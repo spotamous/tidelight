@@ -33,7 +33,7 @@ export const testKey = settings => callClaude(settings, 'Reply with the single w
 export function briefingContext(e, styleSummary) {
   const h = e.hour, s = e.spot, o = e.offset;
   return {
-    spot: { name: s.name, coastal: !!s.coastal, tidePreference: s.tide, maxSafeWaveM: s.maxSwell, facingDeg: s.facing || null, notes: s.notes || '' },
+    spot: { name: s.name, coastal: !!s.coastal, tidePreference: s.tide, facingDeg: s.facing || null, notes: s.notes || '' },
     event: {
       type: e.type, localTime: fmtTime(e.t, o), leaveAt: fmtTime(e.leave, o), driveMinutes: e.drive,
       sunAzimuth: e.sunAz != null ? `${Math.round(e.sunAz)}° ${compass(e.sunAz)}` : null,
@@ -59,9 +59,9 @@ export function briefingContext(e, styleSummary) {
 export async function aiBriefing(settings, ctx) {
   const prompt = `You are an experienced seascape and landscape photography guide giving a photographer a pre-dawn briefing.
 Using ONLY the data below, write a go/no-go briefing in under 110 words.
-Start with one verdict line: GO, MAYBE, SKIP, or NO-GO (SAFETY).
+Start with one verdict line: GO, MAYBE, or SKIP.
 Then explain why in plain language (sky, tide, sea), then give one or two concrete shooting suggestions: composition, shutter-speed range, and whether to stay after the sun for afterglow.
-Safety first: if waves exceed their limit or conditions look hazardous, say so plainly. Do not invent data you weren't given. Plain text only, no markdown.
+Do not invent data you weren't given. Plain text only, no markdown.
 
 DATA:
 ${JSON.stringify(ctx, null, 1)}`;

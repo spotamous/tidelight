@@ -7,7 +7,6 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 ## What it does
 
 - **Go/no-go scores (0–100)** for every sunrise and sunset at each spot, built from low, mid and high cloud, rain, visibility, wind, tide and waves.
-- **Wave safety limit per spot.** If forecast waves exceed your limit, the session is flagged and capped, however good the sky looks.
 - **Leave times** based on drive time from home, plus how early you like to be on location.
 - **Light timeline** showing blue hour, golden hour, sun azimuth, and the nearest high or low tide.
 - **Plans with calendar export (.ics)**, including a 15-minute alarm.
@@ -49,7 +48,7 @@ python3 -m http.server 8000
 ## First-time setup in the app
 
 1. **Settings → Home:** tap *Use my location*, then **Save**. This enables leave times.
-2. **Spots:** tap the map where you shoot, name the spot, choose sunrise and/or sunset, best tide, and your maximum safe wave height. Optionally add a fixed drive time and the compass bearing you face.
+2. **Spots:** tap the map where you shoot, name the spot, choose sunrise and/or sunset, and best tide. Optionally add a fixed drive time and the compass bearing you face.
 3. **Coach:** import 3–10 of your best photos to switch on your personal score.
 4. *(Optional)* **Settings → AI coach:** paste a Claude API key from [console.anthropic.com](https://console.anthropic.com) and tap **Test key**.
 
@@ -70,7 +69,6 @@ The **base score** (`js/scoring.js → baseScore`) is a set of transparent rules
 | Rain chance, fog | Penalised, though fog is noted as "moody". |
 | Tide | Compared with the tide you want at that spot. |
 | Wind | A small penalty for long exposures. |
-| Waves over your limit | Session marked unsafe and capped at 35. |
 
 The **personal score** compares the conditions of each upcoming session with your keepers and duds. It uses a nearest-neighbour similarity across low, mid and high cloud, rain, wind, tide position and wave height. Its weight grows with the number of keepers, up to 60% at 10.
 

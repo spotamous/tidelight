@@ -49,7 +49,6 @@ function allEvents(opts) {
 /* ================= rule-based briefing (works without AI) ================= */
 
 function verdict(e) {
-  if (e.unsafe) return 'No-go: safety';
   if (e.score >= 75) return 'Go';
   if (e.score >= 50) return 'Maybe';
   return 'Skip';
@@ -76,7 +75,7 @@ function briefing(e) {
       ? `Sea is calm (${h.wave.toFixed(1)} m): try 10–30 s with an ND filter for glassy water.`
       : `Waves around ${h.wave.toFixed(1)} m: try 0.3–2 s to keep texture in the water, and watch the sets.`);
   }
-  if ((h.high ?? 0) > 30 && !e.unsafe) {
+  if ((h.high ?? 0) > 30) {
     lines.push(e.type === 'sunset' ? 'Stay 15–20 min after sunset for afterglow on the high cloud.' : 'Arrive early: high cloud often lights up 15–20 min before sunrise.');
   }
   if (e.alignment) lines.push(e.alignment.text + '.');
@@ -86,18 +85,17 @@ function briefing(e) {
 /* ================= shared fragments ================= */
 
 function horizon(e, big = false) {
-  return `<div class="horizon ${big ? 'big' : ''} ${e.unsafe ? 'unsafe' : ''}" style="--p:${e.score}" aria-label="Score ${e.score} out of 100">${e.score}</div>`;
+  return `<div class="horizon ${big ? 'big' : ''}" style="--p:${e.score}" aria-label="Score ${e.score} out of 100">${e.score}</div>`;
 }
 
 function chips(e) {
   const c = [];
-  if (e.unsafe) c.push(`<span class="chip warn">Waves over your limit</span>`);
   if (e.tide) {
     const p = e.tide.pos;
     const label = p < 0.25 ? 'Low tide' : p > 0.75 ? 'High tide' : `Mid tide, ${e.tide.rising ? 'rising' : 'falling'}`;
     c.push(`<span class="chip tide">${label}</span>`);
   }
-  if (e.hour.wave != null && !e.unsafe) c.push(`<span class="chip">${e.hour.wave.toFixed(1)} m sea</span>`);
+  if (e.hour.wave != null) c.push(`<span class="chip">${e.hour.wave.toFixed(1)} m sea</span>`);
   c.push(`<span class="chip">${Math.round(e.hour.low ?? 0)}/${Math.round(e.hour.mid ?? 0)}/${Math.round(e.hour.high ?? 0)}% cloud</span>`);
   if (e.personal) c.push(`<span class="chip me">Your style ${e.personal.score}</span>`);
   return c.join('');
@@ -158,8 +156,7 @@ async function renderForecast(v) {
   if (tab !== 'forecast') return;
 
   const evs = allEvents();
-  const safe = evs.filter(e => !e.unsafe);
-  const best = [...safe].sort((a, b) => b.score - a.score)[0];
+  const best = [...evs].sort((a, b) => b.score - a.score)[0];
 
   let list = '';
   if (forecastSort === 'best') {
@@ -231,7 +228,6 @@ function openEvent(key) {
       ${horizon(e, true)}
       <div><h2>${esc(e.spot.name)}</h2><div class="muted">${fmtDay(e.t, o)}, ${e.type} at ${fmtTime(e.t, o)}</div><div><strong>${verdict(e)}</strong></div></div>
     </div>
-    ${e.unsafe ? `<div class="alert danger">Forecast waves (${h.wave.toFixed(1)} m) are above the ${e.spot.maxSwell} m limit you set for this spot. Rock shelves and jetties can be deadly in these conditions.</div>` : ''}
     <ul class="timeline">${tl.map(x => `<li class="${x.cls || ''}"><time>${fmtTime(x.t, o)}</time><span>${x.label}</span></li>`).join('')}</ul>
 
     <h3>Briefing</h3>
@@ -434,7 +430,7 @@ function renderSpots(v) {
 function openSpotForm(prefill = {}, existing = null) {
   const s = existing || {
     name: '', lat: prefill.lat ?? '', lon: prefill.lon ?? '', events: ['sunrise', 'sunset'],
-    coastal: true, tide: 'any', maxSwell: 1.5, driveMin: '', facing: '', notes: '',
+    coastal: true, tide: 'any', driveMin: '', facing: '', notes: '',
   };
   const num = x => (x === '' || x == null ? '' : Number(x).toFixed(5));
   openSheet(`
@@ -452,12 +448,9 @@ function openSpotForm(prefill = {}, existing = null) {
         </div>
       </fieldset>
       <label class="check"><input type="checkbox" name="coastal" ${s.coastal ? 'checked' : ''}> Coastal spot (use tide and wave data)</label>
-      <div class="two">
-        <label>Best tide<select name="tide">
-          ${['any', 'low', 'mid', 'high'].map(t => `<option value="${t}" ${s.tide === t ? 'selected' : ''}>${cap(t)}</option>`).join('')}
-        </select></label>
-        <label>Max safe waves (m)<input name="maxSwell" inputmode="decimal" value="${s.maxSwell ?? ''}"></label>
-      </div>
+      <label>Best tide<select name="tide">
+        ${['any', 'low', 'mid', 'high'].map(t => `<option value="${t}" ${s.tide === t ? 'selected' : ''}>${cap(t)}</option>`).join('')}
+      </select></label>
       <div class="two">
         <label>Drive time (min)<span class="hint">Blank = estimate from home</span><input name="driveMin" inputmode="numeric" value="${s.driveMin ?? ''}"></label>
         <label>Facing (°)<span class="hint">Your composition's compass bearing, optional</span><input name="facing" inputmode="numeric" value="${s.facing ?? ''}"></label>
@@ -479,7 +472,6 @@ function openSpotForm(prefill = {}, existing = null) {
     const events = ['sunrise', 'sunset'].filter(t => f.get(`ev_${t}`));
     const data = {
       name, lat, lon, events, coastal: !!f.get('coastal'), tide: f.get('tide'),
-      maxSwell: f.get('maxSwell') ? parseFloat(f.get('maxSwell')) : null,
       driveMin: f.get('driveMin') ? parseInt(f.get('driveMin'), 10) : '',
       facing: f.get('facing') !== '' ? parseFloat(f.get('facing')) : '',
       notes: String(f.get('notes') || ''),

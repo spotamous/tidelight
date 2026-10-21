@@ -92,15 +92,8 @@ export function baseScore(h, tide, spot) {
   if (wind >= 30) factors.push({ k: 'bad', t: `Strong wind (${Math.round(wind)} km/h): tripod shake and choppy water` });
   else if (wind <= 10) factors.push({ k: 'good', t: 'Light wind, good for long exposures' });
 
-  let score = 100 * canvas * block * rain * vis * tideF * windF;
-
-  let unsafe = false;
-  if (spot.coastal && h.wave != null && spot.maxSwell && h.wave > spot.maxSwell) {
-    unsafe = true;
-    score = Math.min(score, 35);
-    factors.unshift({ k: 'bad', t: `Waves ${h.wave.toFixed(1)} m exceed your ${spot.maxSwell} m safety limit` });
-  }
-  return { score: Math.round(score), factors, unsafe };
+  const score = 100 * canvas * block * rain * vis * tideF * windF;
+  return { score: Math.round(score), factors };
 }
 
 /* ---------- personal model: learns from your keepers and duds ---------- */
@@ -184,7 +177,6 @@ export function evaluateEvent({ spot, data, type, t, keepers, settings }) {
 
   let score = base.score;
   if (personal) score = Math.round((1 - personal.weight) * base.score + personal.weight * personal.score);
-  if (base.unsafe) score = Math.min(score, 35);
 
   const drive = driveMinutes(spot, settings);
   const arrive = Number(settings.arriveBeforeMin ?? 30);
@@ -209,7 +201,7 @@ export function evaluateEvent({ spot, data, type, t, keepers, settings }) {
   return {
     key: `${spot.id}:${type}:${t}`,
     spot, type, t, offset: data.offset, idx, hour: h, tide,
-    base: base.score, personal, score, unsafe: base.unsafe, factors: base.factors,
+    base: base.score, personal, score, factors: base.factors,
     features, drive, leave, light, sunAz, alignment,
   };
 }

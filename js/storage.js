@@ -10,7 +10,7 @@ const DEFAULTS = {
     claudeKey: '',
     claudeModel: 'claude-sonnet-5-5',
   },
-  spots: [],                  // { id, name, lat, lon, events[], coastal, tide, maxSwell, driveMin, facing, notes }
+  spots: [],                  // { id, name, lat, lon, events[], coastal, tide, driveMin, facing, notes }
   keepers: [],                // { id, label: keeper|dud, source, date(ms), lat, lon, spotName, features[], thumb }
   plans: [],                  // { id, key, spotId, spotName, lat, lon, type, t, leave, offset, score, features, rating }
 };
