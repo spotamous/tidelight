@@ -198,7 +198,7 @@ legend { font-weight: 700; font-size: .9rem; margin-bottom: 6px; }
 }
 @keyframes rise { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sheet-panel { animation: none; } .icon-btn.spin svg { animation: none; } }
-.sheet-close { position: absolute; top: 16px; right: 16px; }
+.sheet-close { position: absolute; top: 16px; right: 16px; z-index: 2; background: rgba(15,17,17,.7); }
 .sheet-head { display: flex; gap: 18px; align-items: center; padding-right: 48px; margin-bottom: 8px; }
 .sheet-head h2 { margin-bottom: .1em; font-size: 2rem; }
 .verdict { font: italic 400 1.5rem var(--serif); color: var(--caramel); }
@@ -266,3 +266,32 @@ legend { font-weight: 700; font-size: .9rem; margin-bottom: 6px; }
   opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 60; max-width: 90vw; text-align: center;
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- Spot photos ---------- */
+.form label.btn { display: inline-flex; font-weight: 700; justify-self: start; }
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin: 6px 0 4px; }
+.photo-grid:empty { display: none; }
+.ph-tile { position: relative; aspect-ratio: 1; border-radius: 6px; overflow: hidden; background: var(--surface-2); }
+.ph-tile.cover { box-shadow: 0 0 0 2px var(--caramel); }
+.ph-pick { all: unset; display: block; width: 100%; height: 100%; cursor: pointer; }
+.ph-pick img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ph-badge { position: absolute; left: 6px; bottom: 6px; font: 500 .6rem var(--mono); letter-spacing: .12em; text-transform: uppercase; padding: 3px 7px; border-radius: 999px; background: var(--caramel); color: var(--caramel-ink); }
+.ph-x { position: absolute; right: 4px; top: 4px; width: 26px; height: 26px; border-radius: 50%; border: 0; background: rgba(15,17,17,.78); color: #fff; cursor: pointer; font-size: 1rem; line-height: 1; }
+
+/* Spot list thumbnails */
+.spot-row { justify-content: flex-start; }
+.spot-row .spot-text { flex: 1; min-width: 0; }
+.spot-thumb { flex: 0 0 auto; width: 64px; height: 64px; border-radius: 6px; object-fit: cover; display: block; }
+.spot-thumb.empty { display: grid; place-items: center; background: var(--surface-2); border: 1px solid var(--line); color: var(--caramel); font: italic 400 1.8rem var(--serif); }
+
+/* Banners in sheets: bleed to the sheet edges */
+.banner { display: block; width: calc(100% + 40px); margin: -24px -20px 18px; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 16px 16px 0 0; }
+.gallery-strip { display: flex; gap: 8px; overflow-x: auto; margin: -8px 0 16px; padding-bottom: 4px; scrollbar-width: none; }
+.gallery-strip button { all: unset; flex: 0 0 auto; width: 64px; height: 64px; border-radius: 6px; overflow: hidden; cursor: pointer; opacity: .55; }
+.gallery-strip button.on { opacity: 1; box-shadow: 0 0 0 2px var(--caramel); }
+.gallery-strip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Hero card can lead with the spot's cover photo */
+.hero-card { flex-direction: column; align-items: stretch; padding: 0; overflow: hidden; gap: 0; }
+.hero-photo { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.hero-body { display: flex; gap: 18px; align-items: center; padding: 16px; }

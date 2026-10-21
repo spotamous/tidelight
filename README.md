@@ -9,6 +9,7 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 - **Go/no-go scores (0–100)** for every sunrise and sunset at each spot, built from low, mid and high cloud, rain, visibility, wind, tide and waves.
 - **Leave times** based on drive time from home, plus how early you like to be on location.
 - **Light timeline** showing blue hour, golden hour, sun azimuth, and the nearest high or low tide.
+- **Your own photos on each spot.** Add as many as you like and choose a cover. The cover appears in the spot list, the session details and the forecast's top pick. A new spot can take its location from a photo's GPS data.
 - **Plans with calendar export (.ics)**, including a 15-minute alarm.
 - **Personal score.** Import your keeper photos. The app reads each photo's capture time and location, looks up the conditions at that moment, and blends a "your style" score into every forecast once you have 3 or more keepers.
 - **Feedback loop.** After a planned session, rate it (delivered, so-so, or not worth it). The app fetches what *actually* happened and learns from it.
@@ -79,7 +80,7 @@ Tune any of this in `js/scoring.js`. It's commented and self-contained.
 - Weather, tide (modelled sea level) and waves come from [Open-Meteo](https://open-meteo.com), which is free and keyless for non-commercial use (CC BY 4.0). Historical conditions for keepers come from the Open-Meteo archive.
 - The map uses OpenStreetMap data with CARTO's free dark basemap.
 - The header loads your logo from tysonwaldron.com. If it can't load, it shows "Tyson Waldron" in text.
-- Spots, plans, keeper thumbnails and settings live in your browser's localStorage. Use **Settings → Export backup** to move them to another device.
+- Spots, plans, keeper thumbnails and settings live in your browser's localStorage. Spot photos are stored in the browser's IndexedDB, resized to 1600 px. **Settings → Export backup** includes your spot photos, so you can move everything to another device.
 
 ## Known limits
 
@@ -100,6 +101,7 @@ js/scoring.js         Base score, tide analysis, personal model, event builder
 js/api.js             Open-Meteo forecast, marine and archive calls
 js/ai.js              Claude API calls and photo/EXIF helpers
 js/storage.js         localStorage state, backup and restore
+js/photos.js          Spot photos (IndexedDB), resize, backup
 js/util.js            Formatting and small helpers
 icons/                App icons
 ```

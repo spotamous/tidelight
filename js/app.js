@@ -1,6 +1,7 @@
 import { getState, update, exportData, importData, resetAll } from './storage.js';
 import { fetchSpotForecast, fetchHistorical, clearCache } from './api.js';
 import { evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js';
 import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js';
 import { esc, fmtTime, fmtDay, fmtDate, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js';
 
@@ -115,13 +116,21 @@ function eventRow(e, extra = '') {
 
 /* ================= sheet ================= */
 
+let onSheetClose = null;  // cleanup hook for the open sheet (e.g. discard unsaved spot photos)
+
+function runSheetClose() {
+  const fn = onSheetClose; onSheetClose = null;
+  if (fn) fn();
+}
 function openSheet(html) {
+  runSheetClose();
   $('#sheetBody').innerHTML = html;
   $('#sheet').classList.remove('hidden');
   document.body.classList.add('noscroll');
   $('.sheet-panel').scrollTop = 0;
 }
 function closeSheet() {
+  runSheetClose();
   $('#sheet').classList.add('hidden');
   document.body.classList.remove('noscroll');
 }
@@ -177,11 +186,14 @@ async function renderForecast(v) {
         <p class="eyebrow">${fmtDay(best.t, best.offset)} — ${best.type} — ${esc(best.spot.name)}</p>
         <h1>${best.score >= 75 ? 'Worth the <em>alarm.</em>' : best.score >= 50 ? 'Your best chance <em>this week.</em>' : 'A quiet week <em>for light.</em>'}</h1>
         <button class="hero-card" data-ev="${esc(best.key)}">
-          ${horizon(best, true)}
-          <div class="ev-main">
-            <div class="ev-title"><span class="verdict">${verdict(best)}</span></div>
-            <div class="ev-sub"><span><strong>${cap(best.type)} ${fmtTime(best.t, best.offset)}</strong></span><span>Leave ${fmtTime(best.leave, best.offset)}</span></div>
-            <div class="chips">${chips(best)}</div>
+          ${coverUrl(best.spot) ? `<img class="hero-photo" src="${coverUrl(best.spot)}" alt="${esc(best.spot.name)}">` : ''}
+          <div class="hero-body">
+            ${horizon(best, true)}
+            <div class="ev-main">
+              <div class="ev-title"><span class="verdict">${verdict(best)}</span></div>
+              <div class="ev-sub"><span><strong>${cap(best.type)} ${fmtTime(best.t, best.offset)}</strong></span><span>Leave ${fmtTime(best.leave, best.offset)}</span></div>
+              <div class="chips">${chips(best)}</div>
+            </div>
           </div>
         </button>` : `<h1>No forecasts yet</h1>`}
     </section>
@@ -224,6 +236,7 @@ function openEvent(key) {
   ];
 
   openSheet(`
+    ${coverUrl(e.spot) ? `<img class="banner" src="${coverUrl(e.spot)}" alt="${esc(e.spot.name)}">` : ''}
     <div class="sheet-head">
       ${horizon(e, true)}
       <div><h2>${esc(e.spot.name)}</h2><div class="muted">${fmtDay(e.t, o)}, ${e.type} at ${fmtTime(e.t, o)}</div><div class="verdict">${verdict(e)}</div></div>
@@ -394,7 +407,8 @@ function renderSpots(v) {
     <section>
       ${st.spots.length ? st.spots.map(s => `
         <button class="spot-row" data-spot="${s.id}">
-          <div><div class="ev-title">${esc(s.name)}</div>
+          ${coverUrl(s) ? `<img class="spot-thumb" src="${coverUrl(s)}" alt="">` : `<span class="spot-thumb empty" aria-hidden="true">${esc(s.name.charAt(0))}</span>`}
+          <div class="spot-text"><div class="ev-title">${esc(s.name)}</div>
           <div class="ev-sub"><span>${(s.events || []).map(cap).join(' and ') || 'No events'}</span>${s.coastal ? `<span>Coastal, ${s.tide} tide</span>` : '<span>Inland</span>'}</div></div>
           <span class="muted" aria-hidden="true">›</span>
         </button>`).join('') : '<p class="muted">No spots yet. Your favourite locations go here.</p>'}
@@ -438,6 +452,12 @@ function openSpotForm(prefill = {}, existing = null) {
     <h2>${existing ? 'Edit spot' : 'New spot'}</h2>
     <form id="spotForm" class="form" novalidate>
       <label>Name<input name="name" required value="${esc(s.name)}" placeholder="e.g. North jetty"></label>
+      <fieldset>
+        <legend>Photos</legend>
+        <span class="hint">The first photo is the cover. Tap a photo to make it the cover.</span>
+        <div class="photo-grid" id="photoGrid"></div>
+        <label class="btn ghost" id="addPhotosBtn">Add photos<input type="file" id="spotPhotos" class="file-input" accept="image/*" multiple></label>
+      </fieldset>
       <div class="two">
         <label>Latitude<input name="lat" inputmode="decimal" required value="${num(s.lat)}"></label>
         <label>Longitude<input name="lon" inputmode="decimal" required value="${num(s.lon)}"></label>
@@ -463,6 +483,56 @@ function openSpotForm(prefill = {}, existing = null) {
       </div>
     </form>`);
 
+  // Photos: work on a copy; only commit on save, discard new uploads if the sheet is closed.
+  const original = [...(existing?.photos || [])];
+  let photos = [...original];
+  const added = new Set();
+  let saved = false;
+  onSheetClose = () => { if (!saved) deletePhotos([...added]); };
+
+  const drawPhotos = () => {
+    $('#photoGrid').innerHTML = photos.map((id, i) => `
+      <div class="ph-tile ${i === 0 ? 'cover' : ''}">
+        <button type="button" class="ph-pick" data-cover="${id}" aria-label="${i === 0 ? 'Cover photo' : 'Make cover photo'}">
+          <img src="${photoUrl(id)}" alt="">
+        </button>
+        ${i === 0 ? '<span class="ph-badge">Cover</span>' : ''}
+        <button type="button" class="ph-x" data-unphoto="${id}" aria-label="Remove photo">×</button>
+      </div>`).join('');
+    $$('[data-cover]', $('#photoGrid')).forEach(b => b.onclick = () => {
+      photos = [b.dataset.cover, ...photos.filter(x => x !== b.dataset.cover)]; drawPhotos();
+    });
+    $$('[data-unphoto]', $('#photoGrid')).forEach(b => b.onclick = () => {
+      photos = photos.filter(x => x !== b.dataset.unphoto); drawPhotos();
+    });
+  };
+  drawPhotos();
+
+  $('#spotPhotos').onchange = async ev => {
+    const files = [...ev.target.files];
+    ev.target.value = '';
+    if (!files.length) return;
+    const btn = $('#addPhotosBtn');
+    const label = btn.firstChild;
+    label.textContent = 'Adding…';
+    const form = $('#spotForm');
+    for (const file of files) {
+      try {
+        // A new spot with no coordinates yet? Use the photo's GPS if it has one.
+        if (!form.lat.value && !form.lon.value) {
+          const ex = await readExif(file);
+          if (ex.lat != null) {
+            form.lat.value = ex.lat.toFixed(5); form.lon.value = ex.lon.toFixed(5);
+            toast('Location filled in from the photo');
+          }
+        }
+        const id = await addPhotoFile(file);
+        added.add(id); photos.push(id); drawPhotos();
+      } catch (e) { toast(e.message, 4000); }
+    }
+    label.textContent = 'Add photos';
+  };
+
   $('#spotForm').onsubmit = ev => {
     ev.preventDefault();
     const f = new FormData(ev.target);
@@ -476,7 +546,10 @@ function openSpotForm(prefill = {}, existing = null) {
       driveMin: f.get('driveMin') ? parseInt(f.get('driveMin'), 10) : '',
       facing: f.get('facing') !== '' ? parseFloat(f.get('facing')) : '',
       notes: String(f.get('notes') || ''),
+      photos,
     };
+    saved = true;
+    deletePhotos(original.filter(id => !photos.includes(id)).concat([...added].filter(id => !photos.includes(id))));
     update(st => {
       if (existing) Object.assign(st.spots.find(x => x.id === existing.id), data);
       else st.spots.push({ id: uid(), ...data });
@@ -489,6 +562,8 @@ function openSpotForm(prefill = {}, existing = null) {
   if (existing) {
     $('#delSpot').onclick = () => {
       if (!confirm(`Delete ${existing.name}?`)) return;
+      saved = true;
+      deletePhotos([...new Set([...original, ...added])]);
       update(st => { st.spots = st.spots.filter(x => x.id !== existing.id); });
       delete forecasts[existing.id];
       closeSheet(); render();
@@ -510,7 +585,10 @@ async function openSpotDetail(id) {
   const evs = evaluateSpot(s, forecasts[id], st.keepers, st.settings);
   indexEvents(evs);
   const data = forecasts[id];
+  const pics = (s.photos || []).filter(id => photoUrl(id));
   $('#sheetBody').innerHTML = `
+    ${pics.length ? `<img class="banner" id="spotBanner" src="${photoUrl(pics[0])}" alt="${esc(s.name)}">` : ''}
+    ${pics.length > 1 ? `<div class="gallery-strip">${pics.map((id, i) => `<button class="${i === 0 ? 'on' : ''}" data-show="${id}" aria-label="Show photo ${i + 1}"><img src="${photoUrl(id)}" alt=""></button>`).join('')}</div>` : ''}
     <h2>${esc(s.name)}</h2>
     <p class="muted small">${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}${s.coastal && !data.hasMarine ? '. No tide or wave data at this exact point; try moving the pin slightly offshore.' : ''}</p>
     ${s.notes ? `<p>${esc(s.notes)}</p>` : ''}
@@ -520,6 +598,10 @@ async function openSpotDetail(id) {
     </div>
     <div>${evs.map(e => eventRow(e, `<span>${fmtDay(e.t, e.offset)}</span>`)).join('') || '<p class="muted">No upcoming events.</p>'}</div>`;
   $('#editSpot').onclick = () => openSpotForm({}, s);
+  $$('[data-show]').forEach(b => b.onclick = () => {
+    $('#spotBanner').src = photoUrl(b.dataset.show);
+    $$('[data-show]').forEach(x => x.classList.toggle('on', x === b));
+  });
 }
 
 /* ================= coach ================= */
@@ -748,16 +830,31 @@ function renderSettings(v) {
     try { await testKey(tmp); toast('Key works'); } catch (e) { toast(e.message, 6000); }
     b.disabled = false; b.textContent = 'Test key';
   };
-  $('#exportBtn').onclick = () => downloadFile(`tidelight-backup-${new Date().toISOString().slice(0, 10)}.json`, exportData(), 'application/json');
+  $('#exportBtn').onclick = async () => {
+    const b = $('#exportBtn'); b.disabled = true; b.textContent = 'Preparing…';
+    try {
+      const backup = JSON.parse(exportData());
+      backup.photos = await exportPhotos(S().spots.flatMap(sp => sp.photos || []));
+      downloadFile(`tidelight-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(backup), 'application/json');
+    } catch (e) { toast(e.message, 5000); }
+    b.disabled = false; b.textContent = 'Export backup';
+  };
   $('#importFile').onchange = async ev => {
     const file = ev.target.files[0];
     if (!file) return;
-    try { importData(await file.text()); for (const k in forecasts) delete forecasts[k]; toast('Backup restored'); render(); }
+    try {
+      const text = await file.text();
+      importData(text);
+      const parsed = JSON.parse(text);
+      if (parsed.photos) await importPhotos(parsed.photos);
+      for (const k in forecasts) delete forecasts[k];
+      toast('Backup restored'); render();
+    }
     catch (e) { toast(e.message, 5000); }
   };
   $('#resetBtn').onclick = () => {
-    if (!confirm('Delete all spots, plans, keepers and settings from this browser?')) return;
-    resetAll(); for (const k in forecasts) delete forecasts[k];
+    if (!confirm('Delete all spots, photos, plans, keepers and settings from this browser?')) return;
+    resetAll(); clearPhotos(); for (const k in forecasts) delete forecasts[k];
     toast('All data deleted'); render();
   };
 }
@@ -780,4 +877,4 @@ $('#refreshBtn').onclick = async () => {
   if (tab === 'forecast' || tab === 'spots') render();
 };
 
-render();
+loadAllPhotos().finally(render);
