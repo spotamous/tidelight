@@ -141,7 +141,7 @@ function render() {
 
 function emptySpots(v) {
   v.innerHTML = `<div class="empty">
-    <h1>Know before the alarm goes off.</h1>
+    <h1>Know before <em>the alarm.</em></h1>
     <p>Add the spots you shoot. Tidelight scores every sunrise and sunset for the next 7 days using sky, tide and sea, tells you when to leave, and learns which conditions you love.</p>
     <div class="row"><button class="btn primary" id="goAdd">Add your first spot</button></div>
   </div>`;
@@ -174,12 +174,12 @@ async function renderForecast(v) {
   v.innerHTML = `
     <section class="hero">
       ${best ? `
-        <h1>${best.score >= 75 ? 'Worth the alarm' : best.score >= 50 ? 'Your best chance this week' : 'A quiet week for light'}</h1>
-        <p class="muted">${fmtDay(best.t, best.offset)}, ${best.type} at ${esc(best.spot.name)}</p>
+        <p class="eyebrow">${fmtDay(best.t, best.offset)} — ${best.type} — ${esc(best.spot.name)}</p>
+        <h1>${best.score >= 75 ? 'Worth the <em>alarm.</em>' : best.score >= 50 ? 'Your best chance <em>this week.</em>' : 'A quiet week <em>for light.</em>'}</h1>
         <button class="hero-card" data-ev="${esc(best.key)}">
           ${horizon(best, true)}
           <div class="ev-main">
-            <div class="ev-title">${verdict(best)}</div>
+            <div class="ev-title"><span class="verdict">${verdict(best)}</span></div>
             <div class="ev-sub"><span><strong>${cap(best.type)} ${fmtTime(best.t, best.offset)}</strong></span><span>Leave ${fmtTime(best.leave, best.offset)}</span></div>
             <div class="chips">${chips(best)}</div>
           </div>
@@ -226,7 +226,7 @@ function openEvent(key) {
   openSheet(`
     <div class="sheet-head">
       ${horizon(e, true)}
-      <div><h2>${esc(e.spot.name)}</h2><div class="muted">${fmtDay(e.t, o)}, ${e.type} at ${fmtTime(e.t, o)}</div><div><strong>${verdict(e)}</strong></div></div>
+      <div><h2>${esc(e.spot.name)}</h2><div class="muted">${fmtDay(e.t, o)}, ${e.type} at ${fmtTime(e.t, o)}</div><div class="verdict">${verdict(e)}</div></div>
     </div>
     <ul class="timeline">${tl.map(x => `<li class="${x.cls || ''}"><time>${fmtTime(x.t, o)}</time><span>${x.label}</span></li>`).join('')}</ul>
 
@@ -335,7 +335,7 @@ function renderPlans(v) {
   const label = { keeper: 'Delivered', meh: 'So-so', dud: 'Not worth it', skipped: 'Didn\'t go' };
 
   v.innerHTML = `
-    <h1>Plans</h1>
+    <p class="eyebrow">Plans</p><h1>Sessions <em>ahead.</em></h1>
     ${toRate.length ? `<section class="panel"><h2>Rate your sessions</h2><p class="muted small">Each rating teaches your personal score what a good morning looks like for you.</p>${toRate.map(rateRow).join('')}</section>` : ''}
     <section class="panel">
       <h2>Upcoming</h2>
@@ -384,7 +384,7 @@ async function ratePlan(id, rating, btn) {
 function renderSpots(v) {
   const st = S();
   v.innerHTML = `
-    <h1>Spots</h1>
+    <p class="eyebrow">Spots</p><h1>Where you <em>shoot.</em></h1>
     <div id="map" role="application" aria-label="Map of your spots. Tap to add a spot."></div>
     <p class="small muted" style="margin-top:8px">Tap anywhere on the map to add a spot there.</p>
     <div class="row">
@@ -410,16 +410,17 @@ function renderSpots(v) {
     const home = st.settings.home;
     map = window.L.map('map', { zoomControl: false, attributionControl: true })
       .setView(home ? [home.lat, home.lon] : [10, 0], home ? 9 : 2);
-    window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18, attribution: '&copy; OpenStreetMap contributors',
+    window.L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19, subdomains: 'abcd',
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
     }).addTo(map);
     const pts = [];
     st.spots.forEach(s => {
-      window.L.circleMarker([s.lat, s.lon], { radius: 9, color: '#F2A65A', weight: 2, fillColor: '#F2A65A', fillOpacity: 0.85 })
+      window.L.circleMarker([s.lat, s.lon], { radius: 9, color: '#0F1111', weight: 2, fillColor: '#D9A066', fillOpacity: 1 })
         .addTo(map).bindTooltip(s.name).on('click', ev => { window.L.DomEvent.stopPropagation(ev); openSpotDetail(s.id); });
       pts.push([s.lat, s.lon]);
     });
-    if (home) window.L.circleMarker([home.lat, home.lon], { radius: 6, color: '#6FC3B8', fillOpacity: 1 }).addTo(map).bindTooltip('Home');
+    if (home) window.L.circleMarker([home.lat, home.lon], { radius: 6, color: '#ECE8E1', fillColor: '#ECE8E1', fillOpacity: 1 }).addTo(map).bindTooltip('Home');
     if (pts.length > 1) map.fitBounds(pts, { padding: [30, 30], maxZoom: 12 });
     else if (pts.length === 1) map.setView(pts[0], 11);
     map.on('click', ev => openSpotForm({ lat: ev.latlng.lat, lon: ev.latlng.lng }));
@@ -532,7 +533,7 @@ function renderCoach(v, logLines = []) {
   const sorted = [...st.keepers].sort((a, b) => b.date - a.date);
 
   v.innerHTML = `
-    <h1>Coach</h1>
+    <p class="eyebrow">Coach</p><h1>Learn your <em>light.</em></h1>
     <section class="panel">
       <h2>Your light profile</h2>
       <div class="meter"><i style="width:${Math.min(100, good / 10 * 100)}%"></i></div>
@@ -667,7 +668,7 @@ async function recreateShot(file) {
 function renderSettings(v) {
   const st = S(), s = st.settings;
   v.innerHTML = `
-    <h1>Settings</h1>
+    <p class="eyebrow">Settings</p><h1>Settings</h1>
     <section class="panel">
       <h2>Home</h2>
       <p class="small muted">Used to estimate drive times and leave times. Stays on this device.</p>
@@ -710,7 +711,7 @@ function renderSettings(v) {
       <div class="row"><button class="btn danger" id="resetBtn">Delete all data</button></div>
     </section>
 
-    <p class="small muted">Weather, tide and sea data: Open-Meteo (CC BY 4.0). Maps: OpenStreetMap. Tide heights are modelled and can differ from official tide tables; check local warnings before heading out.</p>`;
+    <p class="small muted">Weather, tide and sea data: Open-Meteo (CC BY 4.0). Maps: OpenStreetMap and CARTO. Tide heights are modelled and can differ from official tide tables; check local warnings before heading out.</p>`;
 
   $('#homeHere').onclick = async () => {
     try {

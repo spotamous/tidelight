@@ -77,7 +77,8 @@ Tune any of this in `js/scoring.js`. It's commented and self-contained.
 ## Data and privacy
 
 - Weather, tide (modelled sea level) and waves come from [Open-Meteo](https://open-meteo.com), which is free and keyless for non-commercial use (CC BY 4.0). Historical conditions for keepers come from the Open-Meteo archive.
-- The map uses [OpenStreetMap](https://www.openstreetmap.org) tiles.
+- The map uses OpenStreetMap data with CARTO's free dark basemap.
+- The header loads your logo from tysonwaldron.com. If it can't load, it shows "Tyson Waldron" in text.
 - Spots, plans, keeper thumbnails and settings live in your browser's localStorage. Use **Settings → Export backup** to move them to another device.
 
 ## Known limits
@@ -93,7 +94,7 @@ Tune any of this in `js/scoring.js`. It's commented and self-contained.
 ```
 index.html            App shell, loads CDN libraries (Leaflet, SunCalc, exifr)
 manifest.webmanifest  Home-screen install
-css/styles.css        All styling (dark by default, light mode supported)
+css/styles.css        All styling, matched to tysonwaldron.com
 js/app.js             Views: forecast, spots, plans, coach, settings
 js/scoring.js         Base score, tide analysis, personal model, event builder
 js/api.js             Open-Meteo forecast, marine and archive calls
