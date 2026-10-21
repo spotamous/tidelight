@@ -36,6 +36,10 @@ git push -u origin main
 ```
 Then enable Pages as in step 3. Any later `git push` redeploys automatically.
 
+## Updating without stale caches
+
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=1.6`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+
 ## Run it locally
 
 ES modules need a web server (opening `index.html` directly won't work):
@@ -78,7 +82,7 @@ Tune any of this in `js/scoring.js`. It's commented and self-contained.
 ## Data and privacy
 
 - Weather, tide (modelled sea level) and waves come from [Open-Meteo](https://open-meteo.com), which is free and keyless for non-commercial use (CC BY 4.0). Historical conditions for keepers come from the Open-Meteo archive.
-- The map uses OpenStreetMap data with CARTO's free dark basemap.
+- The map uses standard OpenStreetMap tiles (no key needed), darkened with CSS to match the theme.
 - The header loads your logo from tysonwaldron.com. If it can't load, it shows "Tyson Waldron" in text.
 - Spots, plans, keeper thumbnails and settings live in your browser's localStorage. Spot photos are stored in the browser's IndexedDB, resized to 1600 px. **Settings → Export backup** includes your spot photos, so you can move everything to another device.
 

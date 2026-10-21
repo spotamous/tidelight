@@ -190,15 +190,20 @@ legend { font-weight: 700; font-size: .9rem; margin-bottom: 6px; }
 .sheet { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
 .sheet.hidden { display: none; }
 .sheet-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.65); }
+/* The panel itself doesn't scroll; only #sheetBody does, so the close button always stays visible. */
 .sheet-panel {
-  position: relative; width: 100%; max-width: 680px; max-height: 92vh; overflow-y: auto;
+  position: relative; width: 100%; max-width: 680px; max-height: 88vh; max-height: 88dvh;
+  display: flex; flex-direction: column; overflow: hidden;
   background: var(--surface); border-top: 1px solid var(--line); border-radius: 16px 16px 0 0;
-  padding: 24px 20px calc(28px + env(safe-area-inset-bottom));
   animation: rise .22s ease-out;
+}
+#sheetBody {
+  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  padding: 24px 20px calc(28px + env(safe-area-inset-bottom));
 }
 @keyframes rise { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sheet-panel { animation: none; } .icon-btn.spin svg { animation: none; } }
-.sheet-close { position: absolute; top: 16px; right: 16px; z-index: 2; background: rgba(15,17,17,.7); }
+.sheet-close { position: absolute; top: 14px; right: 14px; z-index: 5; width: 44px; height: 44px; background: rgba(15,17,17,.82); border-color: color-mix(in srgb, var(--text) 35%, transparent); }
 .sheet-head { display: flex; gap: 18px; align-items: center; padding-right: 48px; margin-bottom: 8px; }
 .sheet-head h2 { margin-bottom: .1em; font-size: 2rem; }
 .verdict { font: italic 400 1.5rem var(--serif); color: var(--caramel); }
@@ -227,6 +232,8 @@ legend { font-weight: 700; font-size: .9rem; margin-bottom: 6px; }
 /* Map: contained so Leaflet's internal layers can't sit above the sheet or bars */
 #map { position: relative; z-index: 0; isolation: isolate; height: 300px; border-radius: 8px; overflow: hidden; background: var(--surface-2); border: 1px solid var(--line); }
 .leaflet-container { font-family: var(--sans); background: #1a1d1d; }
+/* Standard OpenStreetMap tiles (no key needed), darkened to sit in the charcoal theme */
+.leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.5); }
 .leaflet-tooltip { background: var(--surface); color: var(--text); border: 1px solid var(--line); font: 700 .8rem var(--sans); }
 .leaflet-tooltip::before { display: none; }
 .leaflet-control-attribution { background: rgba(15,17,17,.75) !important; color: var(--muted) !important; }

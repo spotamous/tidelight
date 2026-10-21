@@ -1,9 +1,11 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js';
-import { fetchSpotForecast, fetchHistorical, clearCache } from './api.js';
-import { evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js';
-import { esc, fmtTime, fmtDay, fmtDate, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=1.6';
+import { fetchSpotForecast, fetchHistorical, clearCache } from './api.js?v=1.6';
+import { evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=1.6';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=1.6';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=1.6';
+import { esc, fmtTime, fmtDay, fmtDate, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=1.6';
+
+export const APP_VERSION = '1.6';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -127,7 +129,7 @@ function openSheet(html) {
   $('#sheetBody').innerHTML = html;
   $('#sheet').classList.remove('hidden');
   document.body.classList.add('noscroll');
-  $('.sheet-panel').scrollTop = 0;
+  $('#sheetBody').scrollTop = 0;
 }
 function closeSheet() {
   runSheetClose();
@@ -424,9 +426,8 @@ function renderSpots(v) {
     const home = st.settings.home;
     map = window.L.map('map', { zoomControl: false, attributionControl: true })
       .setView(home ? [home.lat, home.lon] : [10, 0], home ? 9 : 2);
-    window.L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19, subdomains: 'abcd',
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors',
     }).addTo(map);
     const pts = [];
     st.spots.forEach(s => {
@@ -479,8 +480,9 @@ function openSpotForm(prefill = {}, existing = null) {
       <label>Notes<textarea name="notes" placeholder="Access, parking, hazards, compositions">${esc(s.notes || '')}</textarea></label>
       <div class="row">
         <button type="submit" class="btn primary">${existing ? 'Save spot' : 'Add spot'}</button>
-        ${existing ? '<button type="button" class="btn danger" id="delSpot">Delete spot</button>' : ''}
+        <button type="button" class="btn ghost" data-close>Cancel</button>
       </div>
+      ${existing ? '<div class="row"><button type="button" class="btn danger" id="delSpot">Delete spot</button></div>' : ''}
     </form>`);
 
   // Photos: work on a copy; only commit on save, discard new uploads if the sheet is closed.
@@ -793,7 +795,7 @@ function renderSettings(v) {
       <div class="row"><button class="btn danger" id="resetBtn">Delete all data</button></div>
     </section>
 
-    <p class="small muted">Weather, tide and sea data: Open-Meteo (CC BY 4.0). Maps: OpenStreetMap and CARTO. Tide heights are modelled and can differ from official tide tables; check local warnings before heading out.</p>`;
+    <p class="small muted">Tidelight version ${APP_VERSION}. Weather, tide and sea data: Open-Meteo (CC BY 4.0). Maps: OpenStreetMap. Tide heights are modelled and can differ from official tide tables; check local warnings before heading out.</p>`;
 
   $('#homeHere').onclick = async () => {
     try {
