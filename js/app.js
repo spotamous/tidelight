@@ -1,11 +1,11 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=1.6';
-import { fetchSpotForecast, fetchHistorical, clearCache } from './api.js?v=1.6';
-import { evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=1.6';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=1.6';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=1.6';
-import { esc, fmtTime, fmtDay, fmtDate, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=1.6';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=1.7';
+import { fetchSpotForecast, fetchHistorical, clearCache } from './api.js?v=1.7';
+import { evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=1.7';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=1.7';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=1.7';
+import { esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=1.7';
 
-export const APP_VERSION = '1.6';
+export const APP_VERSION = '1.7';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -13,7 +13,6 @@ const S = () => getState();
 
 let tab = 'forecast';
 let map = null;
-let forecastSort = 'time';
 const forecasts = {};          // spotId -> normalized forecast
 const eventIndex = new Map();  // event key -> event
 
@@ -159,6 +158,26 @@ function emptySpots(v) {
   $('#goAdd').onclick = () => { tab = 'spots'; render(); openSpotForm(); };
 }
 
+const SUN_ICON = {
+  sunrise: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 18h18M7 18a5 5 0 0 1 10 0M12 7v3M12 7l-2 2M12 7l2 2M5 12l1.5 1M19 12l-1.5 1"/></svg>',
+  sunset: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 18h18M7 18a5 5 0 0 1 10 0M12 10V7M12 10l-2-2M12 10l2-2M5 12l1.5 1M19 12l-1.5 1"/></svg>',
+};
+
+function tile(e, isBest) {
+  const o = e.offset;
+  return `<button class="tile ${isBest ? 'best' : ''}" data-ev="${esc(e.key)}">
+    <span class="tile-top">
+      ${horizon(e)}
+      <span class="tile-text">
+        <span class="tile-time">${fmtTime(e.t, o)}</span>
+        <span class="tile-meta">Leave ${fmtTime(e.leave, o)}</span>
+      </span>
+    </span>
+    <span class="tile-name">${esc(e.spot.name)}</span>
+    ${isBest ? '<span class="tile-badge">Best</span>' : ''}
+  </button>`;
+}
+
 async function renderForecast(v) {
   const st = S();
   if (!st.spots.length) return emptySpots(v);
@@ -166,49 +185,47 @@ async function renderForecast(v) {
   const failed = await ensureForecasts();
   if (tab !== 'forecast') return;
 
+  // Next 3 days only: today, tomorrow, and the day after (in each spot's local time).
+  const now = Date.now() / 1000;
   const evs = allEvents();
-  const best = [...evs].sort((a, b) => b.score - a.score)[0];
-
-  let list = '';
-  if (forecastSort === 'best') {
-    list = [...evs].sort((a, b) => b.score - a.score).slice(0, 25)
-      .map(e => eventRow(e, `<span>${fmtDay(e.t, e.offset)}</span>`)).join('');
-  } else {
-    let lastDay = '';
-    for (const e of evs) {
-      const k = dayKey(e.t, e.offset);
-      if (k !== lastDay) { list += `<div class="day-label">${fmtDay(e.t, e.offset)}</div>`; lastDay = k; }
-      list += eventRow(e);
-    }
+  const days = [0, 1, 2].map(i => ({ i, events: [] }));
+  for (const e of evs) {
+    const k = dayKey(e.t, e.offset);
+    const d = days.find(x => dayKey(now + x.i * 86400, e.offset) === k);
+    if (d) d.events.push(e);
   }
+  const shown = days.flatMap(d => d.events);
+  const best = [...shown].sort((a, b) => b.score - a.score)[0];
+
+  const dayTitle = i => i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : fmtWeekday(now + i * 86400, best?.offset ?? 0);
+
+  const daySection = d => {
+    const slots = ['sunrise', 'sunset'].map(type => {
+      const list = d.events.filter(e => e.type === type).sort((a, b) => b.score - a.score);
+      if (!list.length) return '';
+      return `<div class="slot">
+        <div class="slot-label">${SUN_ICON[type]}<span>${cap(type)}</span></div>
+        <div class="tiles">${list.map(e => tile(e, best && e.key === best.key)).join('')}</div>
+      </div>`;
+    }).join('');
+    return `<section class="day">
+      <header class="day-head">
+        <h2>${dayTitle(d.i)}</h2>
+        <span class="day-date">${fmtDayDate(now + d.i * 86400, best?.offset ?? 0)}</span>
+      </header>
+      ${slots || `<p class="muted small">${d.i === 0 ? 'Nothing left to shoot today.' : 'No sessions for your spots on this day.'}</p>`}
+    </section>`;
+  };
 
   v.innerHTML = `
     <section class="hero">
-      ${best ? `
-        <p class="eyebrow">${fmtDay(best.t, best.offset)} — ${best.type} — ${esc(best.spot.name)}</p>
-        <h1>${best.score >= 75 ? 'Worth the <em>alarm.</em>' : best.score >= 50 ? 'Your best chance <em>this week.</em>' : 'A quiet week <em>for light.</em>'}</h1>
-        <button class="hero-card" data-ev="${esc(best.key)}">
-          ${coverUrl(best.spot) ? `<img class="hero-photo" src="${coverUrl(best.spot)}" alt="${esc(best.spot.name)}">` : ''}
-          <div class="hero-body">
-            ${horizon(best, true)}
-            <div class="ev-main">
-              <div class="ev-title"><span class="verdict">${verdict(best)}</span></div>
-              <div class="ev-sub"><span><strong>${cap(best.type)} ${fmtTime(best.t, best.offset)}</strong></span><span>Leave ${fmtTime(best.leave, best.offset)}</span></div>
-              <div class="chips">${chips(best)}</div>
-            </div>
-          </div>
-        </button>` : `<h1>No forecasts yet</h1>`}
+      <p class="eyebrow">Next 3 days${best ? ` — best: ${esc(best.spot.name)}, ${fmtDay(best.t, best.offset).toLowerCase()} ${best.type}` : ''}</p>
+      <h1>${!best ? 'No forecasts <em>yet.</em>' : best.score >= 75 ? 'Worth the <em>alarm.</em>' : best.score >= 50 ? 'Worth a <em>look.</em>' : 'A quiet few <em>days.</em>'}</h1>
     </section>
     ${failed.length ? `<div class="alert danger">Couldn't load: ${esc(failed.join(', '))}. Check your connection and tap refresh.</div>` : ''}
     ${!st.settings.home ? `<div class="alert info">Set your home location in Settings to get drive-aware leave times.</div>` : ''}
-    <div class="segmented" role="group" aria-label="Sort">
-      <button data-sort="time" class="${forecastSort === 'time' ? 'on' : ''}">By day</button>
-      <button data-sort="best" class="${forecastSort === 'best' ? 'on' : ''}">Best first</button>
-    </div>
-    <div>${list || '<p class="muted">No upcoming events. Check each spot has sunrise or sunset turned on.</p>'}</div>
-    <p class="small muted" style="margin-top:24px">Forecasts are estimates. Always check official marine and weather warnings before heading out.</p>`;
-
-  $$('[data-sort]', v).forEach(b => b.onclick = () => { forecastSort = b.dataset.sort; renderForecast(v); });
+    ${days.map(daySection).join('')}
+    <p class="small muted" style="margin-top:28px">Tap any spot for the full briefing. Open a spot in Spots to see all 7 days. Forecasts are estimates; always check official marine and weather warnings before heading out.</p>`;
 }
 
 /* ================= event detail ================= */

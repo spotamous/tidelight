@@ -41,6 +41,16 @@ export function fmtDay(t, offset) {
   return `${WD[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`;
 }
 
+export function fmtDayDate(t, offset) {
+  const d = shifted(t, offset);
+  return `${WD[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`;
+}
+
+export function fmtWeekday(t, offset) {
+  const d = shifted(t, offset);
+  return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getUTCDay()];
+}
+
 export function fmtDate(ms) {
   const d = new Date(ms);
   return `${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}`;
