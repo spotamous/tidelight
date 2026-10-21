@@ -6,7 +6,7 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 
 ## What it does
 
-- **A 3-day home screen.** Today, tomorrow and the day after, with every spot for each sunrise and sunset side by side, best first. The top session across the 3 days is marked. Each spot's detail view still shows all 7 days.
+- **A 3-day home screen.** Today, tomorrow and the day after, with every spot for each sunrise and sunset side by side, best first. Each score sits on that spot's cover photo, so you can spot locations at a glance. The top session across the 3 days is marked. Each spot's detail view still shows all 7 days.
 - **Go/no-go scores (0–100)** for every sunrise and sunset at each spot, built from low, mid and high cloud, rain, visibility, wind, tide and waves.
 - **Leave times** based on drive time from home, plus how early you like to be on location.
 - **Light timeline** showing blue hour, golden hour, sun azimuth, and the nearest high or low tide.
@@ -39,7 +39,7 @@ Then enable Pages as in step 3. Any later `git push` redeploys automatically.
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=1.7`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=1.8`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ## Run it locally
 

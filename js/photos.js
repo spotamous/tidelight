@@ -1,5 +1,5 @@
 // Spot photos live in IndexedDB (much roomier than localStorage), on this device only.
-import { uid } from './util.js?v=1.7';
+import { uid } from './util.js?v=1.8';
 
 const DB_NAME = 'tidelight';
 const STORE = 'photos';

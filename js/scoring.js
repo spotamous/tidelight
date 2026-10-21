@@ -1,4 +1,4 @@
-import { clamp, haversineKm, angleDiff, compass } from './util.js?v=1.7';
+import { clamp, haversineKm, angleDiff, compass } from './util.js?v=1.8';
 
 /* ---------- helpers ---------- */
 

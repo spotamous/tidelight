@@ -1,11 +1,11 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=1.7';
-import { fetchSpotForecast, fetchHistorical, clearCache } from './api.js?v=1.7';
-import { evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=1.7';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=1.7';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=1.7';
-import { esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=1.7';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=1.8';
+import { fetchSpotForecast, fetchHistorical, clearCache } from './api.js?v=1.8';
+import { evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=1.8';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=1.8';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=1.8';
+import { esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=1.8';
 
-export const APP_VERSION = '1.7';
+export const APP_VERSION = '1.8';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -86,8 +86,9 @@ function briefing(e) {
 
 /* ================= shared fragments ================= */
 
-function horizon(e, big = false) {
-  return `<div class="horizon ${big ? 'big' : ''}" style="--p:${e.score}" aria-label="Score ${e.score} out of 100">${e.score}</div>`;
+function horizon(e, big = false, photo = null) {
+  const bg = photo ? `;--img:url('${photo}')` : '';
+  return `<div class="horizon ${big ? 'big' : ''} ${photo ? 'has-photo' : ''}" style="--p:${e.score}${bg}" aria-label="Score ${e.score} out of 100">${e.score}</div>`;
 }
 
 function chips(e) {
@@ -167,7 +168,7 @@ function tile(e, isBest) {
   const o = e.offset;
   return `<button class="tile ${isBest ? 'best' : ''}" data-ev="${esc(e.key)}">
     <span class="tile-top">
-      ${horizon(e)}
+      ${horizon(e, false, coverUrl(e.spot))}
       <span class="tile-text">
         <span class="tile-time">${fmtTime(e.t, o)}</span>
         <span class="tile-meta">Leave ${fmtTime(e.leave, o)}</span>
