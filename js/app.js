@@ -1,11 +1,12 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=1.8';
-import { fetchSpotForecast, fetchHistorical, clearCache } from './api.js?v=1.8';
-import { evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=1.8';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=1.8';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=1.8';
-import { esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=1.8';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=1.9';
+import { fetchSpotForecast, fetchHistorical, clearCache } from './api.js?v=1.9';
+import { evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=1.9';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=1.9';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf } from './hunts.js?v=1.9';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=1.9';
+import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=1.9';
 
-export const APP_VERSION = '1.8';
+export const APP_VERSION = '1.9';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -51,10 +52,18 @@ function allEvents(opts) {
 /* ================= rule-based briefing (works without AI) ================= */
 
 function verdict(e) {
-  if (e.score >= 75) return 'Go';
-  if (e.score >= 50) return 'Maybe';
-  return 'Skip';
+  const v = e.score >= 75 ? 'Go' : e.score >= 50 ? 'Maybe' : 'Skip';
+  if (v === 'Skip' || !e.topHunt || e.topHunt === 'colour') return v;
+  return `${v} for ${HUNT_VERB[e.topHunt]}`;
 }
+
+// Hunts on this session in display order, e.g. [['fog', {score, factors}], ...]
+const huntList = e => HUNT_ORDER.filter(k => e.hunts && e.hunts[k]).map(k => [k, e.hunts[k]]);
+// For compact badges: the leading hunt plus any other worth noticing (40+). Hidden for plain colour-only sessions.
+const notableHunts = e => {
+  const list = huntList(e).filter(([k, v]) => k === e.topHunt || v.score >= 40);
+  return list.length > 1 || e.topHunt !== 'colour' ? list : [];
+};
 
 function briefing(e) {
   const o = e.offset, h = e.hour, s = e.spot;
@@ -80,6 +89,18 @@ function briefing(e) {
   if ((h.high ?? 0) > 30) {
     lines.push(e.type === 'sunset' ? 'Stay 15–20 min after sunset for afterglow on the high cloud.' : 'Arrive early: high cloud often lights up 15–20 min before sunrise.');
   }
+  const H = e.hunts || {};
+  if (H.fog && H.fog.score >= 45) {
+    lines.push(e.spot.fogMode === 'above'
+      ? 'Fog is a real chance: get to the lookout before first light, as valley fog often lifts within an hour of sunrise.'
+      : 'Fog is a real chance: arrive in blue hour for soft layers, and use trees or posts as shapes against it.');
+  }
+  if (H.storm && H.storm.score >= 45) lines.push(`Storm potential ${H.storm.score} around ${fmtTime(H.storm.peak, o)}: watch the radar from mid-afternoon for building cells.`);
+  if (H.lightning && H.lightning.score >= 45) lines.push(`Lightning window in the dark (${fmtTime(H.lightning.from, o)}–${fmtTime(H.lightning.to, o)}): try ISO 100–400, f/5.6–8 and 15–30 s exposures on a tripod.`);
+  if (H.rainbow && H.rainbow.score >= 45) lines.push(`Rainbow chance around ${fmtTime(H.rainbow.peak, o)}: keep the sun at your back and look ${compass(H.rainbow.look)}.`);
+  if ((H.storm?.score ?? 0) >= 45 || (H.lightning?.score ?? 0) >= 45) {
+    lines.push('Stay safe: if thunder follows a flash within 30 seconds, you are within striking distance. Shoot from a hard-topped car or a building, and wait 30 minutes after the last thunder.');
+  }
   if (e.alignment) lines.push(e.alignment.text + '.');
   return lines.join(' ');
 }
@@ -101,6 +122,8 @@ function chips(e) {
   if (e.hour.wave != null) c.push(`<span class="chip">${e.hour.wave.toFixed(1)} m sea</span>`);
   c.push(`<span class="chip">${Math.round(e.hour.low ?? 0)}/${Math.round(e.hour.mid ?? 0)}/${Math.round(e.hour.high ?? 0)}% cloud</span>`);
   if (e.personal) c.push(`<span class="chip me">Your style ${e.personal.score}</span>`);
+  const hl = notableHunts(e);
+  if (hl.length) hl.slice().reverse().forEach(([k, v]) => c.unshift(`<span class="chip ${k === e.topHunt ? 'me' : ''}">${HUNT_LABEL[k]} ${v.score}</span>`));
   return c.join('');
 }
 
@@ -175,6 +198,7 @@ function tile(e, isBest) {
       </span>
     </span>
     <span class="tile-name">${esc(e.spot.name)}</span>
+    ${notableHunts(e).length ? `<span class="tile-hunts">${notableHunts(e).map(([k, v]) => `<span class="${k === e.topHunt ? 'top' : ''}">${HUNT_LABEL[k]} ${v.score}</span>`).join('')}</span>` : ''}
     ${isBest ? '<span class="tile-badge">Best</span>' : ''}
   </button>`;
 }
@@ -253,6 +277,8 @@ function openEvent(key) {
     ['Visibility', h.vis != null ? `${(h.vis / 1000).toFixed(0)} km` : '–'],
     ['Waves', h.wave != null ? `${h.wave.toFixed(1)} m` : '–'], ['Tide', e.tide ? `${Math.round(e.tide.pos * 100)}%` : '–'],
     ['Temp', h.temp != null ? `${Math.round(h.temp)}°C` : '–'],
+    ['Dew point', h.dew != null ? `${Math.round(h.dew)}°C` : '–'], ['Humidity', h.rh != null ? `${Math.round(h.rh)}%` : '–'],
+    ['Storm energy', h.cape != null ? `${Math.round(h.cape)} J/kg` : '–'],
   ];
 
   openSheet(`
@@ -268,7 +294,13 @@ function openEvent(key) {
     <div class="row"><button class="btn ghost" id="aiBriefBtn">Ask the AI coach</button></div>
 
     <h3>Why this score</h3>
-    <ul class="factors">${e.factors.map(f => `<li class="${f.k}">${esc(f.t)}</li>`).join('') || '<li>Nothing stands out either way.</li>'}</ul>
+    ${huntList(e).map(([k, v]) => `
+      <div class="hunt ${k === e.topHunt ? 'top' : ''}">
+        <div class="hunt-head"><span>${HUNT_LABEL[k]}</span><b>${v.score}</b></div>
+        <div class="hunt-bar"><i style="width:${v.score}%"></i></div>
+        <ul class="factors">${v.factors.map(f => `<li class="${f.k}">${esc(f.t)}</li>`).join('') || '<li>Nothing stands out either way.</li>'}</ul>
+        ${k === 'lightning' ? '<button class="btn ghost small-btn" data-lightning>Open the lightning distance timer</button>' : ''}
+      </div>`).join('')}
     <p class="small muted" style="margin-top:10px">${e.personal
       ? `Blended score: ${e.base} from conditions, ${e.personal.score} from your ${e.personal.n} keepers (${Math.round(e.personal.weight * 100)}% weight).`
       : `Add ${MIN_KEEPERS}+ keeper photos in Coach and this score will start reflecting your taste.`}</p>
@@ -429,7 +461,7 @@ function renderSpots(v) {
         <button class="spot-row" data-spot="${s.id}">
           ${coverUrl(s) ? `<img class="spot-thumb" src="${coverUrl(s)}" alt="">` : `<span class="spot-thumb empty" aria-hidden="true">${esc(s.name.charAt(0))}</span>`}
           <div class="spot-text"><div class="ev-title">${esc(s.name)}</div>
-          <div class="ev-sub"><span>${(s.events || []).map(cap).join(' and ') || 'No events'}</span>${s.coastal ? `<span>Coastal, ${s.tide} tide</span>` : '<span>Inland</span>'}</div></div>
+          <div class="ev-sub"><span>${(s.events || []).map(cap).join(' and ') || 'No events'}</span><span>${huntsOf(s).map(k => HUNT_LABEL[k]).join(', ')}</span></div></div>
           <span class="muted" aria-hidden="true">›</span>
         </button>`).join('') : '<p class="muted">No spots yet. Your favourite locations go here.</p>'}
     </section>`;
@@ -487,6 +519,16 @@ function openSpotForm(prefill = {}, existing = null) {
           <label class="check"><input type="checkbox" name="ev_sunset" ${s.events.includes('sunset') ? 'checked' : ''}> Sunset</label>
         </div>
       </fieldset>
+      <fieldset><legend>What to hunt for here</legend>
+        <span class="hint">Each one gets its own score. The session shows the best of them.</span>
+        <div class="checks">
+          ${HUNT_ORDER.map(k => `<label class="check"><input type="checkbox" name="hunt_${k}" ${huntsOf(s).includes(k) ? 'checked' : ''}> ${HUNT_LABEL[k]}</label>`).join('')}
+        </div>
+      </fieldset>
+      <label>For fog, this spot is<select name="fogMode">
+        <option value="in" ${s.fogMode !== 'above' ? 'selected' : ''}>In the fog (forest, jetty, paddock)</option>
+        <option value="above" ${s.fogMode === 'above' ? 'selected' : ''}>Above the fog (lookout over a valley)</option>
+      </select></label>
       <label class="check"><input type="checkbox" name="coastal" ${s.coastal ? 'checked' : ''}> Coastal spot (use tide and wave data)</label>
       <label>Best tide<select name="tide">
         ${['any', 'low', 'mid', 'high'].map(t => `<option value="${t}" ${s.tide === t ? 'selected' : ''}>${cap(t)}</option>`).join('')}
@@ -566,6 +608,8 @@ function openSpotForm(prefill = {}, existing = null) {
       driveMin: f.get('driveMin') ? parseInt(f.get('driveMin'), 10) : '',
       facing: f.get('facing') !== '' ? parseFloat(f.get('facing')) : '',
       notes: String(f.get('notes') || ''),
+      hunts: HUNT_ORDER.filter(k => f.get(`hunt_${k}`)).length ? HUNT_ORDER.filter(k => f.get(`hunt_${k}`)) : ['colour'],
+      fogMode: f.get('fogMode') === 'above' ? 'above' : 'in',
       photos,
     };
     saved = true;
@@ -624,6 +668,54 @@ async function openSpotDetail(id) {
   });
 }
 
+/* ================= lightning distance timer ================= */
+
+function openLightningTimer() {
+  openSheet(`
+    <h2>Lightning distance</h2>
+    <p class="muted small">Tap when you see the flash, then tap again when you hear the thunder.</p>
+    <button class="lt-btn" id="ltBtn">Flash</button>
+    <div class="lt-out" id="ltOut" aria-live="polite"></div>
+    <ol class="lt-log" id="ltLog"></ol>
+    <div class="row"><button class="btn ghost" id="ltReset">Clear readings</button></div>
+    <p class="small muted">Sound covers about 1 km every 3 seconds. If thunder follows the flash within 30 seconds (about 10 km), you're within striking distance: get inside a building or a hard-topped car, and wait 30 minutes after the last thunder before heading out.</p>
+  `);
+  let start = null, timer = null;
+  const readings = [];
+  const btn = $('#ltBtn'), out = $('#ltOut');
+  const stop = () => { clearInterval(timer); timer = null; };
+  onSheetClose = stop;
+
+  const show = () => {
+    const last = readings[readings.length - 1];
+    if (!last) { out.innerHTML = ''; $('#ltLog').innerHTML = ''; return; }
+    const prev = readings[readings.length - 2];
+    const trend = !prev ? '' : last.km < prev.km - 0.3 ? 'Getting closer' : last.km > prev.km + 0.3 ? 'Moving away' : 'Holding steady';
+    out.innerHTML = `
+      <div class="lt-km">${last.km.toFixed(1)}<span> km</span></div>
+      <div class="lt-note ${last.km < 10 ? 'warn' : ''}">${last.km < 10 ? 'Within striking distance. Take shelter.' : 'Outside the usual 10 km striking range.'}</div>
+      ${trend ? `<div class="lt-note">${trend} since the last reading.</div>` : ''}`;
+    $('#ltLog').innerHTML = readings.slice().reverse().map(r => `<li><span>${r.time}</span><span>${r.secs.toFixed(1)} s</span><b>${r.km.toFixed(1)} km</b></li>`).join('');
+  };
+
+  btn.onclick = () => {
+    if (start == null) {
+      start = performance.now();
+      btn.classList.add('timing');
+      timer = setInterval(() => { btn.textContent = `Thunder  ${((performance.now() - start) / 1000).toFixed(1)} s`; }, 100);
+      btn.textContent = 'Thunder  0.0 s';
+    } else {
+      const secs = (performance.now() - start) / 1000;
+      stop(); start = null;
+      btn.classList.remove('timing'); btn.textContent = 'Flash';
+      const d = new Date();
+      readings.push({ secs, km: secs * 0.343, time: `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}` });
+      show();
+    }
+  };
+  $('#ltReset').onclick = () => { readings.length = 0; stop(); start = null; btn.classList.remove('timing'); btn.textContent = 'Flash'; show(); };
+}
+
 /* ================= coach ================= */
 
 function renderCoach(v, logLines = []) {
@@ -636,6 +728,12 @@ function renderCoach(v, logLines = []) {
 
   v.innerHTML = `
     <p class="eyebrow">Coach</p><h1>Learn your <em>light.</em></h1>
+    <section class="panel">
+      <h2>Field tools</h2>
+      <p class="small muted">Count the gap between a lightning flash and its thunder to see how far away the storm is, and whether it's coming closer.</p>
+      <button class="btn primary block" data-lightning>Lightning distance timer</button>
+    </section>
+
     <section class="panel">
       <h2>Your light profile</h2>
       <div class="meter"><i style="width:${Math.min(100, good / 10 * 100)}%"></i></div>
@@ -882,6 +980,7 @@ function renderSettings(v) {
 /* ================= boot ================= */
 
 document.addEventListener('click', ev => {
+  if (ev.target.closest('[data-lightning]')) { openLightningTimer(); return; }
   const evBtn = ev.target.closest('[data-ev]');
   if (evBtn) { openEvent(evBtn.dataset.ev); return; }
   if (ev.target.closest('[data-close]')) closeSheet();

@@ -1,4 +1,5 @@
-import { clamp, haversineKm, angleDiff, compass } from './util.js?v=1.8';
+import { clamp, haversineKm, angleDiff, compass } from './util.js?v=1.9';
+import { computeHunts } from './hunts.js?v=1.9';
 
 /* ---------- helpers ---------- */
 
@@ -36,7 +37,7 @@ export function tideInfo(hours, idx) {
 
 /* ---------- feature vector: what the personal model compares ---------- */
 
-export const FEATURE_NAMES = ['Low cloud', 'Mid cloud', 'High cloud', 'Rain', 'Wind', 'Tide height', 'Wave height'];
+export const FEATURE_NAMES = ['Low cloud', 'Mid cloud', 'High cloud', 'Rain', 'Wind', 'Tide height', 'Wave height', 'Dew point gap', 'Storm energy', 'Thunder'];
 
 export function featureVector(h, tide) {
   return [
@@ -47,6 +48,9 @@ export function featureVector(h, tide) {
     clamp((h.wind ?? 0) / 40),
     tide ? tide.pos : null,
     h.wave != null ? clamp(h.wave / 3) : null,
+    h.temp != null && h.dew != null ? clamp((h.temp - h.dew) / 10) : null,   // small = fog-prone
+    h.cape != null ? clamp(h.cape / 2500) : null,                            // storm fuel
+    h.code != null ? ([95, 96, 99].includes(h.code) ? 1 : 0) : null,         // thunder
   ];
 }
 
@@ -134,7 +138,7 @@ export function personalModelSummary(keepers) {
     const v = good.map(k => k.features[i]).filter(x => x != null);
     return v.length ? avg(v) : null;
   };
-  const [low, mid, high, rain, wind, tide, wave] = FEATURE_NAMES.map((_, i) => mean(i));
+  const [low, mid, high, rain, wind, tide, wave, gap, cape, thunder] = FEATURE_NAMES.map((_, i) => mean(i));
   const out = [];
   if (low != null) out.push(low < 0.25 ? 'clear horizons' : low > 0.55 ? 'heavy low cloud and moody skies' : 'some low cloud');
   if (mid != null && high != null) {
@@ -145,6 +149,8 @@ export function personalModelSummary(keepers) {
   if (wind != null) out.push(wind < 0.3 ? 'light wind' : wind > 0.6 ? 'windy, energetic conditions' : 'moderate wind');
   if (tide != null) out.push(tide < 0.35 ? 'lower tides' : tide > 0.65 ? 'higher tides' : 'mid tides');
   if (wave != null) out.push(wave < 0.27 ? 'calm seas' : wave > 0.55 ? 'big surf' : 'moderate swell');
+  if (gap != null && gap < 0.2) out.push('fog-prone, humid mornings');
+  if ((cape != null && cape > 0.3) || (thunder != null && thunder > 0.3)) out.push('stormy, unstable skies');
   return { n: good.length, text: out.join(', ') };
 }
 
@@ -175,8 +181,14 @@ export function evaluateEvent({ spot, data, type, t, keepers, settings }) {
   const features = featureVector(h, tide);
   const personal = personalScore(features, keepers);
 
-  let score = base.score;
-  if (personal) score = Math.round((1 - personal.weight) * base.score + personal.weight * personal.score);
+  // Each hunt chosen for this spot gets its own score; the session's score is the best of them.
+  const hunts = computeHunts({ spot, data, idx, type, colour: { score: base.score, factors: base.factors } });
+  let topHunt = null, top = -1;
+  for (const [k, v] of Object.entries(hunts)) if (v && v.score > top) { top = v.score; topHunt = k; }
+  if (!topHunt) { topHunt = 'colour'; top = base.score; hunts.colour = { score: base.score, factors: base.factors }; }
+
+  let score = top;
+  if (personal) score = Math.round((1 - personal.weight) * top + personal.weight * personal.score);
 
   const drive = driveMinutes(spot, settings);
   const arrive = Number(settings.arriveBeforeMin ?? 30);
@@ -201,7 +213,7 @@ export function evaluateEvent({ spot, data, type, t, keepers, settings }) {
   return {
     key: `${spot.id}:${type}:${t}`,
     spot, type, t, offset: data.offset, idx, hour: h, tide,
-    base: base.score, personal, score, factors: base.factors,
+    base: top, colour: base.score, hunts, topHunt, personal, score, factors: hunts[topHunt]?.factors || base.factors,
     features, drive, leave, light, sunAz, alignment,
   };
 }

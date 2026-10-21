@@ -7,6 +7,12 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 ## What it does
 
 - **A 3-day home screen.** Today, tomorrow and the day after, with every spot for each sunrise and sunset side by side, best first. Each score sits on that spot's cover photo, so you can spot locations at a glance. The top session across the 3 days is marked. Each spot's detail view still shows all 7 days.
+- **Hunts per spot: Colour, Fog, Storm, Lightning, Rainbow.** Choose what you shoot at each spot. Each hunt gets its own 0–100 score, and the session shows the best one:
+  - *Fog* (sunrise) uses the dew point gap, humidity, overnight wind and cloud, forecast visibility and recent rain. Mark a spot "above the fog" for lookouts; it then also checks the spot's elevation.
+  - *Storm* uses storm energy (CAPE), lifted index, convective inhibition, gusts and thunderstorm forecasts in the hours around the session.
+  - *Lightning* looks for storm potential in the dark hours after sunset or before sunrise, when lightning is easiest to shoot.
+  - *Rainbow* needs showers, breaks in the cloud and the sun below 42°, and tells you which way to look.
+- **Lightning distance timer** (Coach → Field tools, or from any lightning score). Tap on the flash, tap on the thunder, and it shows the distance, whether the storm is closing in, and a shelter warning inside 10 km.
 - **Go/no-go scores (0–100)** for every sunrise and sunset at each spot, built from low, mid and high cloud, rain, visibility, wind, tide and waves.
 - **Leave times** based on drive time from home, plus how early you like to be on location.
 - **Light timeline** showing blue hour, golden hour, sun azimuth, and the nearest high or low tide.
@@ -39,7 +45,7 @@ Then enable Pages as in step 3. Any later `git push` redeploys automatically.
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=1.8`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=1.9`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ## Run it locally
 
@@ -102,7 +108,8 @@ index.html            App shell, loads CDN libraries (Leaflet, SunCalc, exifr)
 manifest.webmanifest  Home-screen install
 css/styles.css        All styling, matched to tysonwaldron.com
 js/app.js             Views: forecast, spots, plans, coach, settings
-js/scoring.js         Base score, tide analysis, personal model, event builder
+js/scoring.js         Colour score, tide analysis, personal model, event builder
+js/hunts.js           Fog, storm, lightning and rainbow scores
 js/api.js             Open-Meteo forecast, marine and archive calls
 js/ai.js              Claude API calls and photo/EXIF helpers
 js/storage.js         localStorage state, backup and restore

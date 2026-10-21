@@ -1,6 +1,6 @@
 // Optional AI coach using your own Claude API key, called directly from your browser.
 // The key is stored only in this browser (localStorage) and never in your GitHub repo.
-import { clamp, fmtTime, compass } from './util.js?v=1.8';
+import { clamp, fmtTime, compass } from './util.js?v=1.9';
 
 export const hasAI = settings => !!(settings.claudeKey && settings.claudeKey.trim());
 
@@ -44,6 +44,7 @@ export function briefingContext(e, styleSummary) {
       cloudLowPct: h.low, cloudMidPct: h.mid, cloudHighPct: h.high, rainChancePct: h.pp,
       visibilityKm: h.vis != null ? +(h.vis / 1000).toFixed(1) : null, windKmh: h.wind, tempC: h.temp,
       waveM: h.wave, swellM: h.swell,
+      dewPointC: h.dew, humidityPct: h.rh, stormEnergyCapeJkg: h.cape, liftedIndex: h.li, gustKmh: h.gust, weatherCode: h.code,
       tide: e.tide ? {
         positionPct: Math.round(e.tide.pos * 100), rising: e.tide.rising,
         nearestLow: e.tide.low ? fmtTime(e.tide.low.t, o) : null,
@@ -51,6 +52,8 @@ export function briefingContext(e, styleSummary) {
       } : null,
     },
     scores: { overall: e.score, rulesBased: e.base, personal: e.personal?.score ?? null },
+    hunts: Object.fromEntries(Object.entries(e.hunts || {}).map(([k, v]) => [k, { score: v.score, notes: v.factors.map(f => f.t) }])),
+    bestHunt: e.topHunt,
     scoreFactors: e.factors.map(f => f.t),
     photographerStyle: styleSummary ? `Their keeper photos tend to have ${styleSummary.text}` : 'Unknown yet',
   };
@@ -60,8 +63,8 @@ export async function aiBriefing(settings, ctx) {
   const prompt = `You are an experienced seascape and landscape photography guide giving a photographer a pre-dawn briefing.
 Using ONLY the data below, write a go/no-go briefing in under 110 words.
 Start with one verdict line: GO, MAYBE, or SKIP.
-Then explain why in plain language (sky, tide, sea), then give one or two concrete shooting suggestions: composition, shutter-speed range, and whether to stay after the sun for afterglow.
-Do not invent data you weren't given. Plain text only, no markdown.
+Then explain why in plain language. Cover each hunt this spot is set up for (colour, fog, storms, lightning, rainbows) that scores 40 or more, plus tide and sea where relevant. Then give one or two concrete shooting suggestions: composition, shutter-speed range, and whether to stay after the sun for afterglow.
+If storms or lightning score 45 or more, add one short lightning-safety line. Do not invent data you weren't given. Plain text only, no markdown.
 
 DATA:
 ${JSON.stringify(ctx, null, 1)}`;
@@ -73,7 +76,7 @@ export async function aiAnalyzeReference(settings, base64Jpeg) {
     { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64Jpeg } },
     { type: 'text', text: `Analyse this landscape or seascape photo and estimate the conditions it was taken in.
 Respond ONLY with a JSON object, no prose and no code fences:
-{"timeOfDay":"sunrise|sunset|blue hour|night|day","cloudLow":0-100,"cloudMid":0-100,"cloudHigh":0-100,"rain":0-100,"wind":"calm|light|strong","tide":"low|mid|high|unknown","sea":"glassy|moderate|rough|none","summary":"one sentence on the light and sky","recipe":"one sentence on which conditions to wait for to recreate it"}` },
+{"timeOfDay":"sunrise|sunset|blue hour|night|day","cloudLow":0-100,"cloudMid":0-100,"cloudHigh":0-100,"rain":0-100,"wind":"calm|light|strong","tide":"low|mid|high|unknown","sea":"glassy|moderate|rough|none","fog":true|false,"storm":true|false,"lightning":true|false,"summary":"one sentence on the light and sky","recipe":"one sentence on which conditions to wait for to recreate it"}` },
   ];
   const txt = await callClaude(settings, content, 500);
   const clean = txt.replace(/```json|```/g, '').trim();
@@ -86,7 +89,13 @@ export function aiResultToFeatures(r) {
   const tide = { low: 0.15, mid: 0.5, high: 0.85 }[r.tide] ?? null;
   const sea = { glassy: 0.1, moderate: 0.35, rough: 0.75 }[r.sea] ?? null;
   const n = v => (typeof v === 'number' ? clamp(v / 100) : 0);
-  return [n(r.cloudLow), n(r.cloudMid), n(r.cloudHigh), n(r.rain) * 0.5, wind, tide, sea];
+  const yes = v => v === true || v === 'true';
+  return [
+    n(r.cloudLow), n(r.cloudMid), n(r.cloudHigh), n(r.rain) * 0.5, wind, tide, sea,
+    yes(r.fog) ? 0.02 : null,                     // dew point gap: tiny when foggy
+    yes(r.storm) || yes(r.lightning) ? 0.6 : null, // storm energy
+    yes(r.lightning) ? 1 : (yes(r.storm) ? 0.5 : null),
+  ];
 }
 
 /* ---------- photos ---------- */

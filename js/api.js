@@ -1,5 +1,5 @@
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
-import { nearestIndex, tideInfo } from './scoring.js?v=1.8';
+import { nearestIndex, tideInfo } from './scoring.js?v=1.9';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
@@ -27,11 +27,16 @@ export async function fetchSpotForecast(spot) {
   if (hit && Date.now() - hit.at < TTL) return hit.data;
 
   const common = { latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime', forecast_days: 7, past_days: 2 };
-  const wx = await getJSON(`${FORECAST}?${qs({
-    ...common,
-    hourly: 'cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,precipitation_probability,precipitation,visibility,wind_speed_10m,temperature_2m',
-    daily: 'sunrise,sunset',
-  })}`);
+  const BASE = 'cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,precipitation_probability,precipitation,visibility,wind_speed_10m,temperature_2m';
+  const FOG_STORM = 'relative_humidity_2m,dew_point_2m,cape,lifted_index,convective_inhibition,wind_gusts_10m,weather_code';
+  let wx;
+  try {
+    wx = await getJSON(`${FORECAST}?${qs({ ...common, hourly: `${BASE},${FOG_STORM}`, daily: 'sunrise,sunset' })}`);
+  } catch {
+    // Some variables aren't offered for every region/model; fall back to the core set.
+    wx = await getJSON(`${FORECAST}?${qs({ ...common, hourly: `${BASE},relative_humidity_2m,dew_point_2m,cape,wind_gusts_10m,weather_code`, daily: 'sunrise,sunset' })}`)
+      .catch(() => getJSON(`${FORECAST}?${qs({ ...common, hourly: BASE, daily: 'sunrise,sunset' })}`));
+  }
 
   let marine = null;
   try {
@@ -64,12 +69,15 @@ function normalize(wx, marine) {
       total: H.cloud_cover[i], low: H.cloud_cover_low[i], mid: H.cloud_cover_mid[i], high: H.cloud_cover_high[i],
       pp: H.precipitation_probability?.[i] ?? null, precip: H.precipitation?.[i] ?? 0,
       vis: H.visibility?.[i] ?? null, wind: H.wind_speed_10m?.[i] ?? null, temp: H.temperature_2m?.[i] ?? null,
+      rh: H.relative_humidity_2m?.[i] ?? null, dew: H.dew_point_2m?.[i] ?? null,
+      cape: H.cape?.[i] ?? null, li: H.lifted_index?.[i] ?? null, cin: H.convective_inhibition?.[i] ?? null,
+      gust: H.wind_gusts_10m?.[i] ?? null, code: H.weather_code?.[i] ?? null,
       wave: m.wave ?? null, swell: m.swell ?? null, sea: m.sea ?? null,
     };
   });
   const D = wx.daily;
   const days = D.time.map((t, i) => ({ t, sunrise: D.sunrise[i], sunset: D.sunset[i] }));
-  return { offset: wx.utc_offset_seconds || 0, tz: wx.timezone, hours, days, hasMarine: !!marine };
+  return { offset: wx.utc_offset_seconds || 0, tz: wx.timezone, elevation: wx.elevation ?? null, hours, days, hasMarine: !!marine };
 }
 
 // Conditions at a moment in the past (for keeper photos and rated sessions).
@@ -82,8 +90,9 @@ export async function fetchHistorical(lat, lon, date) {
   const end = ymd(Math.min(date.getTime() + DAY, now));
   const params = {
     latitude: lat, longitude: lon, start_date: start, end_date: end, timezone: 'auto', timeformat: 'unixtime',
-    hourly: 'cloud_cover_low,cloud_cover_mid,cloud_cover_high,precipitation,wind_speed_10m',
+    hourly: 'cloud_cover_low,cloud_cover_mid,cloud_cover_high,precipitation,wind_speed_10m,temperature_2m,dew_point_2m,cape,weather_code',
   };
+  const coreHourly = 'cloud_cover_low,cloud_cover_mid,cloud_cover_high,precipitation,wind_speed_10m';
 
   // The archive lags a few days behind; the forecast API covers the recent past.
   const recent = now - date.getTime() < 10 * DAY;
@@ -91,7 +100,7 @@ export async function fetchHistorical(lat, lon, date) {
   let found = null;
   for (const url of sources) {
     try {
-      const j = await getJSON(`${url}?${qs(params)}`);
+      const j = await getJSON(`${url}?${qs(params)}`).catch(() => getJSON(`${url}?${qs({ ...params, hourly: coreHourly })}`));
       const hours = j.hourly.time.map(tt => ({ t: tt }));
       const i = nearestIndex(hours, t);
       if (i >= 0 && j.hourly.cloud_cover_mid[i] != null) { found = { j, i }; break; }
@@ -103,6 +112,7 @@ export async function fetchHistorical(lat, lon, date) {
   const hour = {
     t: H.time[i], low: H.cloud_cover_low[i], mid: H.cloud_cover_mid[i], high: H.cloud_cover_high[i],
     precip: H.precipitation[i], wind: H.wind_speed_10m[i], wave: null, sea: null,
+    temp: H.temperature_2m?.[i] ?? null, dew: H.dew_point_2m?.[i] ?? null, cape: H.cape?.[i] ?? null, code: H.weather_code?.[i] ?? null,
   };
 
   let tide = null;
