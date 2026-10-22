@@ -23,6 +23,7 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 - **Go/no-go scores (0–100)** for every sunrise and sunset at each spot, built from low, mid and high cloud, rain, visibility, wind, tide and waves.
 - **Leave times** based on drive time from home, plus how early you like to be on location.
 - **Light timeline** showing blue hour, golden hour, sun azimuth, and the nearest high or low tide.
+- **Place search on the Spots map.** Search a beach, landmark, lookout or town (OpenStreetMap, preferring results near home), or paste coordinates. The map jumps there with an *Add spot here* button, and the spot name is filled in for you.
 - **Your own photos on each spot.** Add as many as you like and choose a cover. The cover appears in the spot list, the session details and the forecast's top pick. A new spot can take its location from a photo's GPS data.
 - **Plans with calendar export (.ics)**, including a 15-minute alarm.
 - **Personal score.** Import your keeper photos. The app reads each photo's capture time and location, looks up the conditions at that moment, and blends a "your style" score into every forecast once you have 3 or more keepers.
@@ -52,7 +53,7 @@ Then enable Pages as in step 3. Any later `git push` redeploys automatically.
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=2.0`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=2.1`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:
@@ -73,7 +74,7 @@ python3 -m http.server 8000
 ## First-time setup in the app
 
 1. **Settings → Home:** tap *Use my location*, then **Save**. This enables leave times.
-2. **Spots:** tap the map where you shoot, name the spot, choose sunrise and/or sunset, and best tide. Optionally add a fixed drive time and the compass bearing you face.
+2. **Spots:** search for a place or tap the map where you shoot, name the spot, choose sunrise and/or sunset, and best tide. Optionally add a fixed drive time and the compass bearing you face.
 3. **Coach:** import 3–10 of your best photos to switch on your personal score.
 4. *(Optional)* **Settings → AI coach:** paste a Claude API key from [console.anthropic.com](https://console.anthropic.com) and tap **Test key**.
 
@@ -101,6 +102,7 @@ Tune any of this in `js/scoring.js`. It's commented and self-contained.
 
 ## Data and privacy
 
+- Place search uses OpenStreetMap's Nominatim service (free, one search per second, which the app respects), falling back to Open-Meteo's town search.
 - Aurora forecasts come from NOAA's Space Weather Prediction Center (free). Live radar comes from RainViewer's free tier, which may change; if it stops, the Right now view falls back to Bureau of Meteorology links.
 - Weather, tide (modelled sea level) and waves come from [Open-Meteo](https://open-meteo.com), which is free and keyless for non-commercial use (CC BY 4.0). Historical conditions for keepers come from the Open-Meteo archive.
 - The map uses standard OpenStreetMap tiles (no key needed), darkened with CSS to match the theme.

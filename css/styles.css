@@ -398,3 +398,23 @@ h2 em { font-style: italic; color: var(--caramel); }
 .radar-msg { padding: 20px; }
 .radar-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; color: var(--muted); font: 500 .8rem var(--mono); }
 .radar-bar .btn { margin-top: 0; }
+
+/* ---------- Place search on the Spots map ---------- */
+.search { display: flex; gap: 8px; margin: 4px 0 10px; }
+.search input { flex: 1; min-width: 0; border-radius: 999px; padding: 12px 16px; }
+.search .btn { flex: 0 0 auto; }
+.results { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin: 0 0 12px; overflow: hidden; }
+.results .loading, .results p { padding: 14px 16px; margin: 0; }
+.result { display: grid; gap: 2px; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 12px 16px; color: inherit; font: inherit; cursor: pointer; }
+.result:hover, .result:focus-visible { background: var(--surface-2); }
+.r-name { font: 400 1.2rem/1.15 var(--serif); }
+.r-detail { font-size: .8rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.result-close { width: 100%; background: none; border: 0; padding: 10px; color: var(--muted); font: 700 .82rem var(--sans); cursor: pointer; }
+
+/* Leaflet popup in the brand palette */
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--surface); color: var(--text); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+.leaflet-popup-content { margin: 14px 16px; font-family: var(--sans); }
+.pop { display: grid; gap: 8px; }
+.pop strong { font: 400 1.25rem var(--serif); }
+.pop span { font-size: .78rem; color: var(--muted); }
+.pop .btn { margin: 0; }

@@ -1,12 +1,12 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=2.0';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT } from './api.js?v=2.0';
-import { nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=2.0';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=2.0';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=2.0';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=2.0';
-import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=2.0';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=2.1';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces } from './api.js?v=2.1';
+import { nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=2.1';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=2.1';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=2.1';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=2.1';
+import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=2.1';
 
-export const APP_VERSION = '2.0';
+export const APP_VERSION = '2.1';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -14,6 +14,7 @@ const S = () => getState();
 
 let tab = 'forecast';
 let map = null;
+let found = null;             // last place picked from search: { name, lat, lon, marker }
 const forecasts = {};          // spotId -> normalized forecast
 const eventIndex = new Map();  // event key -> event
 
@@ -551,6 +552,11 @@ function renderSpots(v) {
   const st = S();
   v.innerHTML = `
     <p class="eyebrow">Spots</p><h1>Where you <em>shoot.</em></h1>
+    <form class="search" id="placeSearch" role="search">
+      <input type="search" id="placeQ" placeholder="Search a beach, landmark or town" autocomplete="off" enterkeyhint="search" aria-label="Search for a place">
+      <button class="btn primary" type="submit">Search</button>
+    </form>
+    <div id="placeResults" class="results" hidden></div>
     <div id="map" role="application" aria-label="Map of your spots. Tap to add a spot."></div>
     <p class="small muted" style="margin-top:8px">Tap anywhere on the map to add a spot there.</p>
     <div class="row">
@@ -568,6 +574,8 @@ function renderSpots(v) {
     </section>`;
 
   $('#addSpot').onclick = () => openSpotForm();
+  found = null;
+  $('#placeSearch').onsubmit = ev => { ev.preventDefault(); runPlaceSearch(); };
   $('#hereSpot').onclick = async () => {
     try { const p = await getPosition(); openSpotForm(p); } catch (e) { toast(e.message, 4000); }
   };
@@ -589,14 +597,65 @@ function renderSpots(v) {
     if (home) window.L.circleMarker([home.lat, home.lon], { radius: 6, color: '#ECE8E1', fillColor: '#ECE8E1', fillOpacity: 1 }).addTo(map).bindTooltip('Home');
     if (pts.length > 1) map.fitBounds(pts, { padding: [30, 30], maxZoom: 12 });
     else if (pts.length === 1) map.setView(pts[0], 11);
-    map.on('click', ev => openSpotForm({ lat: ev.latlng.lat, lon: ev.latlng.lng }));
+    map.on('click', ev => {
+      // Fine-tuning near a searched place keeps its name.
+      const near = found && Math.abs(found.lat - ev.latlng.lat) < 0.03 && Math.abs(found.lon - ev.latlng.lng) < 0.03;
+      openSpotForm({ lat: ev.latlng.lat, lon: ev.latlng.lng, name: near ? found.name : '' });
+    });
     setTimeout(() => map && map.invalidateSize(), 60);
   }
 }
 
+let lastSearchAt = 0;
+async function runPlaceSearch() {
+  const q = $('#placeQ').value.trim();
+  const box = $('#placeResults');
+  if (!q) return;
+  $('#placeQ').blur();
+  box.hidden = false;
+  box.innerHTML = '<p class="loading">Searching…</p>';
+  let results = [];
+  const coords = q.match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
+  if (coords) {
+    const lat = parseFloat(coords[1]), lon = parseFloat(coords[2]);
+    if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) results = [{ name: '', detail: `${lat.toFixed(5)}, ${lon.toFixed(5)}`, lat, lon, isCoords: true }];
+  } else {
+    // OpenStreetMap asks for no more than one search a second.
+    const wait = 1100 - (Date.now() - lastSearchAt);
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    lastSearchAt = Date.now();
+    try { results = await searchPlaces(q, S().settings.home); }
+    catch (e) { box.innerHTML = `<p class="muted small">Search isn't available right now. You can still tap the map or paste coordinates like -38.49, 144.88.</p>`; return; }
+  }
+  if (!results.length) {
+    box.innerHTML = '<p class="muted small">No places found. Try adding the area, like "Pulpit Rock, Cape Schanck", or paste coordinates.</p>';
+    return;
+  }
+  box.innerHTML = results.map((r, i) => `<button type="button" class="result" data-res="${i}">
+      <span class="r-name">${esc(r.isCoords ? 'Go to these coordinates' : r.name)}</span>
+      <span class="r-detail">${esc(r.detail)}</span>
+    </button>`).join('') + '<button type="button" class="result-close" id="closeResults">Close results</button>';
+  $$('[data-res]', box).forEach(b => b.onclick = () => { box.hidden = true; showFoundPlace(results[+b.dataset.res]); });
+  $('#closeResults').onclick = () => { box.hidden = true; };
+}
+
+function showFoundPlace(r) {
+  if (!map || !window.L) { openSpotForm({ lat: r.lat, lon: r.lon, name: r.name }); return; }
+  if (found?.marker) found.marker.remove();
+  map.setView([r.lat, r.lon], 15);
+  const marker = window.L.circleMarker([r.lat, r.lon], { radius: 11, color: '#ECE8E1', weight: 3, fillColor: '#D9A066', fillOpacity: 1 }).addTo(map);
+  marker.bindPopup(`<div class="pop">
+      <strong>${esc(r.name || 'Dropped pin')}</strong>
+      <button type="button" class="btn primary small-btn" data-add-here>Add spot here</button>
+      <span>Or tap the map nearby to place it exactly.</span>
+    </div>`, { closeButton: false, minWidth: 200 }).openPopup();
+  found = { name: r.name, lat: r.lat, lon: r.lon, marker };
+  $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 function openSpotForm(prefill = {}, existing = null) {
   const s = existing || {
-    name: '', lat: prefill.lat ?? '', lon: prefill.lon ?? '', events: ['sunrise', 'sunset'],
+    name: prefill.name ?? '', lat: prefill.lat ?? '', lon: prefill.lon ?? '', events: ['sunrise', 'sunset'],
     coastal: true, tide: 'any', driveMin: '', facing: '', notes: '',
   };
   const num = x => (x === '' || x == null ? '' : Number(x).toFixed(5));
@@ -1173,6 +1232,7 @@ function renderSettings(v) {
 
 document.addEventListener('click', ev => {
   if (ev.target.closest('[data-lightning]')) { openLightningTimer(); return; }
+  if (ev.target.closest('[data-add-here]') && found) { openSpotForm({ lat: found.lat, lon: found.lon, name: found.name }); return; }
   const evBtn = ev.target.closest('[data-ev]');
   if (evBtn) { openEvent(evBtn.dataset.ev); return; }
   if (ev.target.closest('[data-close]')) closeSheet();

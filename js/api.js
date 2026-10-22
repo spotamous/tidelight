@@ -1,5 +1,5 @@
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
-import { nearestIndex, tideInfo } from './scoring.js?v=2.0';
+import { nearestIndex, tideInfo } from './scoring.js?v=2.1';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
@@ -196,3 +196,19 @@ export const WEATHER_TEXT = code => {
   if (code === 96 || code === 99) return 'Thunderstorm with hail';
   return 'Mixed';
 };
+
+/* ---------- Place search for adding spots ---------- */
+// OpenStreetMap Nominatim (finds beaches, landmarks, lookouts; free, max ~1 search per second),
+// with Open-Meteo's town/suburb search as a fallback.
+export async function searchPlaces(q, home) {
+  const p = { format: 'jsonv2', q, limit: 6, 'accept-language': 'en' };
+  if (home) p.viewbox = `${home.lon - 3},${home.lat + 3},${home.lon + 3},${home.lat - 3}`; // prefer results near home
+  try {
+    const j = await getJSON(`https://nominatim.openstreetmap.org/search?${qs(p)}`);
+    if (Array.isArray(j) && j.length) {
+      return j.map(r => ({ name: r.name || String(r.display_name).split(',')[0], detail: r.display_name, lat: +r.lat, lon: +r.lon }));
+    }
+  } catch { /* fall through */ }
+  const g = await getJSON(`https://geocoding-api.open-meteo.com/v1/search?${qs({ name: q.split(',')[0].trim(), count: 6, language: 'en', format: 'json' })}`);
+  return (g.results || []).map(r => ({ name: r.name, detail: [r.admin2, r.admin1, r.country].filter(Boolean).join(', '), lat: r.latitude, lon: r.longitude }));
+}
