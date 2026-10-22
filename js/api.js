@@ -1,5 +1,5 @@
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
-import { nearestIndex, tideInfo } from './scoring.js?v=1.9';
+import { nearestIndex, tideInfo } from './scoring.js?v=2.0';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
@@ -130,3 +130,69 @@ export async function fetchHistorical(lat, lon, date) {
 
   return { hour, tide };
 }
+
+/* ---------- Space weather: NOAA SWPC planetary Kp forecast (free, no key) ---------- */
+const KP_URL = 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json';
+let kpCache = null;
+
+function parseTime(v) {
+  let s = String(v).trim().replace(' ', 'T');
+  if (!/[zZ]|[+-]\d\d:?\d\d$/.test(s)) s += 'Z'; // SWPC times are UTC
+  return Date.parse(s) / 1000;
+}
+
+// Returns [{ t: unix seconds (start of 3-hour block), kp }]. Handles both of SWPC's JSON layouts.
+export async function fetchKp() {
+  if (kpCache && Date.now() - kpCache.at < 60 * 60 * 1000) return kpCache.data;
+  const j = await getJSON(KP_URL);
+  let rows = [];
+  if (Array.isArray(j) && Array.isArray(j[0])) {
+    const hdr = j[0].map(x => String(x).toLowerCase());
+    const ti = hdr.indexOf('time_tag'), ki = hdr.indexOf('kp');
+    rows = j.slice(1).map(r => ({ t: parseTime(r[ti]), kp: parseFloat(r[ki]) }));
+  } else if (Array.isArray(j)) {
+    rows = j.map(r => ({ t: parseTime(r.time_tag ?? r.time), kp: parseFloat(r.kp ?? r.Kp ?? r.kp_index) }));
+  }
+  rows = rows.filter(r => !isNaN(r.t) && !isNaN(r.kp)).sort((a, b) => a.t - b.t);
+  kpCache = { at: Date.now(), data: rows };
+  return rows;
+}
+
+/* ---------- Right now: current modelled conditions at a spot ---------- */
+export async function fetchCurrent(spot) {
+  const j = await getJSON(`${FORECAST}?${qs({
+    latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime',
+    current: 'temperature_2m,relative_humidity_2m,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_gusts_10m,weather_code,visibility,precipitation',
+  })}`);
+  const c = j.current || {};
+  return {
+    t: c.time, offset: j.utc_offset_seconds || 0, temp: c.temperature_2m, rh: c.relative_humidity_2m,
+    total: c.cloud_cover, low: c.cloud_cover_low, mid: c.cloud_cover_mid, high: c.cloud_cover_high,
+    wind: c.wind_speed_10m, gust: c.wind_gusts_10m, code: c.weather_code, vis: c.visibility, precip: c.precipitation,
+  };
+}
+
+/* ---------- Live radar frames from RainViewer (free tier; may change) ---------- */
+export async function fetchRadarFrames() {
+  const j = await getJSON('https://api.rainviewer.com/public/weather-maps.json');
+  const past = j?.radar?.past || [];
+  if (!j.host || !past.length) throw new Error('No radar frames available');
+  return past.slice(-8).map(f => ({ time: f.time, url: `${j.host}${f.path}/256/{z}/{x}/{y}/2/1_1.png` }));
+}
+
+export const WEATHER_TEXT = code => {
+  if (code == null) return '–';
+  if (code === 0) return 'Clear';
+  if (code === 1) return 'Mostly clear';
+  if (code === 2) return 'Partly cloudy';
+  if (code === 3) return 'Overcast';
+  if (code === 45 || code === 48) return 'Fog';
+  if (code >= 51 && code <= 57) return 'Drizzle';
+  if (code >= 61 && code <= 67) return 'Rain';
+  if (code >= 71 && code <= 77) return 'Snow';
+  if (code >= 80 && code <= 82) return 'Showers';
+  if (code === 85 || code === 86) return 'Snow showers';
+  if (code === 95) return 'Thunderstorm';
+  if (code === 96 || code === 99) return 'Thunderstorm with hail';
+  return 'Mixed';
+};

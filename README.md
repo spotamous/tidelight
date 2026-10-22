@@ -12,6 +12,13 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
   - *Storm* uses storm energy (CAPE), lifted index, convective inhibition, gusts and thunderstorm forecasts in the hours around the session.
   - *Lightning* looks for storm potential in the dark hours after sunset or before sunrise, when lightning is easiest to shoot.
   - *Rainbow* needs showers, breaks in the cloud and the sun below 42°, and tells you which way to look.
+- **Night sessions: Aurora and Milky Way.** Tick these hunts on a spot and each day gets a *Night* session, timed to the best hour between sunset and sunrise.
+  - *Aurora* uses NOAA's free 3-day Kp forecast, your spot's geomagnetic latitude (Melbourne needs roughly Kp 5.5, Hobart about Kp 4), darkness, cloud and moonlight.
+  - *Milky Way* calculates where the galactic core sits each hour, and combines that with true darkness, moon phase and position, and cloud. If you've set a facing direction, it tells you how well the core lines up with your composition.
+- **Tide access windows.** For rock shelves, caves and sandbars, set the tide level (as a % of the range) the spot is reachable below, plus a safety buffer. The app shows when access opens, when to be back off, and flags sessions the tide blocks.
+- **Hit-rate tracker** (Plans). Shows how often the app's call matched your rating, the average predicted score of sessions that delivered versus those that didn't, and accuracy per spot. You can also log sessions you shot without planning them.
+- **Right now** (radar button in the header). Current modelled conditions at every spot, the tide right now, an animated rain radar, and quick links to the Bureau of Meteorology radar, satellite loop and warnings.
+- **Offline mode.** Once you've opened the app with reception, it works without it: the app, your last forecasts, tides and viewed map tiles are saved on the device.
 - **Lightning distance timer** (Coach → Field tools, or from any lightning score). Tap on the flash, tap on the thunder, and it shows the distance, whether the storm is closing in, and a shelter warning inside 10 km.
 - **Go/no-go scores (0–100)** for every sunrise and sunset at each spot, built from low, mid and high cloud, rain, visibility, wind, tide and waves.
 - **Leave times** based on drive time from home, plus how early you like to be on location.
@@ -45,7 +52,13 @@ Then enable Pages as in step 3. Any later `git push` redeploys automatically.
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=1.9`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=2.0`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+
+### Releasing a new version
+Bump the version in three places so phones pick it up straight away:
+1. `?v=` tags in `index.html` and in the `import` lines at the top of each file in `js/`
+2. `APP_VERSION` in `js/app.js`
+3. `VERSION` in `sw.js`
 
 ## Run it locally
 
@@ -88,6 +101,7 @@ Tune any of this in `js/scoring.js`. It's commented and self-contained.
 
 ## Data and privacy
 
+- Aurora forecasts come from NOAA's Space Weather Prediction Center (free). Live radar comes from RainViewer's free tier, which may change; if it stops, the Right now view falls back to Bureau of Meteorology links.
 - Weather, tide (modelled sea level) and waves come from [Open-Meteo](https://open-meteo.com), which is free and keyless for non-commercial use (CC BY 4.0). Historical conditions for keepers come from the Open-Meteo archive.
 - The map uses standard OpenStreetMap tiles (no key needed), darkened with CSS to match the theme.
 - The header loads your logo from tysonwaldron.com. If it can't load, it shows "Tyson Waldron" in text.
@@ -109,11 +123,12 @@ manifest.webmanifest  Home-screen install
 css/styles.css        All styling, matched to tysonwaldron.com
 js/app.js             Views: forecast, spots, plans, coach, settings
 js/scoring.js         Colour score, tide analysis, personal model, event builder
-js/hunts.js           Fog, storm, lightning and rainbow scores
+js/hunts.js           Fog, storm, lightning, rainbow, aurora and Milky Way scores
 js/api.js             Open-Meteo forecast, marine and archive calls
 js/ai.js              Claude API calls and photo/EXIF helpers
 js/storage.js         localStorage state, backup and restore
 js/photos.js          Spot photos (IndexedDB), resize, backup
+sw.js                 Offline support (service worker)
 js/util.js            Formatting and small helpers
 icons/                App icons
 ```

@@ -1,10 +1,11 @@
 // Extra things to hunt for at a spot, beyond sunrise/sunset colour.
 // Each scorer returns { score 0–100, factors: [{k: good|bad|neutral, t}], ...extras } or null when not applicable.
-import { clamp, compass } from './util.js?v=1.9';
+import { clamp, compass, fmtTime, angleDiff } from './util.js?v=2.0';
 
-export const HUNT_ORDER = ['colour', 'fog', 'storm', 'lightning', 'rainbow'];
-export const HUNT_LABEL = { colour: 'Colour', fog: 'Fog', storm: 'Storm', lightning: 'Lightning', rainbow: 'Rainbow' };
-export const HUNT_VERB = { colour: 'colour', fog: 'fog', storm: 'storms', lightning: 'lightning', rainbow: 'a rainbow' };
+export const HUNT_ORDER = ['colour', 'fog', 'storm', 'lightning', 'rainbow', 'aurora', 'astro'];
+export const NIGHT_HUNTS = ['aurora', 'astro'];   // scored as their own "Night" session
+export const HUNT_LABEL = { colour: 'Colour', fog: 'Fog', storm: 'Storm', lightning: 'Lightning', rainbow: 'Rainbow', aurora: 'Aurora', astro: 'Milky Way' };
+export const HUNT_VERB = { colour: 'colour', fog: 'fog', storm: 'storms', lightning: 'lightning', rainbow: 'a rainbow', aurora: 'aurora', astro: 'the Milky Way' };
 export const huntsOf = spot => (spot.hunts && spot.hunts.length ? spot.hunts : ['colour']);
 
 const THUNDER = c => c === 95 || c === 96 || c === 99;
@@ -141,5 +142,113 @@ export function computeHunts({ spot, data, idx, type, colour }) {
   if (sel.includes('storm')) { const r = stormScore(data.hours, idx, type); if (r) out.storm = r; }
   if (sel.includes('lightning')) { const r = lightningScore(data.hours, idx, type); if (r) out.lightning = r; }
   if (sel.includes('rainbow')) { const r = rainbowScore(data.hours, idx, type, spot); if (r) out.rainbow = r; }
+  return out;
+}
+
+/* =================== Night hunts =================== */
+
+const RAD = Math.PI / 180;
+let KP = [];                                   // [{ t, kp }] from NOAA SWPC
+export function setKp(list) { KP = Array.isArray(list) ? list : []; }
+export const hasKp = () => KP.length > 0;
+function kpAt(t) {
+  for (const r of KP) if (t >= r.t && t < r.t + 3 * 3600) return r.kp;
+  return null;
+}
+
+// Geomagnetic latitude using a dipole approximation (north geomagnetic pole ~80.8°N, 72.7°W).
+export function geomagLat(lat, lon) {
+  const pl = 80.8 * RAD, pn = -72.7 * RAD, p = lat * RAD, l = lon * RAD;
+  return Math.asin(Math.sin(p) * Math.sin(pl) + Math.cos(p) * Math.cos(pl) * Math.cos(l - pn)) / RAD;
+}
+// Rough Kp needed for a camera to catch aurora low on the horizon.
+// Calibrated so Melbourne (~45° geomagnetic) needs about Kp 5.5 and Hobart (~49.5°) about Kp 4.
+export function kpNeeded(lat, lon) {
+  return Math.min(9, Math.max(1, 5.5 - 0.3125 * (Math.abs(geomagLat(lat, lon)) - 44.7)));
+}
+
+function sunAlt(t, spot) { return window.SunCalc.getPosition(new Date(t * 1000), spot.lat, spot.lon).altitude / RAD; }
+function moonInfo(t, spot) {
+  const d = new Date(t * 1000);
+  const alt = window.SunCalc.getMoonPosition(d, spot.lat, spot.lon).altitude / RAD;
+  const frac = window.SunCalc.getMoonIllumination(d).fraction;
+  return { alt, frac, up: alt > 0 };
+}
+
+export function auroraScore(hours, i0, i1, spot, offset) {
+  if (!window.SunCalc) return null;
+  if (!KP.length) return { score: 0, factors: [{ k: 'neutral', t: 'Aurora forecast unavailable right now (NOAA space weather feed)' }] };
+  const need = kpNeeded(spot.lat, spot.lon);
+  const south = spot.lat < 0;
+  let best = -1, bh = null, bkp = null, bmoon = null, maxKp = 0;
+  for (let i = i0; i <= i1; i++) {
+    const h = hours[i];
+    if (!h || sunAlt(h.t, spot) > -12) continue;
+    const kp = kpAt(h.t);
+    if (kp == null) continue;
+    maxKp = Math.max(maxKp, kp);
+    const sKp = clamp((kp - need + 1.5) / 2.5);
+    const clear = 1 - clamp(((h.total ?? 50) - 20) / 70);
+    const m = moonInfo(h.t, spot);
+    const s = sKp * clear * (m.up ? 1 - 0.3 * m.frac : 1);
+    if (s > best) { best = s; bh = h; bkp = kp; bmoon = m; }
+  }
+  if (!bh) return { score: 0, factors: [{ k: 'neutral', t: 'No aurora forecast for these dark hours yet' }] };
+  const f = [];
+  f.push(bkp >= need ? { k: 'good', t: `Kp forecast ${bkp.toFixed(1)} around ${fmtTime(bh.t, offset)}: enough for your latitude (about Kp ${need.toFixed(1)}+ needed here)` }
+    : { k: 'bad', t: `Kp forecast peaks at ${maxKp.toFixed(1)}; this spot needs about ${need.toFixed(1)}+ for a camera to pick it up` });
+  const cl = bh.total ?? 50;
+  f.push(cl <= 30 ? { k: 'good', t: 'Mostly clear skies' } : cl >= 70 ? { k: 'bad', t: `Cloudy (${Math.round(cl)}%)` } : { k: 'neutral', t: `Some cloud (${Math.round(cl)}%)` });
+  if (bmoon.up && bmoon.frac > 0.5) f.push({ k: 'bad', t: `Bright moon up (${Math.round(bmoon.frac * 100)}% lit)` });
+  f.push({ k: 'neutral', t: `Look ${south ? 'south' : 'north'}, low over the horizon. Cameras see it before your eyes do.` });
+  return { score: Math.round(100 * best), factors: f, peak: bh.t, kp: bkp, need };
+}
+
+// Galactic centre (RA 266.417°, Dec −29.008°): altitude and azimuth for a time and place.
+export function coreAltAz(t, lat, lon) {
+  const jd = t / 86400 + 2440587.5, D = jd - 2451545.0;
+  let gmst = (18.697374558 + 24.06570982441908 * D) % 24; if (gmst < 0) gmst += 24;
+  const ha = (((gmst * 15 + lon - 266.417) % 360) + 360) % 360 * RAD;
+  const p = lat * RAD, d = -29.008 * RAD;
+  const alt = Math.asin(Math.sin(p) * Math.sin(d) + Math.cos(p) * Math.cos(d) * Math.cos(ha));
+  const az = Math.atan2(Math.sin(ha), Math.cos(ha) * Math.sin(p) - Math.tan(d) * Math.cos(p));
+  return { alt: alt / RAD, az: (az / RAD + 180 + 360) % 360 };
+}
+
+export function astroScore(hours, i0, i1, spot, offset) {
+  if (!window.SunCalc) return null;
+  let best = -1, bh = null, bcore = null, bmoon = null, anyCore = false;
+  for (let i = i0; i <= i1; i++) {
+    const h = hours[i];
+    if (!h) continue;
+    const sa = sunAlt(h.t, spot);
+    const dark = sa < -18 ? 1 : sa < -15 ? 0.5 : 0;
+    if (!dark) continue;
+    const core = coreAltAz(h.t, spot.lat, spot.lon);
+    if (core.alt > 5) anyCore = true;
+    const m = moonInfo(h.t, spot);
+    const clear = 1 - clamp(((h.total ?? 50) - 15) / 60);
+    const s = dark * clamp((core.alt - 5) / 20) * (m.up ? 1 - 0.85 * m.frac : 1) * clear;
+    if (s > best) { best = s; bh = h; bcore = core; bmoon = m; }
+  }
+  if (!bh || !anyCore) return { score: 0, factors: [{ k: 'bad', t: "The Milky Way core isn't up during dark hours at this time of year" }] };
+  const f = [];
+  f.push({ k: bcore.alt >= 15 ? 'good' : 'neutral', t: `Core ${Math.round(bcore.alt)}° up in the ${compass(bcore.az)} (${Math.round(bcore.az)}°) around ${fmtTime(bh.t, offset)}` });
+  f.push(!bmoon.up ? { k: 'good', t: 'Moon is down' } : bmoon.frac > 0.4 ? { k: 'bad', t: `Moon up and ${Math.round(bmoon.frac * 100)}% lit` } : { k: 'neutral', t: `Thin moon up (${Math.round(bmoon.frac * 100)}% lit)` });
+  const cl = bh.total ?? 50;
+  f.push(cl <= 20 ? { k: 'good', t: 'Clear skies' } : cl >= 60 ? { k: 'bad', t: `Cloudy (${Math.round(cl)}%)` } : { k: 'neutral', t: `Some cloud (${Math.round(cl)}%)` });
+  let alignment = null;
+  if (spot.facing !== '' && spot.facing != null && !isNaN(Number(spot.facing))) {
+    const diff = angleDiff(bcore.az, Number(spot.facing));
+    alignment = { diff, text: `Core sits ${Math.round(diff)}° from where you face` };
+    f.push({ k: diff <= 30 ? 'good' : 'neutral', t: alignment.text });
+  }
+  return { score: Math.round(100 * best), factors: f, peak: bh.t, core: bcore, moon: bmoon, alignment };
+}
+
+export function computeNightHunts({ spot, data, i0, i1 }) {
+  const sel = huntsOf(spot), out = {};
+  if (sel.includes('aurora')) { const r = auroraScore(data.hours, i0, i1, spot, data.offset); if (r) out.aurora = r; }
+  if (sel.includes('astro')) { const r = astroScore(data.hours, i0, i1, spot, data.offset); if (r) out.astro = r; }
   return out;
 }

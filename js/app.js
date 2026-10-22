@@ -1,12 +1,12 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=1.9';
-import { fetchSpotForecast, fetchHistorical, clearCache } from './api.js?v=1.9';
-import { evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=1.9';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=1.9';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf } from './hunts.js?v=1.9';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=1.9';
-import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=1.9';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=2.0';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT } from './api.js?v=2.0';
+import { nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=2.0';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=2.0';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=2.0';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=2.0';
+import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=2.0';
 
-export const APP_VERSION = '1.9';
+export const APP_VERSION = '2.0';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -22,8 +22,13 @@ const eventIndex = new Map();  // event key -> event
 async function loadForecasts(force = false) {
   if (force) { clearCache(); for (const k in forecasts) delete forecasts[k]; }
   const spots = S().spots;
-  const res = await Promise.allSettled(spots.map(s => fetchSpotForecast(s)));
+  const needKp = spots.some(sp => huntsOf(sp).includes('aurora'));
+  const [res] = await Promise.all([
+    Promise.allSettled(spots.map(s => fetchSpotForecast(s))),
+    needKp ? fetchKp().then(setKp).catch(() => {}) : Promise.resolve(),
+  ]);
   const failed = [];
+  if (res.some(r => r.status === 'fulfilled')) { try { localStorage.setItem('tidelight:lastFetch', String(Date.now())); } catch {} }
   res.forEach((r, i) => {
     if (r.status === 'fulfilled') forecasts[spots[i].id] = r.value;
     else failed.push(`${spots[i].name} (${r.reason?.message || 'error'})`);
@@ -59,6 +64,13 @@ function verdict(e) {
 
 // Hunts on this session in display order, e.g. [['fog', {score, factors}], ...]
 const huntList = e => HUNT_ORDER.filter(k => e.hunts && e.hunts[k]).map(k => [k, e.hunts[k]]);
+// "tonight", "tomorrow sunrise", "fri 23 oct sunset"
+function sessionName(e) {
+  const day = fmtDay(e.dayT ?? e.t, e.offset).toLowerCase();
+  if (e.type !== 'night') return `${day} ${e.type}`;
+  return day === 'today' ? 'tonight' : `${day} night`;
+}
+
 // For compact badges: the leading hunt plus any other worth noticing (40+). Hidden for plain colour-only sessions.
 const notableHunts = e => {
   const list = huntList(e).filter(([k, v]) => k === e.topHunt || v.score >= 40);
@@ -68,7 +80,9 @@ const notableHunts = e => {
 function briefing(e) {
   const o = e.offset, h = e.hour, s = e.spot;
   const lines = [];
-  lines.push(`${verdict(e)}. ${s.name} ${e.type} at ${fmtTime(e.t, o)}.`);
+  lines.push(e.type === 'night'
+    ? `${verdict(e)}. ${s.name} ${sessionName(e)}, best around ${fmtTime(e.t, o)}.`
+    : `${verdict(e)}. ${s.name} ${e.type} at ${fmtTime(e.t, o)}.`);
   lines.push(e.drive != null
     ? `Leave ${fmtTime(e.leave, o)} (${e.drive} min drive, on location ${S().settings.arriveBeforeMin} min early).`
     : `Be on location by ${fmtTime(e.leave, o)}. Set your home location in Settings to get a leave time.`);
@@ -86,7 +100,7 @@ function briefing(e) {
       ? `Sea is calm (${h.wave.toFixed(1)} m): try 10–30 s with an ND filter for glassy water.`
       : `Waves around ${h.wave.toFixed(1)} m: try 0.3–2 s to keep texture in the water, and watch the sets.`);
   }
-  if ((h.high ?? 0) > 30) {
+  if ((h.high ?? 0) > 30 && e.type !== 'night') {
     lines.push(e.type === 'sunset' ? 'Stay 15–20 min after sunset for afterglow on the high cloud.' : 'Arrive early: high cloud often lights up 15–20 min before sunrise.');
   }
   const H = e.hunts || {};
@@ -98,6 +112,17 @@ function briefing(e) {
   if (H.storm && H.storm.score >= 45) lines.push(`Storm potential ${H.storm.score} around ${fmtTime(H.storm.peak, o)}: watch the radar from mid-afternoon for building cells.`);
   if (H.lightning && H.lightning.score >= 45) lines.push(`Lightning window in the dark (${fmtTime(H.lightning.from, o)}–${fmtTime(H.lightning.to, o)}): try ISO 100–400, f/5.6–8 and 15–30 s exposures on a tripod.`);
   if (H.rainbow && H.rainbow.score >= 45) lines.push(`Rainbow chance around ${fmtTime(H.rainbow.peak, o)}: keep the sun at your back and look ${compass(H.rainbow.look)}.`);
+  if (H.aurora && H.aurora.score >= 40) lines.push(`Aurora possible around ${fmtTime(H.aurora.peak, o)} (Kp ${H.aurora.kp.toFixed(1)}). Find a dark spot with a clear ${s.lat < 0 ? 'southern' : 'northern'} horizon; try ISO 1600–3200, f/2.8 and 5–15 s.`);
+  if (H.astro && H.astro.score >= 40 && H.astro.core) lines.push(`Milky Way core ${Math.round(H.astro.core.alt)}° up in the ${compass(H.astro.core.az)} around ${fmtTime(H.astro.peak, o)}. Try ISO 3200–6400, f/2.8 or wider, and 15–20 s on a wide lens.`);
+  if (e.access) {
+    if (e.access.none) lines.push('Tide access: the tide never drops low enough around this session for safe access.');
+    else {
+      const when = e.access.openStart
+        ? `Tide access is open; be back off the rocks by ${fmtTime(e.access.backBy, o)}`
+        : `Tide access opens ${fmtTime(e.access.start, o)}; be back off the rocks by ${fmtTime(e.access.backBy, o)}`;
+      lines.push(`${when}${e.access.inside ? '.' : ", which doesn't cover this session."}`);
+    }
+  }
   if ((H.storm?.score ?? 0) >= 45 || (H.lightning?.score ?? 0) >= 45) {
     lines.push('Stay safe: if thunder follows a flash within 30 seconds, you are within striking distance. Shoot from a hard-topped car or a building, and wait 30 minutes after the last thunder.');
   }
@@ -122,6 +147,7 @@ function chips(e) {
   if (e.hour.wave != null) c.push(`<span class="chip">${e.hour.wave.toFixed(1)} m sea</span>`);
   c.push(`<span class="chip">${Math.round(e.hour.low ?? 0)}/${Math.round(e.hour.mid ?? 0)}/${Math.round(e.hour.high ?? 0)}% cloud</span>`);
   if (e.personal) c.push(`<span class="chip me">Your style ${e.personal.score}</span>`);
+  if (e.access && !e.access.inside) c.unshift(`<span class="chip warn">Tide blocks access</span>`);
   const hl = notableHunts(e);
   if (hl.length) hl.slice().reverse().forEach(([k, v]) => c.unshift(`<span class="chip ${k === e.topHunt ? 'me' : ''}">${HUNT_LABEL[k]} ${v.score}</span>`));
   return c.join('');
@@ -182,7 +208,15 @@ function emptySpots(v) {
   $('#goAdd').onclick = () => { tab = 'spots'; render(); openSpotForm(); };
 }
 
+function savedAgo() {
+  const t = Number(localStorage.getItem('tidelight:lastFetch') || 0);
+  if (!t) return 'earlier';
+  const mins = Math.round((Date.now() - t) / 60000);
+  return mins < 60 ? `${mins} min ago` : mins < 48 * 60 ? `${Math.round(mins / 60)} h ago` : `${Math.round(mins / 1440)} days ago`;
+}
+
 const SUN_ICON = {
+  night: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
   sunrise: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 18h18M7 18a5 5 0 0 1 10 0M12 7v3M12 7l-2 2M12 7l2 2M5 12l1.5 1M19 12l-1.5 1"/></svg>',
   sunset: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 18h18M7 18a5 5 0 0 1 10 0M12 10V7M12 10l-2-2M12 10l2-2M5 12l1.5 1M19 12l-1.5 1"/></svg>',
 };
@@ -199,6 +233,7 @@ function tile(e, isBest) {
     </span>
     <span class="tile-name">${esc(e.spot.name)}</span>
     ${notableHunts(e).length ? `<span class="tile-hunts">${notableHunts(e).map(([k, v]) => `<span class="${k === e.topHunt ? 'top' : ''}">${HUNT_LABEL[k]} ${v.score}</span>`).join('')}</span>` : ''}
+    ${e.access && !e.access.inside ? '<span class="tile-warn">Tide blocks access</span>' : ''}
     ${isBest ? '<span class="tile-badge">Best</span>' : ''}
   </button>`;
 }
@@ -215,7 +250,7 @@ async function renderForecast(v) {
   const evs = allEvents();
   const days = [0, 1, 2].map(i => ({ i, events: [] }));
   for (const e of evs) {
-    const k = dayKey(e.t, e.offset);
+    const k = dayKey(e.dayT ?? e.t, e.offset);
     const d = days.find(x => dayKey(now + x.i * 86400, e.offset) === k);
     if (d) d.events.push(e);
   }
@@ -225,7 +260,7 @@ async function renderForecast(v) {
   const dayTitle = i => i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : fmtWeekday(now + i * 86400, best?.offset ?? 0);
 
   const daySection = d => {
-    const slots = ['sunrise', 'sunset'].map(type => {
+    const slots = ['sunrise', 'sunset', 'night'].map(type => {
       const list = d.events.filter(e => e.type === type).sort((a, b) => b.score - a.score);
       if (!list.length) return '';
       return `<div class="slot">
@@ -244,10 +279,11 @@ async function renderForecast(v) {
 
   v.innerHTML = `
     <section class="hero">
-      <p class="eyebrow">Next 3 days${best ? ` — best: ${esc(best.spot.name)}, ${fmtDay(best.t, best.offset).toLowerCase()} ${best.type}` : ''}</p>
+      <p class="eyebrow">Next 3 days${best ? ` — best: ${esc(best.spot.name)}, ${sessionName(best)}` : ''}</p>
       <h1>${!best ? 'No forecasts <em>yet.</em>' : best.score >= 75 ? 'Worth the <em>alarm.</em>' : best.score >= 50 ? 'Worth a <em>look.</em>' : 'A quiet few <em>days.</em>'}</h1>
     </section>
-    ${failed.length ? `<div class="alert danger">Couldn't load: ${esc(failed.join(', '))}. Check your connection and tap refresh.</div>` : ''}
+    ${!navigator.onLine ? `<div class="alert info">You're offline. Showing the forecast saved ${savedAgo()}.</div>` : ''}
+    ${failed.length && navigator.onLine ? `<div class="alert danger">Couldn't load: ${esc(failed.join(', '))}. Check your connection and tap refresh.</div>` : ''}
     ${!st.settings.home ? `<div class="alert info">Set your home location in Settings to get drive-aware leave times.</div>` : ''}
     ${days.map(daySection).join('')}
     <p class="small muted" style="margin-top:28px">Tap any spot for the full briefing. Open a spot in Spots to see all 7 days. Forecasts are estimates; always check official marine and weather warnings before heading out.</p>`;
@@ -264,7 +300,11 @@ function openEvent(key) {
   if (L.blueStart) tl.push({ t: L.blueStart, label: 'Blue hour starts' });
   if (L.blueEnd) tl.push({ t: L.blueEnd, label: 'Blue hour ends' });
   if (L.goldenStart && e.type === 'sunset') tl.push({ t: L.goldenStart, label: 'Golden hour starts' });
-  tl.push({ t: e.t, label: cap(e.type), cls: 'key' });
+  if (e.timeline) tl.push(...e.timeline); else tl.push({ t: e.t, label: cap(e.type), cls: 'key' });
+  if (e.access && !e.access.none) {
+    if (!e.access.openStart) tl.push({ t: e.access.start, label: 'Tide access opens' });
+    tl.push({ t: e.access.backBy, label: 'Be back off the rocks', cls: 'leave' });
+  }
   if (L.goldenEnd && e.type === 'sunrise') tl.push({ t: L.goldenEnd, label: 'Golden hour ends' });
   if (e.tide?.low && Math.abs(e.tide.low.t - e.t) < 4 * 3600) tl.push({ t: e.tide.low.t, label: 'Low tide' });
   if (e.tide?.high && Math.abs(e.tide.high.t - e.t) < 4 * 3600) tl.push({ t: e.tide.high.t, label: 'High tide' });
@@ -285,7 +325,7 @@ function openEvent(key) {
     ${coverUrl(e.spot) ? `<img class="banner" src="${coverUrl(e.spot)}" alt="${esc(e.spot.name)}">` : ''}
     <div class="sheet-head">
       ${horizon(e, true)}
-      <div><h2>${esc(e.spot.name)}</h2><div class="muted">${fmtDay(e.t, o)}, ${e.type} at ${fmtTime(e.t, o)}</div><div class="verdict">${verdict(e)}</div></div>
+      <div><h2>${esc(e.spot.name)}</h2><div class="muted">${e.type === 'night' ? `${cap(sessionName(e))}, best around ${fmtTime(e.t, o)}` : `${fmtDay(e.t, o)}, ${e.type} at ${fmtTime(e.t, o)}`}</div><div class="verdict">${verdict(e)}</div></div>
     </div>
     <ul class="timeline">${tl.map(x => `<li class="${x.cls || ''}"><time>${fmtTime(x.t, o)}</time><span>${x.label}</span></li>`).join('')}</ul>
 
@@ -305,7 +345,8 @@ function openEvent(key) {
       ? `Blended score: ${e.base} from conditions, ${e.personal.score} from your ${e.personal.n} keepers (${Math.round(e.personal.weight * 100)}% weight).`
       : `Add ${MIN_KEEPERS}+ keeper photos in Coach and this score will start reflecting your taste.`}</p>
 
-    <h3>Conditions at ${e.type}</h3>
+    <h3>Conditions at ${e.type === 'night' ? fmtTime(e.t, o) : e.type}</h3>
+    ${e.access && !e.access.inside ? `<div class="alert danger">${e.access.none ? 'The tide stays above your access level around this session.' : `Tide access window is ${fmtTime(e.access.start, o)} to ${fmtTime(e.access.backBy, o)}, which doesn't cover this session.`}</div>` : ''}
     <div class="cond-grid">${cond.map(([k, val]) => `<div><b>${val}</b><span>${k}</span></div>`).join('')}</div>
 
     <div class="row" style="margin-top:20px">
@@ -371,7 +412,42 @@ function downloadIcs(e) {
   downloadFile(`tidelight-${e.type}.ics`, txt, 'text/calendar');
 }
 
-function renderPlans(v) {
+// How often the app's call matched your rating. A "go" call is a predicted score of 60+.
+function hitStats(plans) {
+  const rated = plans.filter(p => p.rating && p.rating !== 'meh');
+  const bySpot = {};
+  let hits = 0;
+  for (const p of rated) {
+    const hit = (p.score >= 60) === (p.rating === 'keeper');
+    if (hit) hits++;
+    const b = bySpot[p.spotName] ||= { name: p.spotName, total: 0, hits: 0 };
+    b.total++; if (hit) b.hits++;
+  }
+  const mean = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+  return {
+    total: rated.length, hits,
+    meh: plans.filter(p => p.rating === 'meh').length,
+    keeperAvg: mean(plans.filter(p => p.rating === 'keeper').map(p => p.score)),
+    dudAvg: mean(plans.filter(p => p.rating === 'dud').map(p => p.score)),
+    bySpot: Object.values(bySpot).sort((a, b) => b.total - a.total),
+  };
+}
+
+function hitPanel(st) {
+  const h = hitStats(st.plans);
+  const pct = h.total ? Math.round(h.hits / h.total * 100) : null;
+  return `<section class="panel">
+    <h2>How often it's right</h2>
+    ${h.total < 3
+      ? `<p class="muted">Rate ${3 - h.total} more session${3 - h.total === 1 ? '' : 's'} to see how accurate the app is for you. Every rating also trains your personal score.</p>`
+      : `<div class="hit-big"><span class="num">${pct}%</span><span>${h.hits} of ${h.total} calls right</span></div>
+         <p class="small muted">A call counts as right when a predicted 60+ delivered, or a predicted under 60 wasn't worth it.${h.meh ? ` ${h.meh} so-so session${h.meh === 1 ? '' : 's'} not counted.` : ''}</p>
+         ${h.keeperAvg != null && h.dudAvg != null ? `<p class="small">Sessions that delivered averaged a predicted <strong>${h.keeperAvg}</strong>; ones that didn't averaged <strong>${h.dudAvg}</strong>. ${h.keeperAvg - h.dudAvg >= 15 ? 'A clear gap, so the score is telling them apart.' : 'Not much gap yet; more ratings will sharpen your personal score.'}</p>` : ''}
+         ${h.bySpot.length > 1 ? `<div class="hit-spots">${h.bySpot.map(b => `<div><span>${esc(b.name)}</span><span class="num">${b.hits}/${b.total}</span></div>`).join('')}</div>` : ''}`}
+  </section>`;
+}
+
+async function renderPlans(v) {
   const st = S();
   const now = Date.now() / 1000;
   const upcoming = st.plans.filter(p => p.t >= now - 3600).sort((a, b) => a.t - b.t);
@@ -401,6 +477,7 @@ function renderPlans(v) {
 
   v.innerHTML = `
     <p class="eyebrow">Plans</p><h1>Sessions <em>ahead.</em></h1>
+    ${hitPanel(st)}
     ${toRate.length ? `<section class="panel"><h2>Rate your sessions</h2><p class="muted small">Each rating teaches your personal score what a good morning looks like for you.</p>${toRate.map(rateRow).join('')}</section>` : ''}
     <section class="panel">
       <h2>Upcoming</h2>
@@ -418,6 +495,30 @@ function renderPlans(v) {
   });
   $$('[data-del]', v).forEach(b => b.onclick = () => { update(s => { s.plans = s.plans.filter(p => p.id !== b.dataset.del); }); render(); });
   $$('[data-rate]', v).forEach(b => b.onclick = () => ratePlan(b.dataset.id, b.dataset.rate, b));
+
+  // Log sessions you shot without planning them (last 2 days), so they can be rated too.
+  if (!st.spots.length) return;
+  await ensureForecasts();
+  if (tab !== 'plans') return;
+  const planned = new Set(S().plans.map(p => p.key));
+  const recent = allEvents({ includePast: true })
+    .filter(e => e.t < now - 3600 && e.t > now - 2 * 86400 && !planned.has(e.key))
+    .sort((a, b) => b.t - a.t).slice(0, 8);
+  if (!recent.length) return;
+  v.insertAdjacentHTML('beforeend', `<section class="panel">
+    <h2>Shot something unplanned?</h2>
+    <p class="small muted">Log it here, then rate it above. Unplanned sessions count towards your hit rate too.</p>
+    ${recent.map(e => `<div class="plan"><div class="ev-title">${esc(e.spot.name)}</div>
+      <div class="ev-sub"><span><strong>${cap(sessionName(e))}</strong></span><span>Predicted ${e.score}</span></div>
+      <div class="row"><button class="btn" data-log="${esc(e.key)}">I shot this</button></div></div>`).join('')}
+  </section>`);
+  $$('[data-log]', v).forEach(b => b.onclick = () => {
+    const e = eventIndex.get(b.dataset.log);
+    if (!e) return;
+    addPlan(e);
+    toast('Logged. Now rate it.');
+    renderPlans(v);
+  });
 }
 
 async function ratePlan(id, rating, btn) {
@@ -477,7 +578,7 @@ function renderSpots(v) {
     map = window.L.map('map', { zoomControl: false, attributionControl: true })
       .setView(home ? [home.lat, home.lon] : [10, 0], home ? 9 : 2);
     window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19, className: 'base-tiles', attribution: '&copy; OpenStreetMap contributors',
     }).addTo(map);
     const pts = [];
     st.spots.forEach(s => {
@@ -530,6 +631,11 @@ function openSpotForm(prefill = {}, existing = null) {
         <option value="above" ${s.fogMode === 'above' ? 'selected' : ''}>Above the fog (lookout over a valley)</option>
       </select></label>
       <label class="check"><input type="checkbox" name="coastal" ${s.coastal ? 'checked' : ''}> Coastal spot (use tide and wave data)</label>
+      <label class="check"><input type="checkbox" name="tideAccess" ${s.tideAccess ? 'checked' : ''}> Access depends on the tide (rock shelf, cave, sandbar)</label>
+      <div class="two">
+        <label>Open below (% of tide range)<span class="hint">0 = low tide, 100 = high</span><input name="accessPct" inputmode="numeric" value="${s.accessPct ?? 40}"></label>
+        <label>Safety buffer (min)<span class="hint">Be back this long before it closes</span><input name="accessBuffer" inputmode="numeric" value="${s.accessBuffer ?? 30}"></label>
+      </div>
       <label>Best tide<select name="tide">
         ${['any', 'low', 'mid', 'high'].map(t => `<option value="${t}" ${s.tide === t ? 'selected' : ''}>${cap(t)}</option>`).join('')}
       </select></label>
@@ -610,6 +716,9 @@ function openSpotForm(prefill = {}, existing = null) {
       notes: String(f.get('notes') || ''),
       hunts: HUNT_ORDER.filter(k => f.get(`hunt_${k}`)).length ? HUNT_ORDER.filter(k => f.get(`hunt_${k}`)) : ['colour'],
       fogMode: f.get('fogMode') === 'above' ? 'above' : 'in',
+      tideAccess: !!f.get('tideAccess'),
+      accessPct: Math.min(100, Math.max(0, parseFloat(f.get('accessPct')) || 40)),
+      accessBuffer: Math.max(0, parseInt(f.get('accessBuffer'), 10) || 0),
       photos,
     };
     saved = true;
@@ -660,12 +769,95 @@ async function openSpotDetail(id) {
       <button class="btn" id="editSpot">Edit spot</button>
       <a class="btn" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}">Directions</a>
     </div>
-    <div>${evs.map(e => eventRow(e, `<span>${fmtDay(e.t, e.offset)}</span>`)).join('') || '<p class="muted">No upcoming events.</p>'}</div>`;
+    <div>${evs.map(e => eventRow(e, `<span>${fmtDay(e.dayT ?? e.t, e.offset)}</span>`)).join('') || '<p class="muted">No upcoming events.</p>'}</div>`;
   $('#editSpot').onclick = () => openSpotForm({}, s);
   $$('[data-show]').forEach(b => b.onclick = () => {
     $('#spotBanner').src = photoUrl(b.dataset.show);
     $$('[data-show]').forEach(x => x.classList.toggle('on', x === b));
   });
+}
+
+/* ================= right now ================= */
+
+async function openNow() {
+  const st = S();
+  openSheet(`
+    <p class="eyebrow">Right now</p>
+    <h2>What's happening <em>outside.</em></h2>
+    <div id="nowSpots">${st.spots.length ? '<p class="loading">Checking your spots…</p>' : '<p class="muted">Add spots to see conditions at each one.</p>'}</div>
+    <h3>Rain radar</h3>
+    <div id="radar" class="radar"></div>
+    <div class="radar-bar"><span id="radarTime" class="num"></span><button class="btn ghost small-btn" id="radarPlay" hidden>Pause</button></div>
+    <div class="row">
+      <a class="btn" target="_blank" rel="noopener" href="https://www.bom.gov.au/australia/radar/">BOM radar</a>
+      <a class="btn" target="_blank" rel="noopener" href="https://www.bom.gov.au/australia/satellite/">Satellite loop</a>
+    </div>
+    <div class="row"><a class="btn ghost" target="_blank" rel="noopener" href="https://www.bom.gov.au/australia/warnings/">Weather warnings</a></div>
+    <p class="small muted">Spot conditions are modelled for right now (Open-Meteo), not station readings. Radar: RainViewer. Links open the Bureau of Meteorology.</p>
+  `);
+
+  let radarMap = null, timer = null;
+  onSheetClose = () => { clearInterval(timer); if (radarMap) { radarMap.remove(); radarMap = null; } };
+
+  // Spot conditions
+  if (st.spots.length) {
+    const res = await Promise.allSettled(st.spots.map(sp => fetchCurrent(sp)));
+    const box = $('#nowSpots');
+    if (!box) return;
+    box.innerHTML = st.spots.map((sp, i) => {
+      const r = res[i];
+      if (r.status !== 'fulfilled') return `<div class="now-row"><div class="ev-title">${esc(sp.name)}</div><p class="small muted">Couldn't load right now.</p></div>`;
+      const c = r.value;
+      let tideTxt = '';
+      const fc = forecasts[sp.id];
+      if (sp.coastal && fc) {
+        const idx = nearestIndex(fc.hours, Date.now() / 1000);
+        const td = tideInfo(fc.hours, idx);
+        if (td) tideTxt = `<span>Tide ${Math.round(td.pos * 100)}%, ${td.rising ? 'rising' : 'falling'}</span>`;
+      }
+      return `<div class="now-row">
+        ${coverUrl(sp) ? `<img class="spot-thumb" src="${coverUrl(sp)}" alt="">` : `<span class="spot-thumb empty" aria-hidden="true">${esc(sp.name.charAt(0))}</span>`}
+        <div class="spot-text">
+          <div class="ev-title">${esc(sp.name)}</div>
+          <div class="now-main"><strong>${WEATHER_TEXT(c.code)}</strong><span class="num">${c.temp != null ? Math.round(c.temp) + '°C' : ''}</span></div>
+          <div class="ev-sub">
+            <span>Cloud ${Math.round(c.low ?? 0)}/${Math.round(c.mid ?? 0)}/${Math.round(c.high ?? 0)}%</span>
+            <span>Wind ${Math.round(c.wind ?? 0)}${c.gust ? `–${Math.round(c.gust)}` : ''} km/h</span>
+            ${c.vis != null ? `<span>Vis ${(c.vis / 1000).toFixed(c.vis < 5000 ? 1 : 0)} km</span>` : ''}
+            ${tideTxt}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Radar
+  const radarEl = $('#radar');
+  if (!radarEl || !window.L) { if (radarEl) radarEl.innerHTML = '<p class="muted small radar-msg">The map library didn\'t load. Use the BOM radar link below.</p>'; return; }
+  try {
+    const frames = await fetchRadarFrames();
+    if (!$('#radar')) return;
+    const c = st.settings.home || st.spots[0] || { lat: -37.8, lon: 145 };
+    radarMap = window.L.map('radar', { zoomControl: false, attributionControl: true }).setView([c.lat, c.lon], 7);
+    window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 12, className: 'base-tiles', attribution: '&copy; OpenStreetMap &copy; RainViewer' }).addTo(radarMap);
+    const layers = frames.map(f => window.L.tileLayer(f.url, { opacity: 0, maxNativeZoom: 7, maxZoom: 12, zIndex: 5 }).addTo(radarMap));
+    st.spots.forEach(sp => window.L.circleMarker([sp.lat, sp.lon], { radius: 5, color: '#0F1111', weight: 2, fillColor: '#D9A066', fillOpacity: 1 }).addTo(radarMap).bindTooltip(sp.name));
+    let i = layers.length - 1, playing = true;
+    const show = k => {
+      layers.forEach((l, j) => l.setOpacity(j === k ? 0.75 : 0));
+      const d = new Date(frames[k].time * 1000);
+      $('#radarTime').textContent = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}${k === layers.length - 1 ? ' (latest)' : ''}`;
+    };
+    show(i);
+    timer = setInterval(() => { if (playing) { i = (i + 1) % layers.length; show(i); } }, 700);
+    const btn = $('#radarPlay');
+    btn.hidden = false;
+    btn.onclick = () => { playing = !playing; btn.textContent = playing ? 'Pause' : 'Play'; if (!playing) { i = layers.length - 1; show(i); } };
+    setTimeout(() => radarMap && radarMap.invalidateSize(), 80);
+  } catch {
+    const el = $('#radar');
+    if (el) el.innerHTML = '<p class="muted small radar-msg">Live radar isn\'t available right now. Use the BOM radar link below.</p>';
+  }
 }
 
 /* ================= lightning distance timer ================= */
@@ -860,7 +1052,7 @@ async function recreateShot(file) {
     ${preview ? `<img class="ref-img" src="${preview}" alt="Your reference photo">` : ''}
     <p>${esc(desc)}</p>
     <h3>Closest upcoming matches</h3>
-    ${ranked.length ? ranked.map(({ e, m }) => eventRow(e, `<span>${fmtDay(e.t, e.offset)}</span><span class="match">${m}% match</span>`)).join('') : '<p class="muted">Add some spots first so there are forecasts to match against.</p>'}`;
+    ${ranked.length ? ranked.map(({ e, m }) => eventRow(e, `<span>${fmtDay(e.dayT ?? e.t, e.offset)}</span><span class="match">${m}% match</span>`)).join('') : '<p class="muted">Add some spots first so there are forecasts to match against.</p>'}`;
 }
 
 /* ================= settings ================= */
@@ -987,6 +1179,13 @@ document.addEventListener('click', ev => {
 });
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeSheet(); });
 $$('.tabbar button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+$('#nowBtn').onclick = () => openNow();
+window.addEventListener('online', () => { toast('Back online'); if (tab === 'forecast') loadForecasts(true).then(render); });
+window.addEventListener('offline', () => toast("You're offline. Showing saved forecasts."));
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
 $('#refreshBtn').onclick = async () => {
   const b = $('#refreshBtn');
   b.classList.add('spin');

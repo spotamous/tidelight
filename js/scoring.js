@@ -1,5 +1,5 @@
-import { clamp, haversineKm, angleDiff, compass } from './util.js?v=1.9';
-import { computeHunts } from './hunts.js?v=1.9';
+import { clamp, haversineKm, angleDiff, compass } from './util.js?v=2.0';
+import { computeHunts, computeNightHunts, huntsOf, NIGHT_HUNTS } from './hunts.js?v=2.0';
 
 /* ---------- helpers ---------- */
 
@@ -33,6 +33,33 @@ export function tideInfo(hours, idx) {
   }
   const next = hours[idx + 1]?.sea;
   return { pos, range: max - min, height: hours[idx].sea, low, high, rising: next != null ? next > hours[idx].sea : null };
+}
+
+/* ---------- tide access window (rock shelves, caves, sandbars) ---------- */
+// Open while the tide is below `frac` of its range; "back by" leaves `bufferMin` before it closes.
+export function accessWindow(hours, idx, t, frac, bufferMin) {
+  if (idx < 0 || hours[idx]?.sea == null) return null;
+  const lo = Math.max(0, idx - 12), hi = Math.min(hours.length - 1, idx + 12);
+  const vals = [];
+  for (let i = lo; i <= hi; i++) if (hours[i].sea != null) vals.push(hours[i].sea);
+  if (vals.length < 10) return null;
+  const min = Math.min(...vals), max = Math.max(...vals);
+  if (max - min < 0.05) return null;
+  const level = min + frac * (max - min);
+  const below = i => hours[i].sea != null && hours[i].sea <= level;
+  const cross = i => { const a = hours[i], b = hours[i + 1]; return a.t + (level - a.sea) / (b.sea - a.sea) * (b.t - a.t); };
+  const wins = [];
+  for (let i = lo; i <= hi; i++) {
+    if (!below(i)) continue;
+    let j = i; while (j + 1 <= hi && below(j + 1)) j++;
+    wins.push({ start: i > lo && hours[i - 1].sea != null ? cross(i - 1) : hours[i].t, end: j < hi && hours[j + 1].sea != null ? cross(j) : hours[j].t, openStart: i === lo, openEnd: j === hi });
+    i = j;
+  }
+  if (!wins.length) return { none: true, inside: false };
+  const dist = w => (t < w.start ? w.start - t : t > w.end ? t - w.end : 0);
+  const w = wins.sort((a, b) => dist(a) - dist(b))[0];
+  const backBy = w.end - (bufferMin || 0) * 60;
+  return { start: w.start, end: w.end, backBy, inside: t >= w.start && t <= backBy, openStart: w.openStart, openEnd: w.openEnd };
 }
 
 /* ---------- feature vector: what the personal model compares ---------- */
@@ -210,8 +237,11 @@ export function evaluateEvent({ spot, data, type, t, keepers, settings }) {
     }
   }
 
+  const access = spot.coastal && spot.tideAccess
+    ? accessWindow(data.hours, idx, t, (Number(spot.accessPct) || 40) / 100, Number(spot.accessBuffer ?? 30)) : null;
+
   return {
-    key: `${spot.id}:${type}:${t}`,
+    key: `${spot.id}:${type}:${t}`, access,
     spot, type, t, offset: data.offset, idx, hour: h, tide,
     base: top, colour: base.score, hunts, topHunt, personal, score, factors: hunts[topHunt]?.factors || base.factors,
     features, drive, leave, light, sunAz, alignment,
@@ -230,5 +260,61 @@ export function evaluateSpot(spot, data, keepers, settings, { includePast = fals
       if (ev) out.push(ev);
     }
   }
-  return out.sort((a, b) => a.t - b.t);
+  if (huntsOf(spot).some(k => NIGHT_HUNTS.includes(k))) {
+    for (let d = 0; d < data.days.length - 1; d++) {
+      const ev = evaluateNight({ spot, data, d, keepers, settings });
+      if (ev && (includePast || data.days[d + 1].sunrise > now)) out.push(ev);
+    }
+  }
+  return out.sort((a, b) => (a.dayT ?? a.t) - (b.dayT ?? b.t) || a.t - b.t);
+}
+
+// A "Night" session: from sunset on day d to sunrise on day d+1, timed to the best hour.
+export function evaluateNight({ spot, data, d, keepers, settings }) {
+  const sunset = data.days[d]?.sunset, sunrise = data.days[d + 1]?.sunrise;
+  if (!sunset || !sunrise || !window.SunCalc) return null;
+  const i0 = nearestIndex(data.hours, sunset), i1 = nearestIndex(data.hours, sunrise);
+  if (i0 < 0 || i1 < 0) return null;
+  const hunts = computeNightHunts({ spot, data, i0, i1 });
+  const keys = Object.keys(hunts);
+  if (!keys.length) return null;
+  const topHunt = keys.sort((a, b) => hunts[b].score - hunts[a].score)[0];
+  const top = hunts[topHunt].score;
+  const t = hunts[topHunt].peak ?? Math.round((sunset + sunrise) / 2);
+  const idx = nearestIndex(data.hours, t);
+  if (idx < 0) return null;
+  const h = data.hours[idx];
+  const tide = spot.coastal ? tideInfo(data.hours, idx) : null;
+  const features = featureVector(h, tide);
+  const personal = personalScore(features, keepers);
+  let score = top;
+  if (personal) score = Math.round((1 - personal.weight) * top + personal.weight * personal.score);
+  const drive = driveMinutes(spot, settings);
+  const leave = t - (Number(settings.arriveBeforeMin ?? 30) + (drive || 0)) * 60;
+
+  // Night timeline: astronomical dark, moonrise/set, the best moment, first light.
+  const timeline = [];
+  const at = new Date(sunset * 1000), next = new Date(sunrise * 1000);
+  const tA = window.SunCalc.getTimes(at, spot.lat, spot.lon), tB = window.SunCalc.getTimes(next, spot.lat, spot.lon);
+  const ok = x => x instanceof Date && !isNaN(x);
+  if (ok(tA.night)) timeline.push({ t: tA.night.getTime() / 1000, label: 'Full darkness' });
+  if (ok(tB.nightEnd)) timeline.push({ t: tB.nightEnd.getTime() / 1000, label: 'First light' });
+  for (const day of [at, next]) {
+    const mt = window.SunCalc.getMoonTimes(day, spot.lat, spot.lon);
+    for (const [k, label] of [['rise', 'Moonrise'], ['set', 'Moonset']]) {
+      const v = mt[k];
+      if (ok(v) && v.getTime() / 1000 > sunset && v.getTime() / 1000 < sunrise) timeline.push({ t: v.getTime() / 1000, label });
+    }
+  }
+  timeline.push({ t, label: `Best for ${topHunt === 'astro' ? 'the Milky Way' : 'aurora'}`, cls: 'key' });
+
+  const access = spot.coastal && spot.tideAccess
+    ? accessWindow(data.hours, idx, t, (Number(spot.accessPct) || 40) / 100, Number(spot.accessBuffer ?? 30)) : null;
+
+  return {
+    key: `${spot.id}:night:${sunset}`, access,
+    spot, type: 'night', t, dayT: sunset, offset: data.offset, idx, hour: h, tide,
+    base: top, colour: null, hunts, topHunt, personal, score, factors: hunts[topHunt].factors,
+    features, drive, leave, light: {}, timeline, sunAz: null, alignment: hunts.astro?.alignment || null,
+  };
 }
