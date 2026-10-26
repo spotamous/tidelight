@@ -33,7 +33,10 @@ alter table public.alert_log enable row level security;  -- no policies: only th
 
 -- 3. Run the alerts function every hour, at 5 past.
 --    Before running this part: enable the pg_cron and pg_net extensions (Database → Extensions),
---    deploy the check-alerts function, and replace PASTE_YOUR_CRON_SECRET with your CRON_SECRET.
+--    deploy the check-alerts function, then replace the two placeholders below:
+--      PASTE_YOUR_PUBLISHABLE_KEY → Project Settings → API Keys → Publishable key (starts sb_publishable_).
+--                                   Supabase needs a project key on every function request.
+--      PASTE_YOUR_CRON_SECRET     → the CRON_SECRET from tools/vapid-keys.html.
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
@@ -46,8 +49,15 @@ select cron.schedule(
   $$
   select net.http_post(
     url     := 'https://lwwhoinoredwathgmdij.supabase.co/functions/v1/check-alerts',
-    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', 'PASTE_YOUR_CRON_SECRET'),
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'apikey', 'PASTE_YOUR_PUBLISHABLE_KEY',
+      'x-cron-secret', 'PASTE_YOUR_CRON_SECRET'
+    ),
     body    := '{}'::jsonb
   );
   $$
 );
+
+-- 4. Optional check: run this a few minutes after 5 past the hour to see the last runs and their results.
+-- select status_code, content::text, created from net._http_response order by created desc limit 5;

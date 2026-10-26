@@ -82,16 +82,16 @@ Set up once:
 3. **Turn on scheduling.** Supabase → Database → Extensions: enable **pg_cron** and **pg_net**.
 4. **Add secrets.** Supabase → Edge Functions → Secrets: add `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `CRON_SECRET` (from step 1) and `VAPID_SUBJECT` (your email as `mailto:you@example.com`).
 5. **Deploy the function.** Supabase → Edge Functions → Deploy a new function → Via editor. Name it exactly `check-alerts`, replace the sample code with all of `supabase/functions/check-alerts/index.ts`, and deploy. Then open the function's settings and switch off **Verify JWT** (the function checks the cron secret and your sign-in itself).
-6. **Schedule it.** Supabase → SQL Editor → New query: paste `supabase/alerts.sql`, replace `PASTE_YOUR_CRON_SECRET` with your `CRON_SECRET`, and run it. It creates the device and alert-log tables and runs the check at 5 past every hour.
+6. **Schedule it.** Supabase → SQL Editor → New query: paste `supabase/alerts.sql`, replace `PASTE_YOUR_PUBLISHABLE_KEY` with your Publishable key (Project Settings → API Keys, starts `sb_publishable_`) and `PASTE_YOUR_CRON_SECRET` with your `CRON_SECRET`, and run it. It creates the device and alert-log tables and runs the check at 5 past every hour.
 7. **Turn alerts on.** On iPhone, open Tidelight **from the home screen** (alerts only work in the home-screen app), then Settings → Alerts → **Turn on alerts on this device** → allow notifications → **Send a test**.
 
-Checking it works: Supabase → Edge Functions → check-alerts → Logs shows each hourly run. Alert settings sync with your account; each device turns notifications on separately.
+Checking it works: visiting the function's address in a browser shows a `MISSING_CREDENTIALS` message; that's expected and means it's live. Supabase → Edge Functions → check-alerts → Logs shows each hourly run, and the query at the end of `alerts.sql` shows the last scheduled calls. Alert settings sync with your account; each device turns notifications on separately.
 
 If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a rebuild) and redeploy the function, so alerts keep scoring like the app.
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=2.6`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=2.8`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:

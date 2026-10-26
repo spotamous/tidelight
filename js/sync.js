@@ -2,9 +2,9 @@
 // Local-first: the app always works from this device's copy. When signed in, it merges with your
 // private copy in Supabase record by record (newest change wins, deletions are remembered), then
 // uploads the result. Spot photos sync through a private storage bucket. The Claude key never syncs.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=2.6';
-import { getState, applyMerged, onLocalChange, COLLECTIONS, syncedSettings } from './storage.js?v=2.6';
-import { getPhotoBlob, putPhotoBlob, hasPhoto } from './photos.js?v=2.6';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=2.8';
+import { getState, applyMerged, onLocalChange, COLLECTIONS, syncedSettings } from './storage.js?v=2.8';
+import { getPhotoBlob, putPhotoBlob, hasPhoto } from './photos.js?v=2.8';
 
 const TABLE = 'user_state';
 const BUCKET = 'photos';
@@ -223,7 +223,28 @@ export async function removePushSubscription(endpoint) {
 export async function sendTestAlert() {
   if (!client || !session) throw new Error('Sign in first.');
   const { data, error } = await client.functions.invoke('check-alerts', { body: { action: 'test' } });
-  if (error) throw new Error("The alerts function didn't respond. Check it's deployed with the steps in the README.");
+  if (error) {
+    // Pull out what actually went wrong, so setup mistakes are easy to spot.
+    const status = error.context?.status;
+    let detail = '';
+    try {
+      const text = await error.context?.text?.();
+      detail = text || '';
+      try { const j = JSON.parse(text); detail = j.error || j.msg || j.message || text; } catch {}
+    } catch {}
+    throw new Error(explainFunctionError(error.name, status, String(detail)));
+  }
   if (!data?.sent) throw new Error(data?.error || 'No devices found for your account. Turn alerts on first.');
   return data.sent;
+}
+
+function explainFunctionError(name, status, detail) {
+  const d = detail.toLowerCase();
+  if (status === 404 || d.includes('not found')) return 'Supabase can\'t find a function called check-alerts. Check it\'s deployed and named exactly check-alerts (all lower case, with the hyphen).';
+  if (d.includes('credentials') || d.includes('apikey') || d.includes('api key')) return 'Supabase didn\'t accept the project key the app sent. In js/config.js, use the Publishable key (Project Settings → API Keys, starts sb_publishable_) as SUPABASE_ANON_KEY, upload it, and try again.';
+  if (status === 401 && (d.includes('jwt') || d.includes('authorization'))) return 'The function is rejecting the request. Open check-alerts in Supabase and switch off "Verify JWT" (README step 6), then try again.';
+  if (d.includes('vapid')) return 'The function is running but can\'t find your alert keys. Check the four secrets in Edge Functions → Secrets (README step 5): names must match exactly, with no spaces.';
+  if (status >= 500 || d.includes('boot') || d.includes('worker')) return `The function failed to start or crashed${status ? ` (error ${status})` : ''}. Open Edge Functions → check-alerts → Logs in Supabase and send me what it says.`;
+  if (name === 'FunctionsFetchError') return 'Couldn\'t reach the alerts function. This usually means it isn\'t deployed yet, or it failed to start: check Edge Functions → check-alerts → Logs.';
+  return `The alerts function returned an error${status ? ` (${status})` : ''}${detail ? `: ${detail.slice(0, 160)}` : ''}.`;
 }
