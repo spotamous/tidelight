@@ -51,8 +51,8 @@ select cron.schedule(
     url     := 'https://lwwhoinoredwathgmdij.supabase.co/functions/v1/check-alerts',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'apikey', 'PASTE_YOUR_PUBLISHABLE_KEY',
-      'x-cron-secret', 'PASTE_YOUR_CRON_SECRET'
+      'apikey', 'sb_publishable_dnqANaGlhgZQ3mnwQG6YLw_MEmkLh7f',
+      'x-cron-secret', 'bbcd07a9cae38c8777cc112c388eaf8dbfafaa0d106a1d09'
     ),
     body    := '{}'::jsonb
   );
