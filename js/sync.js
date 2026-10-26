@@ -2,9 +2,9 @@
 // Local-first: the app always works from this device's copy. When signed in, it merges with your
 // private copy in Supabase record by record (newest change wins, deletions are remembered), then
 // uploads the result. Spot photos sync through a private storage bucket. The Claude key never syncs.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=2.5';
-import { getState, applyMerged, onLocalChange, COLLECTIONS, syncedSettings } from './storage.js?v=2.5';
-import { getPhotoBlob, putPhotoBlob, hasPhoto } from './photos.js?v=2.5';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=2.6';
+import { getState, applyMerged, onLocalChange, COLLECTIONS, syncedSettings } from './storage.js?v=2.6';
+import { getPhotoBlob, putPhotoBlob, hasPhoto } from './photos.js?v=2.6';
 
 const TABLE = 'user_state';
 const BUCKET = 'photos';
@@ -207,4 +207,23 @@ function friendly(e) {
   if (/JWT|token/i.test(m)) return 'Your sign-in expired. Sign in again.';
   if (/Failed to fetch|NetworkError/i.test(m)) return 'Couldn\'t reach Supabase. Check your connection.';
   return m;
+}
+
+/* ---------- alerts: push subscriptions + test (Phase 2) ---------- */
+export async function savePushSubscription(subJson) {
+  if (!client || !session) throw new Error('Sign in first to turn on alerts.');
+  const { error } = await client.from('push_subscriptions')
+    .upsert({ user_id: session.user.id, endpoint: subJson.endpoint, subscription: subJson }, { onConflict: 'endpoint' });
+  if (error) throw new Error(/push_subscriptions/.test(error.message) ? 'The alerts table is missing. Run supabase/alerts.sql in the Supabase SQL editor.' : error.message);
+}
+export async function removePushSubscription(endpoint) {
+  if (!client || !session) return;
+  await client.from('push_subscriptions').delete().eq('endpoint', endpoint);
+}
+export async function sendTestAlert() {
+  if (!client || !session) throw new Error('Sign in first.');
+  const { data, error } = await client.functions.invoke('check-alerts', { body: { action: 'test' } });
+  if (error) throw new Error("The alerts function didn't respond. Check it's deployed with the steps in the README.");
+  if (!data?.sent) throw new Error(data?.error || 'No devices found for your account. Turn alerts on first.');
+  return data.sent;
 }

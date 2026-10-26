@@ -11,6 +11,7 @@ const DEFAULTS = {
     arriveBeforeMin: 30,      // minutes on location before sunrise/sunset
     claudeKey: '',
     claudeModel: 'claude-sonnet-5-5',
+    alerts: { go: true, threshold: 80, calledOff: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 },
   },
   spots: [],                  // { id, name, lat, lon, events[], coastal, tide, driveMin, facing, notes }
   keepers: [],                // { id, label: keeper|dud, source, date(ms), lat, lon, spotName, features[], thumb }
@@ -20,7 +21,7 @@ const DEFAULTS = {
 
 export const COLLECTIONS = ['spots', 'plans', 'keepers'];
 // Settings that follow you between devices. The Claude key never leaves the device.
-export const syncedSettings = s => ({ home: s.home, driveSpeedKmh: s.driveSpeedKmh, arriveBeforeMin: s.arriveBeforeMin, claudeModel: s.claudeModel });
+export const syncedSettings = s => ({ home: s.home, driveSpeedKmh: s.driveSpeedKmh, arriveBeforeMin: s.arriveBeforeMin, claudeModel: s.claudeModel, alerts: s.alerts });
 
 const clone = o => JSON.parse(JSON.stringify(o));
 
@@ -31,7 +32,7 @@ function load() {
     const s = JSON.parse(raw);
     return {
       ...clone(DEFAULTS), ...s,
-      settings: { ...DEFAULTS.settings, ...(s.settings || {}) },
+      settings: { ...DEFAULTS.settings, ...(s.settings || {}), alerts: { ...DEFAULTS.settings.alerts, ...(s.settings?.alerts || {}) } },
       meta: { ...clone(DEFAULTS.meta), ...(s.meta || {}), deleted: { ...clone(DEFAULTS.meta.deleted), ...(s.meta?.deleted || {}) } },
     };
   } catch {

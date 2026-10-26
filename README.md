@@ -68,9 +68,30 @@ How it works: the app always runs from the device's own copy (so it works offlin
 
 Free-plan note: Supabase pauses free projects after a week without use. Opening the app syncs and counts as use; if it does pause, restore it from the Supabase dashboard.
 
+## Alerts (push notifications)
+
+Every hour, a Supabase Edge Function scores your spots with the app's own engine (including your personal score) and sends:
+- **Go alerts:** sessions in the next 36 hours at or above your threshold (default 80), while there's still time to leave. Three or more are grouped into one notification.
+- **Called off:** a session you were alerted about has dropped 20+ points and below your threshold.
+- **Weekly digest:** the best 3 sessions in the next 3 days, on your chosen day and hour (default Thursday 7pm).
+- Nothing during your quiet hours (default 9pm–6am), and nothing is sent twice.
+
+Set up once:
+1. **Make your keys.** Upload this version, then open `https://YOUR-SITE/tools/vapid-keys.html` and tap **Generate keys**. Keys are created in your browser and never sent anywhere. Save them in your password manager.
+2. **Public key into the app.** Paste `VAPID_PUBLIC_KEY` into `js/config.js` in place of `PASTE_YOUR_VAPID_PUBLIC_KEY_HERE`, and upload that file again.
+3. **Turn on scheduling.** Supabase → Database → Extensions: enable **pg_cron** and **pg_net**.
+4. **Add secrets.** Supabase → Edge Functions → Secrets: add `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `CRON_SECRET` (from step 1) and `VAPID_SUBJECT` (your email as `mailto:you@example.com`).
+5. **Deploy the function.** Supabase → Edge Functions → Deploy a new function → Via editor. Name it exactly `check-alerts`, replace the sample code with all of `supabase/functions/check-alerts/index.ts`, and deploy. Then open the function's settings and switch off **Verify JWT** (the function checks the cron secret and your sign-in itself).
+6. **Schedule it.** Supabase → SQL Editor → New query: paste `supabase/alerts.sql`, replace `PASTE_YOUR_CRON_SECRET` with your `CRON_SECRET`, and run it. It creates the device and alert-log tables and runs the check at 5 past every hour.
+7. **Turn alerts on.** On iPhone, open Tidelight **from the home screen** (alerts only work in the home-screen app), then Settings → Alerts → **Turn on alerts on this device** → allow notifications → **Send a test**.
+
+Checking it works: Supabase → Edge Functions → check-alerts → Logs shows each hourly run. Alert settings sync with your account; each device turns notifications on separately.
+
+If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a rebuild) and redeploy the function, so alerts keep scoring like the app.
+
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=2.5`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=2.6`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:
@@ -150,7 +171,11 @@ js/photos.js          Spot photos (IndexedDB), resize, backup
 js/sync.js            Sign-in and sync with Supabase
 js/config.js          Supabase project URL and anon key
 supabase/schema.sql   Table, photo bucket and security rules to run in Supabase
-sw.js                 Offline support (service worker)
+supabase/alerts.sql   Alert tables and the hourly schedule
+supabase/functions/check-alerts/index.ts   The hourly alerts function (generated)
+tools/vapid-keys.html Generates your alert keys in the browser
+tools/build-alerts.mjs, tools/alerts-main.js   Builds the alerts function from the app's scoring code
+sw.js                 Offline support and alert notifications (service worker)
 js/util.js            Formatting and small helpers
 icons/                App icons
 ```

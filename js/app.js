@@ -1,13 +1,14 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=2.5';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=2.5';
-import { nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=2.5';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=2.5';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=2.5';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow } from './sync.js?v=2.5';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=2.5';
-import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=2.5';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=2.6';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=2.6';
+import { nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=2.6';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=2.6';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=2.6';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert } from './sync.js?v=2.6';
+import { VAPID_PUBLIC_KEY } from './config.js?v=2.6';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=2.6';
+import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=2.6';
 
-export const APP_VERSION = '2.5';
+export const APP_VERSION = '2.6';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -1437,11 +1438,116 @@ function renderAccount() {
   };
 }
 
+/* ---------- alerts panel ---------- */
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const hourLabel = h => `${h % 12 || 12}${h < 12 ? 'am' : 'pm'}`;
+const b64urlToBytes = s => {
+  const pad = '='.repeat((4 - s.length % 4) % 4);
+  const raw = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+};
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+async function currentPushSub() {
+  if (!pushSupported()) return null;
+  const reg = await navigator.serviceWorker.getRegistration();
+  return reg ? reg.pushManager.getSubscription() : null;
+}
+
+async function renderAlerts() {
+  const box = $('#alertsPanel');
+  if (!box) return;
+  const st = syncStatus();
+  const a = S().settings.alerts;
+  if (!st.email) {
+    box.innerHTML = `<h2>Alerts</h2><p class="small muted">Sign in above to turn on alerts. Your spots are checked every hour, and you get a notification when the light lines up.</p>`;
+    return;
+  }
+  let device = '';
+  if (VAPID_PUBLIC_KEY.startsWith('PASTE')) {
+    device = `<p class="small muted">Alerts aren't set up yet. Follow the "Alerts" steps in the README to add your keys and the alerts function.</p>`;
+  } else if (!pushSupported() || (isIOS() && !isStandalone())) {
+    device = `<p class="small muted">${isIOS() ? 'On iPhone, alerts work in the home-screen app. Open Tidelight from your home screen (Share → Add to Home Screen) and turn them on there.' : "This browser can't receive notifications."}</p>`;
+  } else {
+    const sub = await currentPushSub();
+    const blocked = Notification.permission === 'denied';
+    device = sub && Notification.permission === 'granted'
+      ? `<p class="small"><strong class="caramel">Alerts are on for this device.</strong></p>
+         <div class="row"><button class="btn" id="testAlert">Send a test</button><button class="btn ghost" id="pushOff">Turn off on this device</button></div>`
+      : blocked
+        ? `<p class="small sync-err">Notifications are blocked for Tidelight. Allow them in your phone's Settings → Notifications → Tidelight, then come back here.</p>`
+        : `<div class="row"><button class="btn primary block" id="pushOn">Turn on alerts on this device</button></div>`;
+  }
+  const opt = (v, cur, label) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${label}</option>`;
+  box.innerHTML = `<h2>Alerts</h2>
+    <p class="small muted">Checked every hour from your Supabase account, using the same scores as the app (including your personal score).</p>
+    ${device}
+    <form class="form alert-prefs" id="alertForm">
+      <label class="check"><input type="checkbox" name="go" ${a.go ? 'checked' : ''}> Tell me when a session in the next 36 hours scores
+        <select name="threshold" aria-label="Score threshold">${[70, 75, 80, 85, 90].map(v => opt(v, a.threshold, `${v}+`)).join('')}</select></label>
+      <label class="check"><input type="checkbox" name="calledOff" ${a.calledOff ? 'checked' : ''}> Tell me if a session I was alerted about falls through</label>
+      <label class="check"><input type="checkbox" name="digest" ${a.digest ? 'checked' : ''}> Weekly digest of the best 3 sessions, every
+        <select name="digestDay" aria-label="Digest day">${DAYS.map((d, i) => opt(i, a.digestDay, d)).join('')}</select>
+        at <select name="digestHour" aria-label="Digest time">${[7, 8, 12, 17, 18, 19, 20].map(h => opt(h, a.digestHour, hourLabel(h))).join('')}</select></label>
+      <div class="two">
+        <label>Quiet from<select name="quietStart">${opt(-1, a.quietStart === a.quietEnd ? -1 : a.quietStart, 'No quiet hours')}${[20, 21, 22, 23].map(h => opt(h, a.quietStart, hourLabel(h))).join('')}</select></label>
+        <label>Until<select name="quietEnd">${[5, 6, 7, 8].map(h => opt(h, a.quietEnd, hourLabel(h))).join('')}</select></label>
+      </div>
+      <div class="row"><button class="btn primary" type="submit">Save alert settings</button></div>
+    </form>`;
+
+  const on = $('#pushOn');
+  if (on) on.onclick = async () => {
+    on.disabled = true; on.textContent = 'Turning on…';
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') throw new Error('Notifications weren\'t allowed. You can allow them in your phone\'s Settings → Notifications → Tidelight.');
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64urlToBytes(VAPID_PUBLIC_KEY) });
+      await savePushSubscription(sub.toJSON());
+      toast('Alerts are on. Tap "Send a test" to check.');
+    } catch (e) { toast(e.message, 7000); }
+    renderAlerts();
+  };
+  const off = $('#pushOff');
+  if (off) off.onclick = async () => {
+    const sub = await currentPushSub();
+    if (sub) { await removePushSubscription(sub.endpoint).catch(() => {}); await sub.unsubscribe().catch(() => {}); }
+    toast('Alerts turned off on this device.');
+    renderAlerts();
+  };
+  const test = $('#testAlert');
+  if (test) test.onclick = async () => {
+    test.disabled = true; test.textContent = 'Sending…';
+    try { await sendTestAlert(); toast('Test sent. It should arrive in a few seconds.'); }
+    catch (e) { toast(e.message, 7000); }
+    test.disabled = false; test.textContent = 'Send a test';
+  };
+  $('#alertForm').onsubmit = ev => {
+    ev.preventDefault();
+    const f = new FormData(ev.target);
+    const qs = parseInt(f.get('quietStart'), 10), qe = parseInt(f.get('quietEnd'), 10);
+    update(s => {
+      s.settings.alerts = {
+        go: !!f.get('go'), threshold: parseInt(f.get('threshold'), 10),
+        calledOff: !!f.get('calledOff'),
+        digest: !!f.get('digest'), digestDay: parseInt(f.get('digestDay'), 10), digestHour: parseInt(f.get('digestHour'), 10),
+        quietStart: qs < 0 ? 0 : qs, quietEnd: qs < 0 ? 0 : qe,
+      };
+    });
+    toast('Alert settings saved. They sync to your account.');
+  };
+}
+
 function renderSettings(v) {
   const st = S(), s = st.settings;
   v.innerHTML = `
     <p class="eyebrow">Settings</p><h1>Settings</h1>
     <section class="panel" id="accountPanel"></section>
+    <section class="panel" id="alertsPanel"></section>
     <section class="panel">
       <h2>Home</h2>
       <p class="small muted">Used to estimate drive times and leave times. Stays on this device.</p>
@@ -1487,6 +1593,7 @@ function renderSettings(v) {
     <p class="small muted">Tidelight version ${APP_VERSION}. Weather, tide and sea data: Open-Meteo (CC BY 4.0). Maps: OpenStreetMap. Tide heights are modelled and can differ from official tide tables; check local warnings before heading out.</p>`;
 
   renderAccount();
+  renderAlerts();
 
   $('#homeHere').onclick = async () => {
     try {
@@ -1585,5 +1692,5 @@ loadAllPhotos().finally(() => {
   render();
   initSync(() => { for (const k in forecasts) delete forecasts[k]; if (!$('#sheet').classList.contains('hidden')) return; render(); })
     .catch(() => {});
-  onSyncStatus(() => { if (tab === 'settings') renderAccount(); });
+  onSyncStatus(() => { if (tab === 'settings') { renderAccount(); renderAlerts(); } });
 });

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tidelight: alert keys</title>
+<style>
+  :root { --ground:#0F1111; --surface:#151818; --line:#2A2F2F; --text:#ECE8E1; --muted:#A3A6A4; --caramel:#D9A066; color-scheme: dark; }
+  body { margin:0; background:var(--ground); color:var(--text); font:16px/1.55 "Helvetica Neue", Arial, system-ui, sans-serif; }
+  main { max-width:640px; margin:0 auto; padding:28px 20px 60px; }
+  h1 { font:400 2.2rem/1.05 "Iowan Old Style", "Times New Roman", serif; margin:0 0 10px; }
+  .eyebrow { font:500 .72rem ui-monospace, Menlo, monospace; letter-spacing:.22em; text-transform:uppercase; color:var(--caramel); }
+  p { color:var(--muted); }
+  .key { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:14px; margin:14px 0; }
+  .key b { display:block; margin-bottom:4px; }
+  .key small { display:block; color:var(--muted); margin-bottom:8px; }
+  textarea { width:100%; box-sizing:border-box; background:#1C2020; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:10px; font:13px ui-monospace, Menlo, monospace; resize:none; }
+  button { min-height:44px; padding:0 20px; border-radius:999px; border:1px solid var(--caramel); background:var(--caramel); color:#1A130B; font-weight:700; font-size:15px; cursor:pointer; margin-top:8px; }
+  button.ghost { background:transparent; color:var(--text); border-color:var(--line); }
+  .warn { color:#E07A6E; }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Tidelight setup</p>
+  <h1>Alert keys</h1>
+  <p>This page makes the key pair that lets your Supabase project send notifications to your devices, plus a secret for the hourly check. Everything is generated here in your browser. Nothing is sent anywhere, and nothing is saved when you close the page.</p>
+  <button id="go">Generate keys</button>
+  <div id="out" hidden>
+    <div class="key"><b>VAPID_PUBLIC_KEY</b><small>Goes in two places: <code>js/config.js</code> in your repo, and Supabase → Edge Functions → Secrets.</small><textarea id="pub" rows="3" readonly></textarea><button class="ghost" data-copy="pub">Copy</button></div>
+    <div class="key"><b>VAPID_PRIVATE_KEY</b><small class="warn">Secret. Supabase → Edge Functions → Secrets only. Never in your repo or in chat.</small><textarea id="priv" rows="2" readonly></textarea><button class="ghost" data-copy="priv">Copy</button></div>
+    <div class="key"><b>CRON_SECRET</b><small class="warn">Secret. Supabase → Edge Functions → Secrets, and in the hourly schedule (supabase/alerts.sql).</small><textarea id="cron" rows="2" readonly></textarea><button class="ghost" data-copy="cron">Copy</button></div>
+    <p>Keep these somewhere safe, such as your password manager. If you generate new keys later, every device has to turn alerts on again.</p>
+  </div>
+</main>
+<script>
+const b64url = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+document.getElementById('go').onclick = async () => {
+  const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  const raw = await crypto.subtle.exportKey('raw', kp.publicKey);
+  const jwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+  document.getElementById('pub').value = b64url(raw);
+  document.getElementById('priv').value = jwk.d;
+  document.getElementById('cron').value = [...crypto.getRandomValues(new Uint8Array(24))].map(b => b.toString(16).padStart(2, '0')).join('');
+  document.getElementById('out').hidden = false;
+};
+document.addEventListener('click', async e => {
+  const id = e.target.dataset && e.target.dataset.copy;
+  if (!id) return;
+  await navigator.clipboard.writeText(document.getElementById(id).value);
+  e.target.textContent = 'Copied';
+  setTimeout(() => { e.target.textContent = 'Copy'; }, 1500);
+});
+</script>
+</body>
+</html>

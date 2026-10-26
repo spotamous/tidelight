@@ -1,6 +1,6 @@
 // Extra things to hunt for at a spot, beyond sunrise/sunset colour.
 // Each scorer returns { score 0–100, factors: [{k: good|bad|neutral, t}], ...extras } or null when not applicable.
-import { clamp, compass, fmtTime, angleDiff } from './util.js?v=2.5';
+import { clamp, compass, fmtTime, angleDiff } from './util.js?v=2.6';
 
 export const HUNT_ORDER = ['colour', 'fog', 'storm', 'lightning', 'rainbow', 'aurora', 'astro'];
 export const NIGHT_HUNTS = ['aurora', 'astro'];   // scored as their own "Night" session

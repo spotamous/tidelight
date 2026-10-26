@@ -521,3 +521,9 @@ h2 em { font-style: italic; color: var(--caramel); }
 /* Account and sync */
 .sync-err { color: var(--danger); }
 code { font: 400 .85em var(--mono); background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+
+/* Alerts panel */
+.alert-prefs .check { display: block !important; line-height: 2; }
+.alert-prefs .check input[type=checkbox] { vertical-align: middle; margin-right: 8px; }
+.alert-prefs select { width: auto; display: inline-block; padding: 6px 10px; margin: 0 4px; border-radius: 999px; }
+.alert-prefs .two select { width: 100%; margin: 0; padding: 11px 12px; border-radius: 8px; }
