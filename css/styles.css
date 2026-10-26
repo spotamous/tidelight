@@ -271,7 +271,7 @@ legend { font-weight: 700; font-size: .9rem; margin-bottom: 6px; }
 /* Toast */
 #toast {
   position: fixed; left: 50%; bottom: calc(92px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(20px);
-  background: var(--caramel); color: var(--caramel-ink); padding: 11px 18px; border-radius: 999px; font: 700 .9rem var(--sans);
+  background: var(--caramel); color: var(--caramel-ink); padding: 11px 18px; border-radius: 16px; line-height: 1.35; font: 700 .9rem var(--sans);
   opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 60; max-width: 90vw; text-align: center;
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -517,3 +517,7 @@ h2 em { font-style: italic; color: var(--caramel); }
 .hr-cloud { font-size: .8rem; color: var(--muted); text-align: right; }
 .hr-day { font: 400 1.2rem var(--serif); padding: 14px 0 4px; border-bottom: 1px solid var(--line); }
 .hr-sun { display: flex; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); font: 500 .7rem var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--caramel); }
+
+/* Account and sync */
+.sync-err { color: var(--danger); }
+code { font: 400 .85em var(--mono); background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }

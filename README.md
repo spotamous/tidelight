@@ -52,9 +52,25 @@ git push -u origin main
 ```
 Then enable Pages as in step 3. Any later `git push` redeploys automatically.
 
+## Sign-in and sync (Supabase)
+
+Sync keeps spots, photos, plans, keepers and settings in step across devices. The Claude key never syncs.
+
+1. **Add your anon key.** In Supabase, open Project Settings → API, copy the **anon public** key, and paste it into `js/config.js` in place of `PASTE_YOUR_ANON_KEY_HERE`. The anon key is safe in a public repo. **Never** use the `service_role` key.
+2. **Create the table and photo bucket.** In Supabase, open SQL Editor → New query, paste all of `supabase/schema.sql`, and click Run.
+3. **Point sign-in at your site.** Authentication → URL Configuration: set **Site URL** to your GitHub Pages address (for example `https://YOUR-USERNAME.github.io/tidelight/`) and add the same address under **Redirect URLs**.
+4. **Turn off email confirmation (personal use).** Authentication → Sign In / Providers → Email → switch off **Confirm email** and save. This lets you sign in straight away without Supabase sending an email (new free projects can't edit email templates without custom SMTP). Turn it back on, with custom SMTP, before launch.
+5. **Create your account and sign in.** In the app, Settings → Account and sync → enter your email and a password (at least 8 characters) → **Create account**. Your existing data uploads straight away. On your other devices, use the same details and tap **Sign in**.
+
+Password reset needs email, so keep your password in your password manager until custom SMTP is set up. The emailed-code sign-in is still in `js/sync.js`, ready to switch back to once custom SMTP unlocks the email templates.
+
+How it works: the app always runs from the device's own copy (so it works offline), then merges with your Supabase copy record by record. The newest change to each spot, plan or keeper wins, and deletions are remembered for 120 days so they don't come back. Before launch, set up custom SMTP: Supabase's built-in email sender only allows a couple of emails an hour, and new free projects can't edit email templates without it.
+
+Free-plan note: Supabase pauses free projects after a week without use. Opening the app syncs and counts as use; if it does pause, restore it from the Supabase dashboard.
+
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=2.3`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=2.5`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:
@@ -131,6 +147,9 @@ js/api.js             Open-Meteo forecast, marine and archive calls
 js/ai.js              Claude API calls and photo/EXIF helpers
 js/storage.js         localStorage state, backup and restore
 js/photos.js          Spot photos (IndexedDB), resize, backup
+js/sync.js            Sign-in and sync with Supabase
+js/config.js          Supabase project URL and anon key
+supabase/schema.sql   Table, photo bucket and security rules to run in Supabase
 sw.js                 Offline support (service worker)
 js/util.js            Formatting and small helpers
 icons/                App icons

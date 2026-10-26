@@ -1,12 +1,13 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=2.3';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=2.3';
-import { nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=2.3';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=2.3';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=2.3';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=2.3';
-import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=2.3';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=2.5';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=2.5';
+import { nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=2.5';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=2.5';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=2.5';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow } from './sync.js?v=2.5';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=2.5';
+import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=2.5';
 
-export const APP_VERSION = '2.3';
+export const APP_VERSION = '2.5';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -1373,10 +1374,74 @@ async function recreateShot(file) {
 
 /* ================= settings ================= */
 
+function syncAgo(t) {
+  if (!t) return 'not yet';
+  const m = Math.round((Date.now() - t) / 60000);
+  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
+}
+
+function renderAccount() {
+  const box = $('#accountPanel');
+  if (!box) return;
+  const st = syncStatus();
+  if (!st.configured) {
+    box.innerHTML = `<h2>Account and sync</h2>
+      <p class="small muted">Sync isn't switched on yet. Add your Supabase anon key to <code>js/config.js</code> and run <code>supabase/schema.sql</code> in Supabase (see the README).</p>`;
+    return;
+  }
+  if (st.email) {
+    box.innerHTML = `<h2>Account and sync</h2>
+      <p>Signed in as <strong>${esc(st.email)}</strong>.</p>
+      <p class="small ${st.state === 'error' ? 'sync-err' : 'muted'}">${st.state === 'syncing' ? 'Syncing…' : st.state === 'error' ? esc(st.error) : `Last synced ${syncAgo(st.lastSync)}. Spots, photos, plans, keepers and settings stay in step across your devices. Your Claude key stays on each device.`}</p>
+      <div class="row"><button class="btn primary" id="syncNowBtn" ${st.state === 'syncing' ? 'disabled' : ''}>Sync now</button><button class="btn ghost" id="signOutBtn">Sign out</button></div>`;
+    $('#syncNowBtn').onclick = () => syncNow();
+    $('#signOutBtn').onclick = async () => { await signOut(); toast('Signed out. Your data stays on this device.'); renderAccount(); };
+    return;
+  }
+  box.innerHTML = `<h2>Account and sync</h2>
+    <p class="small muted">Sign in to keep your spots, photos, plans and keepers in step across your phone and computer.</p>
+    <form class="form" id="authForm">
+      <label>Email<input type="email" name="email" autocomplete="username" inputmode="email" required placeholder="you@example.com"></label>
+      <label>Password<input type="password" name="password" autocomplete="current-password" required minlength="8" placeholder="At least 8 characters"></label>
+      <div class="row">
+        <button class="btn primary" type="submit" value="signin">Sign in</button>
+        <button class="btn ghost" type="submit" value="create">Create account</button>
+      </div>
+    </form>
+    <p class="small muted">First time? Tap Create account once on any device, then Sign in everywhere else with the same details.</p>`;
+  const form = $('#authForm');
+  form.onsubmit = async ev => {
+    ev.preventDefault();
+    const mode = ev.submitter?.value || 'signin';
+    const email = form.email.value.trim(), password = form.password.value;
+    const buttons = [...form.querySelectorAll('button')];
+    buttons.forEach(b => { b.disabled = true; });
+    try {
+      if (mode === 'create') {
+        const signedIn = await createAccount(email, password);
+        if (!signedIn) {
+          toast('Account created. Confirm the email Supabase sent you, then tap Sign in.', 7000);
+          buttons.forEach(b => { b.disabled = false; });   // keep the details filled in
+          return;
+        }
+        toast('Account created. Syncing your data.');
+      } else {
+        await signInWithPassword(email, password);
+        toast('Signed in. Syncing your data.');
+      }
+      renderAccount();
+    } catch (e) {
+      toast(e.message, 7000);
+      buttons.forEach(b => { b.disabled = false; });
+    }
+  };
+}
+
 function renderSettings(v) {
   const st = S(), s = st.settings;
   v.innerHTML = `
     <p class="eyebrow">Settings</p><h1>Settings</h1>
+    <section class="panel" id="accountPanel"></section>
     <section class="panel">
       <h2>Home</h2>
       <p class="small muted">Used to estimate drive times and leave times. Stays on this device.</p>
@@ -1420,6 +1485,8 @@ function renderSettings(v) {
     </section>
 
     <p class="small muted">Tidelight version ${APP_VERSION}. Weather, tide and sea data: Open-Meteo (CC BY 4.0). Maps: OpenStreetMap. Tide heights are modelled and can differ from official tide tables; check local warnings before heading out.</p>`;
+
+  renderAccount();
 
   $('#homeHere').onclick = async () => {
     try {
@@ -1478,8 +1545,9 @@ function renderSettings(v) {
     }
     catch (e) { toast(e.message, 5000); }
   };
-  $('#resetBtn').onclick = () => {
-    if (!confirm('Delete all spots, photos, plans, keepers and settings from this browser?')) return;
+  $('#resetBtn').onclick = async () => {
+    if (!confirm('Delete all spots, photos, plans, keepers and settings from this browser? If you are signed in, you will be signed out and your synced copy stays safe in your account.')) return;
+    await signOut().catch(() => {});
     resetAll(); clearPhotos(); for (const k in forecasts) delete forecasts[k];
     toast('All data deleted'); render();
   };
@@ -1507,9 +1575,15 @@ $('#refreshBtn').onclick = async () => {
   const b = $('#refreshBtn');
   b.classList.add('spin');
   const failed = await loadForecasts(true);
+  syncNow();
   b.classList.remove('spin');
   toast(failed.length ? `Some spots failed: ${failed.join(', ')}` : 'Forecasts updated');
   if (tab === 'forecast' || tab === 'spots') render();
 };
 
-loadAllPhotos().finally(render);
+loadAllPhotos().finally(() => {
+  render();
+  initSync(() => { for (const k in forecasts) delete forecasts[k]; if (!$('#sheet').classList.contains('hidden')) return; render(); })
+    .catch(() => {});
+  onSyncStatus(() => { if (tab === 'settings') renderAccount(); });
+});

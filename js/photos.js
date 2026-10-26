@@ -1,5 +1,5 @@
 // Spot photos live in IndexedDB (much roomier than localStorage), on this device only.
-import { uid } from './util.js?v=2.3';
+import { uid } from './util.js?v=2.5';
 
 const DB_NAME = 'tidelight';
 const STORE = 'photos';
@@ -120,4 +120,13 @@ export async function importPhotos(map = {}) {
     const old = urls.get(id); if (old) URL.revokeObjectURL(old);
     urls.set(id, URL.createObjectURL(blob));
   }
+}
+
+/* ---------- for sync ---------- */
+export const hasPhoto = id => urls.has(id);
+export async function getPhotoBlob(id) { return run('readonly', s => s.get(id)); }
+export async function putPhotoBlob(id, blob) {
+  await run('readwrite', s => s.put(blob, id));
+  const old = urls.get(id); if (old) URL.revokeObjectURL(old);
+  urls.set(id, URL.createObjectURL(blob));
 }
