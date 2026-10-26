@@ -20,6 +20,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body {
   background: var(--ground);
@@ -485,3 +486,34 @@ h2 em { font-style: italic; color: var(--caramel); }
 .mx-detail .eyebrow { margin: 0 0 2px; font-size: .64rem; }
 .mx-detail-name { font: 400 1.4rem/1.1 var(--serif); }
 .caramel { color: var(--caramel); }
+
+/* ---------- Hourly forecast (Right now) ---------- */
+.place-pick { display: flex; gap: 8px; margin: 10px 0; }
+.place-pick select { flex: 1; min-width: 0; border-radius: 999px; padding: 11px 14px; }
+.place-pick .btn { flex: 0 0 auto; }
+.hourly-where { font: 500 .7rem var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--caramel); margin-top: 6px; }
+.hourly-summary { font: 400 1.35rem/1.2 var(--serif); margin: 6px 0 10px; }
+.hourly-chart { margin: 0 0 8px; }
+.hourly-chart svg { width: 100%; height: auto; display: block; }
+.hourly-chart figcaption { display: flex; gap: 16px; font-size: .74rem; color: var(--muted); margin-top: 2px; }
+.hourly-chart figcaption span { display: flex; align-items: center; gap: 6px; }
+.key-rain { width: 10px; height: 10px; border-radius: 2px; background: var(--slate); display: inline-block; }
+.key-temp { width: 14px; height: 2px; background: var(--caramel); display: inline-block; }
+
+.hr-list { margin: 8px 0 12px; }
+.hr-head, .hr-row { display: grid; grid-template-columns: 48px 26px 38px minmax(0, 1fr) 70px 40px; gap: 8px; align-items: center; }
+.hr-head { font: 500 .6rem var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 6px 0; border-bottom: 1px solid var(--line); }
+.hr-row { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: .9rem; }
+.hr-time { font: 500 .8rem var(--mono); }
+.hr-icon { color: var(--text); display: grid; place-items: center; }
+.hr-temp { font: 400 1.15rem var(--serif); }
+.hr-rain { position: relative; display: flex; align-items: center; gap: 6px; height: 22px; padding-left: 6px; }
+.hr-rain i { position: absolute; left: 0; top: 3px; bottom: 3px; background: var(--slate); opacity: .22; border-radius: 3px; max-width: 100%; }
+.hr-rain b { position: relative; font-weight: 700; font-size: .82rem; }
+.hr-rain em { position: relative; font-style: normal; font-size: .74rem; color: var(--slate); }
+.hr-wind { display: flex; align-items: center; gap: 4px; font-size: .85rem; color: var(--text); }
+.hr-wind svg { color: var(--muted); flex: 0 0 auto; }
+.hr-wind small { color: var(--muted); font-size: .74rem; }
+.hr-cloud { font-size: .8rem; color: var(--muted); text-align: right; }
+.hr-day { font: 400 1.2rem var(--serif); padding: 14px 0 4px; border-bottom: 1px solid var(--line); }
+.hr-sun { display: flex; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); font: 500 .7rem var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--caramel); }

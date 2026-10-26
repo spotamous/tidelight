@@ -17,6 +17,7 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
   - *Milky Way* calculates where the galactic core sits each hour, and combines that with true darkness, moon phase and position, and cloud. If you've set a facing direction, it tells you how well the core lines up with your composition.
 - **Tide access windows.** For rock shelves, caves and sandbars, set the tide level (as a % of the range) the spot is reachable below, plus a safety buffer. The app shows when access opens, when to be back off, and flags sessions the tide blocks.
 - **Hit-rate tracker** (Plans). Shows how often the app's call matched your rating, the average predicted score of sessions that delivered versus those that didn't, and accuracy per spot. You can also log sessions you shot without planning them.
+- **Hourly forecast** (top of Right now, or *Hourly forecast* on any spot). The next 48 hours for your current location, any spot or any searched place: a plain summary ("Dry until about 4pm, then rain likely until 9pm"), a 24-hour rain and temperature chart, and hour-by-hour rows (conditions, temperature, rain chance and amount, wind and gusts with direction, cloud), with sunrise and sunset marked.
 - **Right now** (radar button in the header). Current modelled conditions at every spot, the tide right now, an animated rain radar, and quick links to the Bureau of Meteorology radar, satellite loop and warnings.
 - **Offline mode.** Once you've opened the app with reception, it works without it: the app, your last forecasts, tides and viewed map tiles are saved on the device.
 - **Lightning distance timer** (Coach → Field tools, or from any lightning score). Tap on the flash, tap on the thunder, and it shows the distance, whether the storm is closing in, and a shelter warning inside 10 km.
@@ -53,7 +54,7 @@ Then enable Pages as in step 3. Any later `git push` redeploys automatically.
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=2.2`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=2.3`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:

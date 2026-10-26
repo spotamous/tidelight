@@ -1,5 +1,5 @@
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
-import { nearestIndex, tideInfo } from './scoring.js?v=2.2';
+import { nearestIndex, tideInfo } from './scoring.js?v=2.3';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
@@ -211,4 +211,35 @@ export async function searchPlaces(q, home) {
   } catch { /* fall through */ }
   const g = await getJSON(`https://geocoding-api.open-meteo.com/v1/search?${qs({ name: q.split(',')[0].trim(), count: 6, language: 'en', format: 'json' })}`);
   return (g.results || []).map(r => ({ name: r.name, detail: [r.admin2, r.admin1, r.country].filter(Boolean).join(', '), lat: r.latitude, lon: r.longitude }));
+}
+
+/* ---------- Hour-by-hour forecast for any place (Right now view) ---------- */
+export async function fetchHourly(lat, lon) {
+  // Coordinates rounded to ~100 m so repeat checks from the same place can use the offline cache.
+  const j = await getJSON(`${FORECAST}?${qs({
+    latitude: lat.toFixed(3), longitude: lon.toFixed(3), timezone: 'auto', timeformat: 'unixtime', forecast_days: 3,
+    hourly: 'temperature_2m,precipitation_probability,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_gusts_10m,wind_direction_10m,is_day',
+    daily: 'sunrise,sunset',
+  })}`);
+  const H = j.hourly, now = Date.now() / 1000;
+  const hours = H.time.map((t, i) => ({
+    t, temp: H.temperature_2m?.[i], pp: H.precipitation_probability?.[i], precip: H.precipitation?.[i] ?? 0,
+    code: H.weather_code?.[i], cloud: H.cloud_cover?.[i], wind: H.wind_speed_10m?.[i], gust: H.wind_gusts_10m?.[i],
+    dir: H.wind_direction_10m?.[i], day: H.is_day?.[i] === 1,
+  })).filter(h => h.t >= now - 3600).slice(0, 48);
+  const suns = [];
+  (j.daily?.time || []).forEach((_, i) => {
+    if (j.daily.sunrise?.[i]) suns.push({ t: j.daily.sunrise[i], kind: 'Sunrise' });
+    if (j.daily.sunset?.[i]) suns.push({ t: j.daily.sunset[i], kind: 'Sunset' });
+  });
+  return { offset: j.utc_offset_seconds || 0, hours, suns };
+}
+
+// A short place name for a coordinate ("Cowes"), or null.
+export async function placeName(lat, lon) {
+  try {
+    const j = await getJSON(`https://nominatim.openstreetmap.org/reverse?${qs({ format: 'jsonv2', lat, lon, zoom: 14, 'accept-language': 'en' })}`);
+    const a = j.address || {};
+    return a.suburb || a.town || a.village || a.city || a.hamlet || a.county || null;
+  } catch { return null; }
 }

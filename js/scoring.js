@@ -1,5 +1,5 @@
-import { clamp, haversineKm, angleDiff, compass } from './util.js?v=2.2';
-import { computeHunts, computeNightHunts, huntsOf, NIGHT_HUNTS } from './hunts.js?v=2.2';
+import { clamp, haversineKm, angleDiff, compass } from './util.js?v=2.3';
+import { computeHunts, computeNightHunts, huntsOf, NIGHT_HUNTS } from './hunts.js?v=2.3';
 
 /* ---------- helpers ---------- */
 

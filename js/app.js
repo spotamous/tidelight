@@ -1,12 +1,12 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=2.2';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces } from './api.js?v=2.2';
-import { nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=2.2';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=2.2';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=2.2';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=2.2';
-import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=2.2';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=2.3';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=2.3';
+import { nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=2.3';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=2.3';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=2.3';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=2.3';
+import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=2.3';
 
-export const APP_VERSION = '2.2';
+export const APP_VERSION = '2.3';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -919,10 +919,12 @@ async function openSpotDetail(id) {
     ${s.notes ? `<p>${esc(s.notes)}</p>` : ''}
     <div class="row">
       <button class="btn" id="editSpot">Edit spot</button>
+      <button class="btn" id="spotHourly">Hourly forecast</button>
       <a class="btn" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}">Directions</a>
     </div>
     <div>${evs.map(e => eventRow(e, `<span>${fmtDay(e.dayT ?? e.t, e.offset)}</span>`)).join('') || '<p class="muted">No upcoming events.</p>'}</div>`;
   $('#editSpot').onclick = () => openSpotForm({}, s);
+  $('#spotHourly').onclick = () => openNow({ kind: 'spot', id: s.id, lat: s.lat, lon: s.lon, name: s.name });
   $$('[data-show]').forEach(b => b.onclick = () => {
     $('#spotBanner').src = photoUrl(b.dataset.show);
     $$('[data-show]').forEach(x => x.classList.toggle('on', x === b));
@@ -931,11 +933,146 @@ async function openSpotDetail(id) {
 
 /* ================= right now ================= */
 
-async function openNow() {
+let nowPlace = { kind: 'here' };   // last place chosen in the hourly forecast
+
+const WX_ICON = (code, day) => {
+  const p = d => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const cloud = 'M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 9.3 4.4 4.4 0 0 0 7 18z';
+  if (code == null) return p('<circle cx="12" cy="12" r="2"/>');
+  if (code >= 95) return p(`<path d="${cloud}"/><path d="M12.5 13l-2 3.5h3l-2 3.5"/>`);
+  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return p(`<path d="M7 15h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 6.3 4.4 4.4 0 0 0 7 15z"/><path d="M9 18l-1 2.5M13 18l-1 2.5M17 18l-1 2.5"/>`);
+  if (code >= 71 && code <= 86) return p(`<path d="M7 15h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 6.3 4.4 4.4 0 0 0 7 15z"/><path d="M9 19h.01M13 20h.01M17 19h.01"/>`);
+  if (code === 45 || code === 48) return p('<path d="M4 9h16M4 13h16M6 17h12"/>');
+  if (code === 3) return p(`<path d="${cloud}"/>`);
+  if (code === 1 || code === 2) return day
+    ? p('<circle cx="9" cy="9" r="3"/><path d="M9 3v1.5M3 9h1.5M4.8 4.8l1 1M13.2 4.8l-1 1"/><path d="M9 19h8a3.5 3.5 0 0 0 .5-7 5 5 0 0 0-8.7 1.4A3 3 0 0 0 9 19z"/>')
+    : p('<path d="M13 4.5A5 5 0 1 0 8 11a4 4 0 0 1 5-6.5z"/><path d="M9 19h8a3.5 3.5 0 0 0 .5-7 5 5 0 0 0-8.7 1.4A3 3 0 0 0 9 19z"/>');
+  return day ? p('<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>')
+    : p('<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>');
+};
+
+function hourlySummary(fc) {
+  const hs = fc.hours.slice(0, 24), o = fc.offset;
+  if (!hs.length) return 'No forecast available.';
+  const wet = h => (h.pp ?? 0) >= 50 || h.precip >= 0.3;
+  const dry = h => (h.pp ?? 0) < 30 && h.precip < 0.1;
+  const out = [];
+  if (wet(hs[0])) {
+    const ease = hs.find(dry);
+    out.push(ease ? `Rain now, easing around ${fmtTime(ease.t, o)}.` : 'Rain now, and it looks set in for the day.');
+  } else {
+    const start = hs.find(wet);
+    if (start) {
+      const end = hs.slice(hs.indexOf(start)).find(dry);
+      out.push(`Dry until about ${fmtTime(start.t, o)}, then rain likely (${Math.round(start.pp ?? 0)}%)${end ? ` until around ${fmtTime(end.t, o)}` : ''}.`);
+    } else out.push('Dry for the next 24 hours.');
+  }
+  const storm = fc.hours.slice(0, 12).find(h => h.code >= 95);
+  if (storm) out.push(`Thunderstorms possible around ${fmtTime(storm.t, o)}.`);
+  const gusty = fc.hours.slice(0, 12).reduce((m, h) => (h.gust ?? 0) > (m?.gust ?? 0) ? h : m, null);
+  if (gusty && gusty.gust >= 45) out.push(`Gusts to ${Math.round(gusty.gust)} km/h around ${fmtTime(gusty.t, o)}.`);
+  return out.join(' ');
+}
+
+function hourlyChart(fc) {
+  const hs = fc.hours.slice(0, 24), o = fc.offset;
+  if (hs.length < 2) return '';
+  const W = 350, bw = W / hs.length, base = 92;
+  const temps = hs.map(h => h.temp).filter(v => v != null);
+  const tMin = Math.min(...temps), tMax = Math.max(...temps), span = Math.max(1, tMax - tMin);
+  const ty = v => 14 + (1 - (v - tMin) / span) * 44;
+  const line = hs.map((h, i) => h.temp == null ? '' : `${i ? 'L' : 'M'}${(i * bw + bw / 2).toFixed(1)} ${ty(h.temp).toFixed(1)}`).join('');
+  const hiI = hs.findIndex(h => h.temp === tMax), loI = hs.findIndex(h => h.temp === tMin);
+  const label = (i, txt, above) => `<text x="${Math.min(W - 14, Math.max(14, i * bw + bw / 2))}" y="${ty(hs[i].temp) + (above ? -6 : 14)}" text-anchor="middle" font-size="10" fill="var(--text)">${txt}</text>`;
+  return `<figure class="hourly-chart">
+    <svg viewBox="0 0 ${W} 118" role="img" aria-label="Next 24 hours: rain chance bars and temperature line, ${Math.round(tMin)} to ${Math.round(tMax)} degrees">
+      ${hs.map((h, i) => `<rect x="${(i * bw + 1).toFixed(1)}" y="${(base - (h.pp ?? 0) * 0.3).toFixed(1)}" width="${(bw - 2).toFixed(1)}" height="${((h.pp ?? 0) * 0.3).toFixed(1)}" rx="1.5" fill="var(--slate)" fill-opacity="${h.precip >= 0.3 ? 0.9 : 0.45}"/>`).join('')}
+      <line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="var(--line)"/>
+      <path d="${line}" fill="none" stroke="var(--caramel)" stroke-width="2" stroke-linejoin="round"/>
+      ${label(hiI, `${Math.round(tMax)}°`, true)}${loI !== hiI ? label(loI, `${Math.round(tMin)}°`, false) : ''}
+      ${hs.map((h, i) => i % 3 === 0 ? `<text x="${i === 0 ? 1 : (i * bw + bw / 2).toFixed(1)}" y="110" text-anchor="${i === 0 ? 'start' : 'middle'}" font-size="9.5" fill="var(--muted)">${i === 0 ? 'Now' : fmtTime(h.t, o).replace(':00', '')}</text>` : '').join('')}
+    </svg>
+    <figcaption><span><i class="key-rain"></i>Rain chance</span><span><i class="key-temp"></i>Temperature</span></figcaption>
+  </figure>`;
+}
+
+function hourlyRows(fc, count) {
+  const o = fc.offset, rows = [];
+  const hs = fc.hours.slice(0, count);
+  hs.forEach((h, i) => {
+    const next = hs[i + 1]?.t ?? h.t + 3600;
+    const dayChange = i > 0 && dayKey(h.t, o) !== dayKey(hs[i - 1].t, o);
+    if (dayChange) rows.push(`<div class="hr-day">${fmtDay(h.t, o)}</div>`);
+    rows.push(`<div class="hr-row">
+      <span class="hr-time num">${i === 0 ? 'Now' : fmtTime(h.t, o).replace(':00', '')}</span>
+      <span class="hr-icon" title="${esc(WEATHER_TEXT(h.code))}">${WX_ICON(h.code, h.day)}</span>
+      <span class="hr-temp num">${h.temp != null ? Math.round(h.temp) + '°' : '–'}</span>
+      <span class="hr-rain"><i style="width:${Math.round(h.pp ?? 0)}%"></i><b class="num">${Math.round(h.pp ?? 0)}%</b>${h.precip >= 0.1 ? `<em class="num">${h.precip.toFixed(1)}mm</em>` : ''}</span>
+      <span class="hr-wind num"><svg viewBox="0 0 24 24" width="13" height="13" style="transform:rotate(${(h.dir ?? 0) + 180}deg)" aria-hidden="true"><path d="M12 3l5 9h-3.5v9h-3v-9H7z" fill="currentColor"/></svg>${Math.round(h.wind ?? 0)}${h.gust ? `<small>–${Math.round(h.gust)}</small>` : ''}</span>
+      <span class="hr-cloud num">${h.cloud != null ? Math.round(h.cloud) + '%' : ''}</span>
+    </div>`);
+    fc.suns.filter(s => s.t >= h.t && s.t < next).forEach(s => rows.push(`<div class="hr-sun"><span class="num">${fmtTime(s.t, o)}</span><span>${s.kind}</span></div>`));
+  });
+  return `<div class="hr-head"><span>Time</span><span></span><span>Temp</span><span>Rain</span><span>Wind km/h</span><span>Cloud</span></div>${rows.join('')}`;
+}
+
+async function loadHourly(place) {
+  const box = $('#hourly');
+  if (!box) return;
+  box.innerHTML = '<p class="loading">Getting the forecast…</p>';
+  try {
+    if (place.kind === 'here' && place.lat == null) {
+      const p = await getPosition();
+      place = { ...place, ...p };
+      placeName(p.lat, p.lon).then(n => {
+        if (!n) return;
+        place.name = `Near ${n}`;           // used by later redraws
+        if ($('#hourlyWhere')) $('#hourlyWhere').textContent = place.name;
+      });
+    }
+    nowPlace = place;
+    const fc = await fetchHourly(place.lat, place.lon);
+    if (!$('#hourly')) return;
+    let count = 24;
+    const draw = () => {
+      $('#hourly').innerHTML = `
+        <div class="hourly-where" id="hourlyWhere">${esc(place.name || (place.kind === 'here' ? 'Your location' : 'Selected place'))}</div>
+        <p class="hourly-summary">${esc(hourlySummary(fc))}</p>
+        ${hourlyChart(fc)}
+        <div class="hr-list">${hourlyRows(fc, count)}</div>
+        ${fc.hours.length > 24 ? `<button class="btn ghost block small-btn" id="hourlyMore">${count === 24 ? 'Show the next 24 hours' : 'Show less'}</button>` : ''}`;
+      const more = $('#hourlyMore');
+      if (more) more.onclick = () => { count = count === 24 ? 48 : 24; draw(); };
+    };
+    draw();
+  } catch (e) {
+    if ($('#hourly')) $('#hourly').innerHTML = `<p class="muted small">${esc(e.message || "Couldn't load the forecast.")} You can pick a spot or search a place instead.</p>`;
+  }
+}
+
+async function openNow(start) {
   const st = S();
+  if (start) nowPlace = start;
+  const sel = nowPlace.kind === 'spot' ? nowPlace.id : nowPlace.kind;
   openSheet(`
     <p class="eyebrow">Right now</p>
-    <h2>What's happening <em>outside.</em></h2>
+    <h2>What's <em>coming.</em></h2>
+    <div class="place-pick">
+      <select id="hourlyPlace" aria-label="Forecast location">
+        <option value="here" ${sel === 'here' ? 'selected' : ''}>My location</option>
+        ${st.spots.map(sp => `<option value="${sp.id}" ${sel === sp.id ? 'selected' : ''}>${esc(sp.name)}</option>`).join('')}
+        ${nowPlace.kind === 'search' ? `<option value="search" selected>${esc(nowPlace.name)}</option>` : ''}
+      </select>
+      <button class="btn ghost" id="hourlyFind" type="button">Search</button>
+    </div>
+    <form class="search" id="hourlySearch" hidden>
+      <input type="search" id="hourlyQ" placeholder="Any town, beach or landmark" enterkeyhint="search" aria-label="Search a place for the hourly forecast">
+      <button class="btn primary" type="submit">Go</button>
+    </form>
+    <div id="hourlyResults" class="results" hidden></div>
+    <div id="hourly"></div>
+
+    <h3>At your spots now</h3>
     <div id="nowSpots">${st.spots.length ? '<p class="loading">Checking your spots…</p>' : '<p class="muted">Add spots to see conditions at each one.</p>'}</div>
     <h3>Rain radar</h3>
     <div id="radar" class="radar"></div>
@@ -950,6 +1087,33 @@ async function openNow() {
 
   let radarMap = null, timer = null;
   onSheetClose = () => { clearInterval(timer); if (radarMap) { radarMap.remove(); radarMap = null; } };
+
+  // Hourly forecast: my location, a spot, or a searched place.
+  $('#hourlyPlace').onchange = e => {
+    const v = e.target.value;
+    if (v === 'here') loadHourly({ kind: 'here' });
+    else if (v !== 'search') { const sp = S().spots.find(x => x.id === v); if (sp) loadHourly({ kind: 'spot', id: sp.id, lat: sp.lat, lon: sp.lon, name: sp.name }); }
+  };
+  $('#hourlyFind').onclick = () => { const f = $('#hourlySearch'); f.hidden = !f.hidden; if (!f.hidden) $('#hourlyQ').focus(); };
+  $('#hourlySearch').onsubmit = async ev => {
+    ev.preventDefault();
+    const q = $('#hourlyQ').value.trim(), box = $('#hourlyResults');
+    if (!q) return;
+    box.hidden = false; box.innerHTML = '<p class="loading">Searching…</p>';
+    let res = [];
+    try { res = await searchPlaces(q, S().settings.home); } catch { box.innerHTML = '<p class="muted small">Search isn\'t available right now.</p>'; return; }
+    if (!res.length) { box.innerHTML = '<p class="muted small">No places found.</p>'; return; }
+    box.innerHTML = res.map((r, i) => `<button type="button" class="result" data-hres="${i}"><span class="r-name">${esc(r.name)}</span><span class="r-detail">${esc(r.detail)}</span></button>`).join('');
+    $$('[data-hres]', box).forEach(b => b.onclick = () => {
+      const r = res[+b.dataset.hres];
+      box.hidden = true; $('#hourlySearch').hidden = true;
+      const selEl = $('#hourlyPlace');
+      selEl.querySelector('option[value="search"]')?.remove();
+      selEl.insertAdjacentHTML('beforeend', `<option value="search" selected>${esc(r.name)}</option>`);
+      loadHourly({ kind: 'search', lat: r.lat, lon: r.lon, name: r.name });
+    });
+  };
+  loadHourly(nowPlace.kind === 'here' ? { kind: 'here' } : nowPlace);
 
   // Spot conditions
   if (st.spots.length) {
