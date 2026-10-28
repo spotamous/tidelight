@@ -3,8 +3,8 @@
 // in supabase/schema.sql, so it is safe in this file and in your GitHub repo.
 // NEVER put the service_role key here.
 export const SUPABASE_URL = 'https://lwwhoinoredwathgmdij.supabase.co';
-export const SUPABASE_ANON_KEY = 'PASTE_YOUR_ANON_KEY_HERE'; // Supabase → Project Settings → API → anon public
+export const SUPABASE_ANON_KEY = 'sb_publishable_dnqANaGlhgZQ3mnwQG6YLw_MEmkLh7f'; // Supabase → Project Settings → API → anon public
 
 // Public half of your web-push (VAPID) key pair, for alerts. Generate the pair with tools/vapid-keys.html.
 // The PRIVATE half goes only into Supabase → Edge Functions → Secrets, never here.
-export const VAPID_PUBLIC_KEY = 'PASTE_YOUR_VAPID_PUBLIC_KEY_HERE';
+export const VAPID_PUBLIC_KEY = 'BHrkfwgrz-W1xqiZm8pmmlAzARZRXQXZ1tBbEsPR89btWHTo91I8y1JgNe9AhPJ-4OIQV_hbgJqWX5fRrlgzkRU';
