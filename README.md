@@ -25,6 +25,7 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 - **Leave times** based on drive time from home, plus how early you like to be on location.
 - **Light timeline** showing blue hour, golden hour, sun azimuth, and the nearest high or low tide.
 - **Place search on the Spots map.** Search a beach, landmark, lookout or town (OpenStreetMap, preferring results near home), or paste coordinates. The map jumps there with an *Add spot here* button, and the spot name is filled in for you.
+- **Hike details per spot.** Hike time, distance and difficulty (easy, moderate, hard, very hard). Leave times include the walk, the timeline shows when to start walking, and briefings warn when you'll be walking in or out in the dark. With no time entered, it's estimated one way from distance and difficulty (about 4, 3.3, 2.6 and 2 km/h).
 - **Your own photos on each spot.** Add as many as you like and choose a cover. The cover appears in the spot list, the session details and the forecast's top pick. A new spot can take its location from a photo's GPS data.
 - **Plans with calendar export (.ics)**, including a 15-minute alarm.
 - **Personal score.** Import your keeper photos. The app reads each photo's capture time and location, looks up the conditions at that moment, and blends a "your style" score into every forecast once you have 3 or more keepers.
@@ -91,7 +92,7 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=2.8`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=3.0`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:

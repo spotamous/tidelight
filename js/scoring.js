@@ -1,5 +1,5 @@
-import { clamp, haversineKm, angleDiff, compass } from './util.js?v=2.8';
-import { computeHunts, computeNightHunts, huntsOf, NIGHT_HUNTS } from './hunts.js?v=2.8';
+import { clamp, haversineKm, angleDiff, compass } from './util.js?v=3.0';
+import { computeHunts, computeNightHunts, huntsOf, NIGHT_HUNTS } from './hunts.js?v=3.0';
 
 /* ---------- helpers ---------- */
 
@@ -192,6 +192,17 @@ function ensureSunCalc() {
 }
 const secs = d => (d instanceof Date && !isNaN(d)) ? d.getTime() / 1000 : null;
 
+// Walking speeds used to estimate a hike when only distance is known (km/h, allowing for terrain and stops).
+export const HIKE_SPEED = { easy: 4, moderate: 3.3, hard: 2.6, 'very hard': 2 };
+export const DIFFICULTIES = ['easy', 'moderate', 'hard', 'very hard'];
+
+export function hikeMinutes(spot) {
+  if (spot.hikeMin) return Number(spot.hikeMin);
+  if (spot.hikeKm) return Math.round(Number(spot.hikeKm) / (HIKE_SPEED[spot.difficulty] || HIKE_SPEED.moderate) * 60);
+  return 0;
+}
+export const hikeIsEstimate = spot => !spot.hikeMin && !!spot.hikeKm;
+
 export function driveMinutes(spot, settings) {
   if (spot.driveMin) return Number(spot.driveMin);
   if (!settings.home) return null;
@@ -218,8 +229,10 @@ export function evaluateEvent({ spot, data, type, t, keepers, settings }) {
   if (personal) score = Math.round((1 - personal.weight) * top + personal.weight * personal.score);
 
   const drive = driveMinutes(spot, settings);
+  const hike = hikeMinutes(spot);
   const arrive = Number(settings.arriveBeforeMin ?? 30);
-  const leave = t - (arrive + (drive || 0)) * 60;
+  const leave = t - (arrive + (drive || 0) + hike) * 60;
+  const walkStart = hike ? t - (arrive + hike) * 60 : null;   // park up and start walking
 
   let light = {}, sunAz = null, alignment = null;
   ensureSunCalc();
@@ -244,7 +257,7 @@ export function evaluateEvent({ spot, data, type, t, keepers, settings }) {
     key: `${spot.id}:${type}:${t}`, access,
     spot, type, t, offset: data.offset, idx, hour: h, tide,
     base: top, colour: base.score, hunts, topHunt, personal, score, factors: hunts[topHunt]?.factors || base.factors,
-    features, drive, leave, light, sunAz, alignment,
+    features, drive, hike, walkStart, leave, light, sunAz, alignment,
   };
 }
 
@@ -290,7 +303,10 @@ export function evaluateNight({ spot, data, d, keepers, settings }) {
   let score = top;
   if (personal) score = Math.round((1 - personal.weight) * top + personal.weight * personal.score);
   const drive = driveMinutes(spot, settings);
-  const leave = t - (Number(settings.arriveBeforeMin ?? 30) + (drive || 0)) * 60;
+  const hike = hikeMinutes(spot);
+  const arrive = Number(settings.arriveBeforeMin ?? 30);
+  const leave = t - (arrive + (drive || 0) + hike) * 60;
+  const walkStart = hike ? t - (arrive + hike) * 60 : null;
 
   // Night timeline: astronomical dark, moonrise/set, the best moment, first light.
   const timeline = [];
@@ -315,6 +331,6 @@ export function evaluateNight({ spot, data, d, keepers, settings }) {
     key: `${spot.id}:night:${sunset}`, access,
     spot, type: 'night', t, dayT: sunset, offset: data.offset, idx, hour: h, tide,
     base: top, colour: null, hunts, topHunt, personal, score, factors: hunts[topHunt].factors,
-    features, drive, leave, light: {}, timeline, sunAz: null, alignment: hunts.astro?.alignment || null,
+    features, drive, hike, walkStart, leave, light: {}, timeline, sunAz: null, alignment: hunts.astro?.alignment || null,
   };
 }

@@ -1,14 +1,14 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=2.8';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=2.8';
-import { nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=2.8';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=2.8';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=2.8';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert } from './sync.js?v=2.8';
-import { VAPID_PUBLIC_KEY } from './config.js?v=2.8';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=2.8';
-import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=2.8';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=3.0';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=3.0';
+import { DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=3.0';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=3.0';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=3.0';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert } from './sync.js?v=3.0';
+import { VAPID_PUBLIC_KEY } from './config.js?v=3.0';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=3.0';
+import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=3.0';
 
-export const APP_VERSION = '2.8';
+export const APP_VERSION = '3.0';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -59,6 +59,24 @@ function allEvents(opts) {
 
 /* ================= rule-based briefing (works without AI) ================= */
 
+// "47 min drive + 35 min hike"
+function travelText(e) {
+  const parts = [];
+  if (e.drive != null) parts.push(`${e.drive} min drive`);
+  if (e.hike) parts.push(`${e.hike} min hike`);
+  return parts.join(' + ');
+}
+// "3.2 km, moderate, about 58 min" for a spot
+function hikeSummary(sp) {
+  const m = hikeMinutes(sp);
+  if (!m && !sp.hikeKm && !sp.difficulty) return '';
+  const bits = [];
+  if (sp.hikeKm) bits.push(`${Number(sp.hikeKm)} km`);
+  if (sp.difficulty) bits.push(sp.difficulty);
+  if (m) bits.push(`${hikeIsEstimate(sp) ? 'about ' : ''}${m} min`);
+  return `Hike: ${bits.join(', ')}`;
+}
+
 function verdict(e) {
   const v = e.score >= 75 ? 'Go' : e.score >= 50 ? 'Maybe' : 'Skip';
   if (v === 'Skip' || !e.topHunt || e.topHunt === 'colour') return v;
@@ -86,9 +104,20 @@ function briefing(e) {
   lines.push(e.type === 'night'
     ? `${verdict(e)}. ${s.name} ${sessionName(e)}, best around ${fmtTime(e.t, o)}.`
     : `${verdict(e)}. ${s.name} ${e.type} at ${fmtTime(e.t, o)}.`);
-  lines.push(e.drive != null
-    ? `Leave ${fmtTime(e.leave, o)} (${e.drive} min drive, on location ${S().settings.arriveBeforeMin} min early).`
-    : `Be on location by ${fmtTime(e.leave, o)}. Set your home location in Settings to get a leave time.`);
+  if (e.drive != null) {
+    lines.push(`Leave ${fmtTime(e.leave, o)} (${travelText(e)}${e.hike ? `, start walking ${fmtTime(e.walkStart, o)}` : ''}, on location ${S().settings.arriveBeforeMin} min early).`);
+  } else if (e.hike) {
+    lines.push(`Start walking by ${fmtTime(e.walkStart, o)} (${e.hike} min hike, on location ${S().settings.arriveBeforeMin} min early). Set your home location in Settings to include the drive.`);
+  } else {
+    lines.push(`Be on location by ${fmtTime(e.leave, o)}. Set your home location in Settings to get a leave time.`);
+  }
+  if (e.hike >= 10) {
+    const dawn = e.light?.blueStart, dusk = e.light?.blueEnd;
+    const kind = s.difficulty ? ` ${s.difficulty}` : '';
+    if (e.type === 'sunrise' && dawn && e.walkStart < dawn) lines.push(`The${kind} walk in starts before first light: bring a headtorch and allow extra time on the trail.`);
+    else if (e.type === 'sunset' && dusk && e.t + (20 + e.hike) * 60 > dusk) lines.push(`You'll walk the ${e.hike} min${kind} track back after dark: bring a headtorch.`);
+    else if (e.type === 'night') lines.push(`Both walks on the${kind} track are in the dark: headtorch, spare batteries, and tell someone your plan.`);
+  }
   const good = e.factors.filter(f => f.k === 'good').map(f => f.t);
   const bad = e.factors.filter(f => f.k === 'bad').map(f => f.t);
   if (good.length) lines.push(`In your favour: ${good.slice(0, 2).join('; ').toLowerCase()}.`);
@@ -297,7 +326,7 @@ async function renderForecast(v) {
         <div class="call-spot">${esc(best.spot.name)}</div>
         <div class="call-meta">
           <span><strong>Leave ${fmtTime(best.leave, o)}</strong></span>
-          ${best.drive != null ? `<span>${best.drive} min drive</span>` : ''}
+          ${travelText(best) ? `<span>${travelText(best)}</span>` : ''}
           ${reason ? `<span>${esc(reason)}</span>` : ''}
         </div>
         ${best.access && !best.access.inside ? '<div class="call-warn">The tide blocks access for this session. Check the briefing.</div>' : ''}
@@ -392,7 +421,8 @@ function openEvent(key) {
   if (!e) return;
   const o = e.offset, h = e.hour, L = e.light;
 
-  const tl = [{ t: e.leave, label: e.drive != null ? `Leave home (${e.drive} min drive)` : 'Be on location', cls: 'leave' }];
+  const tl = [{ t: e.leave, label: e.drive != null ? `Leave home (${e.drive} min drive)` : e.hike ? 'Start walking' : 'Be on location', cls: 'leave' }];
+  if (e.hike && e.drive != null) tl.push({ t: e.walkStart, label: `Start the hike (${[e.spot.hikeKm ? `${Number(e.spot.hikeKm)} km` : '', e.spot.difficulty || '', `${e.hike} min`].filter(Boolean).join(', ')})`, cls: 'leave' });
   if (L.blueStart) tl.push({ t: L.blueStart, label: 'Blue hour starts' });
   if (L.blueEnd) tl.push({ t: L.blueEnd, label: 'Blue hour ends' });
   if (L.goldenStart && e.type === 'sunset') tl.push({ t: L.goldenStart, label: 'Golden hour starts' });
@@ -663,7 +693,7 @@ function renderSpots(v) {
         <button class="spot-row" data-spot="${s.id}">
           ${coverUrl(s) ? `<img class="spot-thumb" src="${coverUrl(s)}" alt="">` : `<span class="spot-thumb empty" aria-hidden="true">${esc(s.name.charAt(0))}</span>`}
           <div class="spot-text"><div class="ev-title">${esc(s.name)}</div>
-          <div class="ev-sub"><span>${(s.events || []).map(cap).join(' and ') || 'No events'}</span><span>${huntsOf(s).map(k => HUNT_LABEL[k]).join(', ')}</span></div></div>
+          <div class="ev-sub"><span>${(s.events || []).map(cap).join(' and ') || 'No events'}</span><span>${huntsOf(s).map(k => HUNT_LABEL[k]).join(', ')}</span>${hikeSummary(s) ? `<span>${esc(hikeSummary(s))}</span>` : ''}</div></div>
           <span class="muted" aria-hidden="true">›</span>
         </button>`).join('') : '<p class="muted">No spots yet. Your favourite locations go here.</p>'}
     </section>`;
@@ -797,6 +827,18 @@ function openSpotForm(prefill = {}, existing = null) {
         <label>Drive time (min)<span class="hint">Blank = estimate from home</span><input name="driveMin" inputmode="numeric" value="${s.driveMin ?? ''}"></label>
         <label>Facing (°)<span class="hint">Your composition's compass bearing, optional</span><input name="facing" inputmode="numeric" value="${s.facing ?? ''}"></label>
       </div>
+      <fieldset><legend>Hike from the car</legend>
+        <span class="hint">Leave blank if you can shoot from the car park. Leave times include the walk.</span>
+        <div class="three">
+          <label>Time (min)<input name="hikeMin" inputmode="numeric" value="${s.hikeMin ?? ''}" placeholder="Auto"></label>
+          <label>Distance (km)<input name="hikeKm" inputmode="decimal" value="${s.hikeKm ?? ''}" placeholder="0"></label>
+          <label>Difficulty<select name="difficulty">
+            <option value="" ${!s.difficulty ? 'selected' : ''}>–</option>
+            ${DIFFICULTIES.map(d => `<option value="${d}" ${s.difficulty === d ? 'selected' : ''}>${cap(d)}</option>`).join('')}
+          </select></label>
+        </div>
+        <span class="hint">No time entered? It's estimated from distance and difficulty, one way.</span>
+      </fieldset>
       <label>Notes<textarea name="notes" placeholder="Access, parking, hazards, compositions">${esc(s.notes || '')}</textarea></label>
       <div class="row">
         <button type="submit" class="btn primary">${existing ? 'Save spot' : 'Add spot'}</button>
@@ -866,6 +908,9 @@ function openSpotForm(prefill = {}, existing = null) {
     const data = {
       name, lat, lon, events, coastal: !!f.get('coastal'), tide: f.get('tide'),
       driveMin: f.get('driveMin') ? parseInt(f.get('driveMin'), 10) : '',
+      hikeMin: f.get('hikeMin') ? Math.max(0, parseInt(f.get('hikeMin'), 10) || 0) || '' : '',
+      hikeKm: f.get('hikeKm') ? Math.max(0, parseFloat(f.get('hikeKm')) || 0) || '' : '',
+      difficulty: DIFFICULTIES.includes(f.get('difficulty')) ? f.get('difficulty') : '',
       facing: f.get('facing') !== '' ? parseFloat(f.get('facing')) : '',
       notes: String(f.get('notes') || ''),
       hunts: HUNT_ORDER.filter(k => f.get(`hunt_${k}`)).length ? HUNT_ORDER.filter(k => f.get(`hunt_${k}`)) : ['colour'],
@@ -918,6 +963,7 @@ async function openSpotDetail(id) {
     ${pics.length > 1 ? `<div class="gallery-strip">${pics.map((id, i) => `<button class="${i === 0 ? 'on' : ''}" data-show="${id}" aria-label="Show photo ${i + 1}"><img src="${photoUrl(id)}" alt=""></button>`).join('')}</div>` : ''}
     <h2>${esc(s.name)}</h2>
     <p class="muted small">${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}${s.coastal && !data.hasMarine ? '. No tide or wave data at this exact point; try moving the pin slightly offshore.' : ''}</p>
+    ${hikeSummary(s) ? `<p class="hike-line">${esc(hikeSummary(s))}</p>` : ''}
     ${s.notes ? `<p>${esc(s.notes)}</p>` : ''}
     <div class="row">
       <button class="btn" id="editSpot">Edit spot</button>
@@ -1473,6 +1519,8 @@ async function renderAlerts() {
   } else {
     const sub = await currentPushSub();
     const blocked = Notification.permission === 'denied';
+    // Self-heal: if this device is subscribed but the server lost (or never got) the record, save it again.
+    if (sub && Notification.permission === 'granted') savePushSubscription(sub.toJSON()).catch(() => {});
     device = sub && Notification.permission === 'granted'
       ? `<p class="small"><strong class="caramel">Alerts are on for this device.</strong></p>
          <div class="row"><button class="btn" id="testAlert">Send a test</button><button class="btn ghost" id="pushOff">Turn off on this device</button></div>`
@@ -1522,7 +1570,12 @@ async function renderAlerts() {
   const test = $('#testAlert');
   if (test) test.onclick = async () => {
     test.disabled = true; test.textContent = 'Sending…';
-    try { await sendTestAlert(); toast('Test sent. It should arrive in a few seconds.'); }
+    try {
+      const sub = await currentPushSub();
+      if (sub) await savePushSubscription(sub.toJSON());   // make sure Supabase knows this device
+      await sendTestAlert();
+      toast('Test sent. It should arrive in a few seconds.');
+    }
     catch (e) { toast(e.message, 7000); }
     test.disabled = false; test.textContent = 'Send a test';
   };

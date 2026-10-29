@@ -1,6 +1,6 @@
 // Optional AI coach using your own Claude API key, called directly from your browser.
 // The key is stored only in this browser (localStorage) and never in your GitHub repo.
-import { clamp, fmtTime, compass } from './util.js?v=2.8';
+import { clamp, fmtTime, compass } from './util.js?v=3.0';
 
 export const hasAI = settings => !!(settings.claudeKey && settings.claudeKey.trim());
 
@@ -36,6 +36,7 @@ export function briefingContext(e, styleSummary) {
     spot: { name: s.name, coastal: !!s.coastal, tidePreference: s.tide, facingDeg: s.facing || null, notes: s.notes || '' },
     event: {
       type: e.type, localTime: fmtTime(e.t, o), leaveAt: fmtTime(e.leave, o), driveMinutes: e.drive,
+      hike: e.hike ? { minutesOneWay: e.hike, km: s.hikeKm || null, difficulty: s.difficulty || null, startWalking: fmtTime(e.walkStart, o) } : null,
       sunAzimuth: e.sunAz != null ? `${Math.round(e.sunAz)}° ${compass(e.sunAz)}` : null,
       goldenHour: e.light.goldenStart ? `${fmtTime(e.light.goldenStart, o)}–${fmtTime(e.light.goldenEnd, o)}` : null,
       blueHour: e.light.blueStart ? `${fmtTime(e.light.blueStart, o)}–${fmtTime(e.light.blueEnd, o)}` : null,

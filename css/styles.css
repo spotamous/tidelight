@@ -527,3 +527,7 @@ code { font: 400 .85em var(--mono); background: var(--surface-2); padding: 1px 5
 .alert-prefs .check input[type=checkbox] { vertical-align: middle; margin-right: 8px; }
 .alert-prefs select { width: auto; display: inline-block; padding: 6px 10px; margin: 0 4px; border-radius: 999px; }
 .alert-prefs .two select { width: 100%; margin: 0; padding: 11px 12px; border-radius: 8px; }
+
+/* Hike fields */
+.form .three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.hike-line { color: var(--slate); font-size: .9rem; margin: 0 0 8px; }

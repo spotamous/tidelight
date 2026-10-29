@@ -570,6 +570,17 @@ function ensureSunCalc() {
 }
 const secs = d => (d instanceof Date && !isNaN(d)) ? d.getTime() / 1000 : null;
 
+// Walking speeds used to estimate a hike when only distance is known (km/h, allowing for terrain and stops).
+const HIKE_SPEED = { easy: 4, moderate: 3.3, hard: 2.6, 'very hard': 2 };
+const DIFFICULTIES = ['easy', 'moderate', 'hard', 'very hard'];
+
+function hikeMinutes(spot) {
+  if (spot.hikeMin) return Number(spot.hikeMin);
+  if (spot.hikeKm) return Math.round(Number(spot.hikeKm) / (HIKE_SPEED[spot.difficulty] || HIKE_SPEED.moderate) * 60);
+  return 0;
+}
+const hikeIsEstimate = spot => !spot.hikeMin && !!spot.hikeKm;
+
 function driveMinutes(spot, settings) {
   if (spot.driveMin) return Number(spot.driveMin);
   if (!settings.home) return null;
@@ -596,8 +607,10 @@ function evaluateEvent({ spot, data, type, t, keepers, settings }) {
   if (personal) score = Math.round((1 - personal.weight) * top + personal.weight * personal.score);
 
   const drive = driveMinutes(spot, settings);
+  const hike = hikeMinutes(spot);
   const arrive = Number(settings.arriveBeforeMin ?? 30);
-  const leave = t - (arrive + (drive || 0)) * 60;
+  const leave = t - (arrive + (drive || 0) + hike) * 60;
+  const walkStart = hike ? t - (arrive + hike) * 60 : null;   // park up and start walking
 
   let light = {}, sunAz = null, alignment = null;
   ensureSunCalc();
@@ -622,7 +635,7 @@ function evaluateEvent({ spot, data, type, t, keepers, settings }) {
     key: `${spot.id}:${type}:${t}`, access,
     spot, type, t, offset: data.offset, idx, hour: h, tide,
     base: top, colour: base.score, hunts, topHunt, personal, score, factors: hunts[topHunt]?.factors || base.factors,
-    features, drive, leave, light, sunAz, alignment,
+    features, drive, hike, walkStart, leave, light, sunAz, alignment,
   };
 }
 
@@ -668,7 +681,10 @@ function evaluateNight({ spot, data, d, keepers, settings }) {
   let score = top;
   if (personal) score = Math.round((1 - personal.weight) * top + personal.weight * personal.score);
   const drive = driveMinutes(spot, settings);
-  const leave = t - (Number(settings.arriveBeforeMin ?? 30) + (drive || 0)) * 60;
+  const hike = hikeMinutes(spot);
+  const arrive = Number(settings.arriveBeforeMin ?? 30);
+  const leave = t - (arrive + (drive || 0) + hike) * 60;
+  const walkStart = hike ? t - (arrive + hike) * 60 : null;
 
   // Night timeline: astronomical dark, moonrise/set, the best moment, first light.
   const timeline = [];
@@ -693,11 +709,11 @@ function evaluateNight({ spot, data, d, keepers, settings }) {
     key: `${spot.id}:night:${sunset}`, access,
     spot, type: 'night', t, dayT: sunset, offset: data.offset, idx, hour: h, tide,
     base: top, colour: null, hunts, topHunt, personal, score, factors: hunts[topHunt].factors,
-    features, drive, leave, light: {}, timeline, sunAz: null, alignment: hunts.astro?.alignment || null,
+    features, drive, hike, walkStart, leave, light: {}, timeline, sunAz: null, alignment: hunts.astro?.alignment || null,
   };
 }
 
-return { nearestIndex, tideInfo, accessWindow, FEATURE_NAMES, featureVector, baseScore, similarity, MIN_KEEPERS, personalScore, personalModelSummary, driveMinutes, evaluateEvent, evaluateSpot, evaluateNight };
+return { nearestIndex, tideInfo, accessWindow, FEATURE_NAMES, featureVector, baseScore, similarity, MIN_KEEPERS, personalScore, personalModelSummary, HIKE_SPEED, DIFFICULTIES, hikeMinutes, hikeIsEstimate, driveMinutes, evaluateEvent, evaluateSpot, evaluateNight };
 })();
 
 /* ===== js/api.js ===== */
@@ -967,6 +983,21 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
+// The server-side admin key. Newer projects expose secret keys as JSON in SUPABASE_SECRET_KEYS;
+// older ones as SUPABASE_SERVICE_ROLE_KEY. TIDELIGHT_SECRET_KEY lets you set one explicitly.
+function adminKey() {
+  const own = Deno.env.get('TIDELIGHT_SECRET_KEY');
+  if (own) return { key: own, from: 'TIDELIGHT_SECRET_KEY' };
+  try {
+    const keys = JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') || '{}');
+    const k = keys.default || Object.values(keys)[0];
+    if (k) return { key: k, from: 'SUPABASE_SECRET_KEYS' };
+  } catch { /* not set */ }
+  const legacy = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  return { key: legacy, from: legacy ? 'SUPABASE_SERVICE_ROLE_KEY' : 'none' };
+}
+const keyKind = k => (!k ? 'missing' : k.startsWith('sb_secret_') ? 'secret' : k.startsWith('sb_publishable_') ? 'publishable (wrong kind)' : k.startsWith('eyJ') ? 'legacy JWT' : 'unknown');
+
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
 const inQuiet = (h, s, e) => (s === e ? false : s < e ? h >= s && h < e : h >= s || h < e);
@@ -980,21 +1011,25 @@ function goBody(e) {
   const when = e.type === 'night' ? `${sessionLabel(e)}, best around ${fmtTime(e.t, e.offset)}` : `${sessionLabel(e)} ${fmtTime(e.t, e.offset)}`;
   const hunt = e.topHunt !== 'colour' ? ` (${HUNT_LABEL[e.topHunt].toLowerCase()})` : '';
   const access = e.access && !e.access.inside ? ' Tide blocks access, check the briefing.' : '';
-  return `${when}. Score ${e.score}${hunt}. Leave ${fmtTime(e.leave, e.offset)}.${access}`;
+  const walk = e.hike ? ` (incl. ${e.hike} min hike)` : '';
+  return `${when}. Score ${e.score}${hunt}. Leave ${fmtTime(e.leave, e.offset)}${walk}.${access}`;
 }
 
 async function sendToUser(admin, uid, payload) {
-  const { data: subs } = await admin.from('push_subscriptions').select('id, subscription').eq('user_id', uid);
-  let sent = 0;
+  const { data: subs, error } = await admin.from('push_subscriptions').select('id, subscription').eq('user_id', uid);
+  if (error) throw new Error(`Couldn't read your devices from the database: ${error.message}`);
+  let sent = 0, failed = 0, lastFail = '';
   for (const s of subs || []) {
     try {
       await webpush.sendNotification(s.subscription, JSON.stringify(payload), { TTL: 6 * 3600 });
       sent++;
     } catch (err) {
       if (err?.statusCode === 404 || err?.statusCode === 410) await admin.from('push_subscriptions').delete().eq('id', s.id); // device gone
-      else console.error('push failed', err?.statusCode, err?.body || err?.message);
+      else { failed++; lastFail = `${err?.statusCode || ''} ${err?.body || err?.message || ''}`.trim(); console.error('push failed', lastFail); }
     }
   }
+  console.log(`push to ${uid}: ${subs?.length || 0} devices, ${sent} sent, ${failed} failed`);
+  if (!sent && failed) throw new Error(`Apple/Google rejected the notification: ${lastFail.slice(0, 200)}`);
   return sent;
 }
 
@@ -1088,7 +1123,9 @@ async function checkUser(admin, uid) {
 
 async function handler(req) {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
-  const admin = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false } });
+  const ak = adminKey();
+  if (!ak.key) return json({ error: 'The function has no admin key. Add your Secret key (sb_secret_…) as an Edge Function secret named TIDELIGHT_SECRET_KEY.' }, 500);
+  const admin = createClient(Deno.env.get('SUPABASE_URL'), ak.key, { auth: { persistSession: false, autoRefreshToken: false } });
   try {
     webpush.setVapidDetails(Deno.env.get('VAPID_SUBJECT') || 'mailto:hello@example.com', Deno.env.get('VAPID_PUBLIC_KEY'), Deno.env.get('VAPID_PRIVATE_KEY'));
   } catch {
@@ -1101,14 +1138,21 @@ async function handler(req) {
     const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
     const { data, error } = await admin.auth.getUser(jwt);
     if (error || !data?.user) return json({ error: 'Not signed in.' }, 401);
-    const sent = await sendToUser(admin, data.user.id, { title: 'Tidelight alerts are on', body: "You'll hear from me when the light lines up.", tag: 'test', url: './' });
-    return json(sent ? { sent } : { sent: 0, error: 'No devices found for your account. Turn alerts on first.' });
+    console.log(`test for ${data.user.id} using admin key from ${ak.from} (${keyKind(ak.key)})`);
+    try {
+      const sent = await sendToUser(admin, data.user.id, { title: 'Tidelight alerts are on', body: "You'll hear from me when the light lines up.", tag: 'test', url: './' });
+      return json(sent ? { sent } : { sent: 0, error: `No devices found for your account (admin key: ${keyKind(ak.key)} from ${ak.from}). Turn alerts on first.` });
+    } catch (e) {
+      console.error('test failed:', e?.message);
+      return json({ sent: 0, error: `${e?.message} (admin key: ${keyKind(ak.key)} from ${ak.from})` });
+    }
   }
 
   const secret = Deno.env.get('CRON_SECRET');
   if (!secret || req.headers.get('x-cron-secret') !== secret) return json({ error: 'Forbidden' }, 403);
   const { data: subs, error } = await admin.from('push_subscriptions').select('user_id');
-  if (error) return json({ error: error.message }, 500);
+  if (error) { console.error('cron: could not read devices:', error.message, `(admin key from ${ak.from}, ${keyKind(ak.key)})`); return json({ error: error.message }, 500); }
+  console.log(`cron: ${subs?.length || 0} devices found (admin key from ${ak.from}, ${keyKind(ak.key)})`);
   const users = [...new Set((subs || []).map(s => s.user_id))];
   clearCache();   // a warm function keeps memory between runs: always score with fresh forecasts
   let sent = 0;
