@@ -1,6 +1,6 @@
 // Optional AI coach using your own Claude API key, called directly from your browser.
 // The key is stored only in this browser (localStorage) and never in your GitHub repo.
-import { clamp, fmtTime, compass } from './util.js?v=3.0';
+import { clamp, fmtTime, compass } from './util.js?v=3.1';
 
 export const hasAI = settings => !!(settings.claudeKey && settings.claudeKey.trim());
 

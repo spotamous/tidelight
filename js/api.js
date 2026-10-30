@@ -1,5 +1,5 @@
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
-import { nearestIndex, tideInfo } from './scoring.js?v=3.0';
+import { nearestIndex, tideInfo } from './scoring.js?v=3.1';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
@@ -38,17 +38,69 @@ export async function fetchSpotForecast(spot) {
       .catch(() => getJSON(`${FORECAST}?${qs({ ...common, hourly: BASE, daily: 'sunrise,sunset' })}`));
   }
 
-  let marine = null;
-  try {
-    marine = await getJSON(`${MARINE}?${qs({ ...common, hourly: 'wave_height,swell_wave_height,sea_level_height_msl' })}`);
-    const m = marine.hourly || {};
+  const getMarine = async () => {
+    const mr = await getJSON(`${MARINE}?${qs({ ...common, hourly: 'wave_height,swell_wave_height,sea_level_height_msl' })}`);
+    const m = mr.hourly || {};
     const hasAny = (m.wave_height || []).some(v => v != null) || (m.sea_level_height_msl || []).some(v => v != null);
-    if (!hasAny) marine = null;
-  } catch { marine = null; }
+    return hasAny ? mr : null;
+  };
+  const [mr, hz, md] = await Promise.allSettled([getMarine(), fetchHorizon(spot), fetchModels(spot)]);
+  const marine = mr.status === 'fulfilled' ? mr.value : null;
 
   const data = normalize(wx, marine);
+  data.horizon = hz.status === 'fulfilled' ? hz.value : null;   // cloud towards sunrise/sunset
+  data.models = md.status === 'fulfilled' ? md.value : null;    // per-model cloud, for confidence
   cache.set(key, { at: Date.now(), data });
   return data;
+}
+
+/* ---------- cloud on the horizon towards the sun ---------- */
+function destPoint(lat, lon, bearing, km) {
+  const R = 6371, d = km / R, b = bearing * Math.PI / 180, p1 = lat * Math.PI / 180, l1 = lon * Math.PI / 180;
+  const p2 = Math.asin(Math.sin(p1) * Math.cos(d) + Math.cos(p1) * Math.sin(d) * Math.cos(b));
+  const l2 = l1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(p1), Math.cos(d) - Math.sin(p1) * Math.sin(p2));
+  return { lat: p2 * 180 / Math.PI, lon: ((l2 * 180 / Math.PI + 540) % 360) - 180 };
+}
+
+async function fetchHorizon(spot) {
+  if (!window.SunCalc) return null;
+  const now = new Date();
+  const times = window.SunCalc.getTimes(now, spot.lat, spot.lon);
+  const azAt = d => (window.SunCalc.getPosition(d, spot.lat, spot.lon).azimuth * 180 / Math.PI + 180 + 360) % 360;
+  const ok = d => d instanceof Date && !isNaN(d);
+  const dirs = { sunrise: ok(times.sunrise) ? azAt(times.sunrise) : 90, sunset: ok(times.sunset) ? azAt(times.sunset) : 270 };
+  const pts = [];
+  for (const [kind, az] of Object.entries(dirs)) for (const km of [60, 120]) pts.push({ kind, km, az, ...destPoint(spot.lat, spot.lon, az, km) });
+  const j = await getJSON(`${FORECAST}?${qs({
+    latitude: pts.map(p => p.lat.toFixed(3)).join(','), longitude: pts.map(p => p.lon.toFixed(3)).join(','),
+    hourly: 'cloud_cover_low,cloud_cover_mid,cloud_cover_high', timezone: 'auto', timeformat: 'unixtime', forecast_days: 7, past_days: 2,
+  })}`);
+  const arr = Array.isArray(j) ? j : [j];
+  const out = { sunrise: { az: dirs.sunrise, points: [] }, sunset: { az: dirs.sunset, points: [] } };
+  arr.forEach((r, i) => {
+    const H = r?.hourly;
+    if (!H || !pts[i]) return;
+    out[pts[i].kind].points.push({ km: pts[i].km, times: H.time, low: H.cloud_cover_low, mid: H.cloud_cover_mid, high: H.cloud_cover_high });
+  });
+  return out.sunrise.points.length || out.sunset.points.length ? out : null;
+}
+
+/* ---------- the same cloud from several weather models, for confidence ---------- */
+async function fetchModels(spot) {
+  const sets = [['ecmwf_ifs025', 'gfs_seamless', 'bom_access_global'], ['ecmwf_ifs025', 'gfs_seamless']];
+  for (const ms of sets) {
+    try {
+      const j = await getJSON(`${FORECAST}?${qs({
+        latitude: spot.lat, longitude: spot.lon, models: ms.join(','), hourly: 'cloud_cover_low,cloud_cover_mid,cloud_cover_high',
+        timezone: 'auto', timeformat: 'unixtime', forecast_days: 7, past_days: 2,
+      })}`);
+      const H = j.hourly || {};
+      const models = ms.map(m => ({ model: m, low: H[`cloud_cover_low_${m}`], mid: H[`cloud_cover_mid_${m}`], high: H[`cloud_cover_high_${m}`] }))
+        .filter(x => Array.isArray(x.low) && x.low.some(v => v != null));
+      if (models.length >= 2) return { times: H.time, models };
+    } catch { /* try the smaller set */ }
+  }
+  return null;
 }
 
 function normalize(wx, marine) {

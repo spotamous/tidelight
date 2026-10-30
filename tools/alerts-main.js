@@ -9,7 +9,7 @@ const { setKp, HUNT_LABEL, HUNT_VERB } = M_hunts;
 const { fetchSpotForecast, fetchKp, clearCache } = M_api;
 const { fmtTime, fmtDay } = M_util;
 
-const DEFAULT_ALERTS = { go: true, threshold: 80, calledOff: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 };
+const DEFAULT_ALERTS = { go: true, threshold: 80, confident: true, calledOff: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 };
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
@@ -44,7 +44,8 @@ function goBody(e) {
   const hunt = e.topHunt !== 'colour' ? ` (${HUNT_LABEL[e.topHunt].toLowerCase()})` : '';
   const access = e.access && !e.access.inside ? ' Tide blocks access, check the briefing.' : '';
   const walk = e.hike ? ` (incl. ${e.hike} min hike)` : '';
-  return `${when}. Score ${e.score}${hunt}. Leave ${fmtTime(e.leave, e.offset)}${walk}.${access}`;
+  const sure = e.topHunt === 'colour' && e.confidence?.level === 'high' ? ' Models agree.' : '';
+  return `${when}. Score ${e.score}${hunt}.${sure} Leave ${fmtTime(e.leave, e.offset)}${walk}.${access}`;
 }
 
 async function sendToUser(admin, uid, payload) {
@@ -99,6 +100,7 @@ async function checkUser(admin, uid) {
   if (prefs.go && !quiet) {
     const fresh = events
       .filter(e => e.t > now + 1800 && e.t < now + 36 * 3600 && e.leave > now && e.score >= prefs.threshold && !done.has(`go|${e.key}`))
+      .filter(e => !(prefs.confident && e.topHunt === 'colour' && e.confidence?.level === 'low'))   // skip coin tosses
       .sort((a, b) => b.score - a.score);
     if (fresh.length && fresh.length <= 2) fresh.forEach(e => toSend.push({ title: goTitle(e), body: goBody(e), tag: `go-${e.key}`, url: './' }));
     else if (fresh.length > 2) toSend.push({

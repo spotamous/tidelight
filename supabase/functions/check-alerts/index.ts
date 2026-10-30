@@ -461,7 +461,7 @@ function featureVector(h, tide) {
 
 /* ---------- base score: physics-ish rules any photographer would agree with ---------- */
 
-function baseScore(h, tide, spot) {
+function baseScore(h, tide, spot, ctx = {}) {
   const factors = [];
   const low = h.low ?? 0, mid = h.mid ?? 0, high = h.high ?? 0;
 
@@ -501,7 +501,18 @@ function baseScore(h, tide, spot) {
   if (wind >= 30) factors.push({ k: 'bad', t: `Strong wind (${Math.round(wind)} km/h): tripod shake and choppy water` });
   else if (wind <= 10) factors.push({ k: 'good', t: 'Light wind, good for long exposures' });
 
-  const score = 100 * canvas * block * rain * vis * tideF * windF;
+  // The horizon towards the sun: light has to pass under the clouds from 50–150 km away to paint them.
+  let horizonF = 1;
+  if (ctx.horizon) {
+    const { blk, dir, kind } = ctx.horizon;
+    horizonF = 1 - 0.7 * clamp((blk - 0.35) / 0.5);
+    const where = `towards the ${kind} (${dir})`;
+    if (blk >= 0.7) factors.unshift({ k: 'bad', t: `Cloud bank on the horizon ${where}: it may block the light` });
+    else if (blk >= 0.45) factors.push({ k: 'neutral', t: `Some cloud on the horizon ${where}` });
+    else factors.push({ k: 'good', t: `Clear horizon ${where} for the light to get under the clouds` });
+  }
+
+  const score = 100 * canvas * block * rain * vis * tideF * windF * horizonF;
   return { score: Math.round(score), factors };
 }
 
@@ -527,10 +538,15 @@ function personalScore(f, keepers) {
   const good = keepers.filter(k => k.label === 'keeper' && k.features);
   const bad = keepers.filter(k => k.label === 'dud' && k.features);
   if (good.length < MIN_KEEPERS) return null;
+  const meh = keepers.filter(k => k.label === 'meh' && k.features);
   const g = avg(topK(f, good));
   const b = bad.length ? avg(topK(f, bad)) : 0;
+  const m = meh.length ? avg(topK(f, meh)) : 0;
+  // So-so sessions pull the score towards the middle when today looks like them.
+  let p = clamp(g - 0.5 * b);
+  p = p + (0.5 - p) * 0.5 * m;
   return {
-    score: Math.round(100 * clamp(g - 0.5 * b)),
+    score: Math.round(100 * clamp(p)),
     weight: Math.min(0.6, good.length * 0.06),
     n: good.length,
   };
@@ -560,6 +576,41 @@ function personalModelSummary(keepers) {
 }
 
 /* ---------- events ---------- */
+
+/* ---------- horizon and model-agreement helpers ---------- */
+const timeIndex = (obj, times) => obj._idx || (obj._idx = new Map(times.map((t, i) => [t, i])));
+
+// How blocked the horizon towards the sun is at time t (0 clear … 1 solid), from points 60 and 120 km out.
+function horizonBlock(data, type, t) {
+  const hz = data.horizon?.[type];
+  if (!hz || !hz.points?.length) return null;
+  let worst = null;
+  for (const p of hz.points) {
+    const i = nearestIndex(p.times.map(x => ({ t: x })), t);   // nearest hour (works in half-hour time zones too)
+    if (i < 0) continue;
+    if (i == null || p.low[i] == null) continue;
+    const blk = clamp(((p.low[i] ?? 0) + 0.6 * (p.mid[i] ?? 0)) / 100);
+    worst = worst == null ? blk : Math.max(worst, blk);
+  }
+  return worst == null ? null : { blk: worst, dir: compass(hz.az), kind: type };
+}
+
+// Score the same hour with each weather model's cloud; the spread is the confidence.
+function modelConfidence(data, idx, h, tide, spot, ctx) {
+  const M = data.models;
+  if (!M || !M.models?.length) return null;
+  const i = timeIndex(M, M.times).get(h.t);
+  if (i == null) return null;
+  const scores = [];
+  for (const m of M.models) {
+    if (m.low[i] == null || m.mid[i] == null || m.high[i] == null) continue;
+    scores.push({ model: m.model, score: baseScore({ ...h, low: m.low[i], mid: m.mid[i], high: m.high[i] }, tide, spot, ctx).score });
+  }
+  if (scores.length < 2) return null;
+  const vals = scores.map(x => x.score);
+  const spread = Math.max(...vals) - Math.min(...vals);
+  return { level: spread <= 15 ? 'high' : spread <= 30 ? 'medium' : 'low', spread, min: Math.min(...vals), max: Math.max(...vals), scores };
+}
 
 let sunReady = false;
 function ensureSunCalc() {
@@ -593,7 +644,18 @@ function evaluateEvent({ spot, data, type, t, keepers, settings }) {
   if (idx < 0) return null;
   const h = data.hours[idx];
   const tide = spot.coastal ? tideInfo(data.hours, idx) : null;
-  const base = baseScore(h, tide, spot);
+  const hz = horizonBlock(data, type, t);
+  const ctx = hz ? { horizon: hz } : {};
+  const base = baseScore(h, tide, spot, ctx);
+  const confidence = modelConfidence(data, idx, h, tide, spot, ctx);
+  if (confidence) {
+    if (confidence.level === 'low') {
+      if (base.score > 50) base.score = Math.round(50 + (base.score - 50) * 0.8);   // don't oversell a coin toss
+      base.factors.push({ k: 'bad', t: `Weather models disagree on the cloud (they range ${confidence.min}–${confidence.max}): treat it as a maybe` });
+    } else if (confidence.level === 'high') {
+      base.factors.push({ k: 'good', t: 'Weather models agree on the cloud' });
+    }
+  }
   const features = featureVector(h, tide);
   const personal = personalScore(features, keepers);
 
@@ -632,7 +694,7 @@ function evaluateEvent({ spot, data, type, t, keepers, settings }) {
     ? accessWindow(data.hours, idx, t, (Number(spot.accessPct) || 40) / 100, Number(spot.accessBuffer ?? 30)) : null;
 
   return {
-    key: `${spot.id}:${type}:${t}`, access,
+    key: `${spot.id}:${type}:${t}`, access, confidence,
     spot, type, t, offset: data.offset, idx, hour: h, tide,
     base: top, colour: base.score, hunts, topHunt, personal, score, factors: hunts[topHunt]?.factors || base.factors,
     features, drive, hike, walkStart, leave, light, sunAz, alignment,
@@ -713,7 +775,7 @@ function evaluateNight({ spot, data, d, keepers, settings }) {
   };
 }
 
-return { nearestIndex, tideInfo, accessWindow, FEATURE_NAMES, featureVector, baseScore, similarity, MIN_KEEPERS, personalScore, personalModelSummary, HIKE_SPEED, DIFFICULTIES, hikeMinutes, hikeIsEstimate, driveMinutes, evaluateEvent, evaluateSpot, evaluateNight };
+return { nearestIndex, tideInfo, accessWindow, FEATURE_NAMES, featureVector, baseScore, similarity, MIN_KEEPERS, personalScore, personalModelSummary, horizonBlock, modelConfidence, HIKE_SPEED, DIFFICULTIES, hikeMinutes, hikeIsEstimate, driveMinutes, evaluateEvent, evaluateSpot, evaluateNight };
 })();
 
 /* ===== js/api.js ===== */
@@ -757,17 +819,69 @@ async function fetchSpotForecast(spot) {
       .catch(() => getJSON(`${FORECAST}?${qs({ ...common, hourly: BASE, daily: 'sunrise,sunset' })}`));
   }
 
-  let marine = null;
-  try {
-    marine = await getJSON(`${MARINE}?${qs({ ...common, hourly: 'wave_height,swell_wave_height,sea_level_height_msl' })}`);
-    const m = marine.hourly || {};
+  const getMarine = async () => {
+    const mr = await getJSON(`${MARINE}?${qs({ ...common, hourly: 'wave_height,swell_wave_height,sea_level_height_msl' })}`);
+    const m = mr.hourly || {};
     const hasAny = (m.wave_height || []).some(v => v != null) || (m.sea_level_height_msl || []).some(v => v != null);
-    if (!hasAny) marine = null;
-  } catch { marine = null; }
+    return hasAny ? mr : null;
+  };
+  const [mr, hz, md] = await Promise.allSettled([getMarine(), fetchHorizon(spot), fetchModels(spot)]);
+  const marine = mr.status === 'fulfilled' ? mr.value : null;
 
   const data = normalize(wx, marine);
+  data.horizon = hz.status === 'fulfilled' ? hz.value : null;   // cloud towards sunrise/sunset
+  data.models = md.status === 'fulfilled' ? md.value : null;    // per-model cloud, for confidence
   cache.set(key, { at: Date.now(), data });
   return data;
+}
+
+/* ---------- cloud on the horizon towards the sun ---------- */
+function destPoint(lat, lon, bearing, km) {
+  const R = 6371, d = km / R, b = bearing * Math.PI / 180, p1 = lat * Math.PI / 180, l1 = lon * Math.PI / 180;
+  const p2 = Math.asin(Math.sin(p1) * Math.cos(d) + Math.cos(p1) * Math.sin(d) * Math.cos(b));
+  const l2 = l1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(p1), Math.cos(d) - Math.sin(p1) * Math.sin(p2));
+  return { lat: p2 * 180 / Math.PI, lon: ((l2 * 180 / Math.PI + 540) % 360) - 180 };
+}
+
+async function fetchHorizon(spot) {
+  if (!window.SunCalc) return null;
+  const now = new Date();
+  const times = window.SunCalc.getTimes(now, spot.lat, spot.lon);
+  const azAt = d => (window.SunCalc.getPosition(d, spot.lat, spot.lon).azimuth * 180 / Math.PI + 180 + 360) % 360;
+  const ok = d => d instanceof Date && !isNaN(d);
+  const dirs = { sunrise: ok(times.sunrise) ? azAt(times.sunrise) : 90, sunset: ok(times.sunset) ? azAt(times.sunset) : 270 };
+  const pts = [];
+  for (const [kind, az] of Object.entries(dirs)) for (const km of [60, 120]) pts.push({ kind, km, az, ...destPoint(spot.lat, spot.lon, az, km) });
+  const j = await getJSON(`${FORECAST}?${qs({
+    latitude: pts.map(p => p.lat.toFixed(3)).join(','), longitude: pts.map(p => p.lon.toFixed(3)).join(','),
+    hourly: 'cloud_cover_low,cloud_cover_mid,cloud_cover_high', timezone: 'auto', timeformat: 'unixtime', forecast_days: 7, past_days: 2,
+  })}`);
+  const arr = Array.isArray(j) ? j : [j];
+  const out = { sunrise: { az: dirs.sunrise, points: [] }, sunset: { az: dirs.sunset, points: [] } };
+  arr.forEach((r, i) => {
+    const H = r?.hourly;
+    if (!H || !pts[i]) return;
+    out[pts[i].kind].points.push({ km: pts[i].km, times: H.time, low: H.cloud_cover_low, mid: H.cloud_cover_mid, high: H.cloud_cover_high });
+  });
+  return out.sunrise.points.length || out.sunset.points.length ? out : null;
+}
+
+/* ---------- the same cloud from several weather models, for confidence ---------- */
+async function fetchModels(spot) {
+  const sets = [['ecmwf_ifs025', 'gfs_seamless', 'bom_access_global'], ['ecmwf_ifs025', 'gfs_seamless']];
+  for (const ms of sets) {
+    try {
+      const j = await getJSON(`${FORECAST}?${qs({
+        latitude: spot.lat, longitude: spot.lon, models: ms.join(','), hourly: 'cloud_cover_low,cloud_cover_mid,cloud_cover_high',
+        timezone: 'auto', timeformat: 'unixtime', forecast_days: 7, past_days: 2,
+      })}`);
+      const H = j.hourly || {};
+      const models = ms.map(m => ({ model: m, low: H[`cloud_cover_low_${m}`], mid: H[`cloud_cover_mid_${m}`], high: H[`cloud_cover_high_${m}`] }))
+        .filter(x => Array.isArray(x.low) && x.low.some(v => v != null));
+      if (models.length >= 2) return { times: H.time, models };
+    } catch { /* try the smaller set */ }
+  }
+  return null;
 }
 
 function normalize(wx, marine) {
@@ -977,7 +1091,7 @@ const { setKp, HUNT_LABEL, HUNT_VERB } = M_hunts;
 const { fetchSpotForecast, fetchKp, clearCache } = M_api;
 const { fmtTime, fmtDay } = M_util;
 
-const DEFAULT_ALERTS = { go: true, threshold: 80, calledOff: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 };
+const DEFAULT_ALERTS = { go: true, threshold: 80, confident: true, calledOff: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 };
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
@@ -1012,7 +1126,8 @@ function goBody(e) {
   const hunt = e.topHunt !== 'colour' ? ` (${HUNT_LABEL[e.topHunt].toLowerCase()})` : '';
   const access = e.access && !e.access.inside ? ' Tide blocks access, check the briefing.' : '';
   const walk = e.hike ? ` (incl. ${e.hike} min hike)` : '';
-  return `${when}. Score ${e.score}${hunt}. Leave ${fmtTime(e.leave, e.offset)}${walk}.${access}`;
+  const sure = e.topHunt === 'colour' && e.confidence?.level === 'high' ? ' Models agree.' : '';
+  return `${when}. Score ${e.score}${hunt}.${sure} Leave ${fmtTime(e.leave, e.offset)}${walk}.${access}`;
 }
 
 async function sendToUser(admin, uid, payload) {
@@ -1067,6 +1182,7 @@ async function checkUser(admin, uid) {
   if (prefs.go && !quiet) {
     const fresh = events
       .filter(e => e.t > now + 1800 && e.t < now + 36 * 3600 && e.leave > now && e.score >= prefs.threshold && !done.has(`go|${e.key}`))
+      .filter(e => !(prefs.confident && e.topHunt === 'colour' && e.confidence?.level === 'low'))   // skip coin tosses
       .sort((a, b) => b.score - a.score);
     if (fresh.length && fresh.length <= 2) fresh.forEach(e => toSend.push({ title: goTitle(e), body: goBody(e), tag: `go-${e.key}`, url: './' }));
     else if (fresh.length > 2) toSend.push({

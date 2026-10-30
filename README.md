@@ -92,7 +92,7 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=3.0`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=3.1`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:
@@ -135,7 +135,11 @@ The **base score** (`js/scoring.js → baseScore`) is a set of transparent rules
 | Tide | Compared with the tide you want at that spot. |
 | Wind | A small penalty for long exposures. |
 
-The **personal score** compares the conditions of each upcoming session with your keepers and duds. It uses a nearest-neighbour similarity across low, mid and high cloud, rain, wind, tide position and wave height. Its weight grows with the number of keepers, up to 60% at 10.
+**Horizon check (colour):** the app also samples cloud 60 and 120 km out along the sunrise and sunset directions. Low or mid cloud there blocks the light from getting under the clouds, so it lowers the colour score and says so.
+
+**Confidence (colour):** each session is also scored with three weather models (ECMWF, GFS and the Bureau of Meteorology's ACCESS). If they agree, it's high confidence; if they disagree by more than 30 points, it's low confidence, the score is pulled towards the middle, and alerts skip it unless you turn that option off.
+
+The **personal score** compares the conditions of each upcoming session with your keepers and duds. It uses a nearest-neighbour similarity across low, mid and high cloud, rain, wind, tide position and wave height. Its weight grows with the number of keepers, up to 60% at 10. So-so sessions count too: when today looks like a past so-so session, the personal score is pulled towards the middle.
 
 Tune any of this in `js/scoring.js`. It's commented and self-contained.
 

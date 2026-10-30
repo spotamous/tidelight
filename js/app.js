@@ -1,14 +1,14 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=3.0';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=3.0';
-import { DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=3.0';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=3.0';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=3.0';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert } from './sync.js?v=3.0';
-import { VAPID_PUBLIC_KEY } from './config.js?v=3.0';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=3.0';
-import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=3.0';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=3.1';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=3.1';
+import { DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=3.1';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=3.1';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=3.1';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert } from './sync.js?v=3.1';
+import { VAPID_PUBLIC_KEY } from './config.js?v=3.1';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=3.1';
+import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=3.1';
 
-export const APP_VERSION = '3.0';
+export const APP_VERSION = '3.1';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -76,6 +76,15 @@ function hikeSummary(sp) {
   if (m) bits.push(`${hikeIsEstimate(sp) ? 'about ' : ''}${m} min`);
   return `Hike: ${bits.join(', ')}`;
 }
+
+// Confidence applies to the colour score; show it when colour is what the session is about.
+function confLine(e) {
+  const c = e.confidence;
+  if (!c || e.topHunt !== 'colour') return '';
+  const text = { high: 'High confidence: weather models agree', medium: 'Medium confidence: models roughly agree', low: 'Low confidence: models disagree' }[c.level];
+  return `<div class="conf conf-${c.level}">${text}</div>`;
+}
+const unsure = e => e.confidence?.level === 'low' && e.topHunt === 'colour';
 
 function verdict(e) {
   const v = e.score >= 75 ? 'Go' : e.score >= 50 ? 'Maybe' : 'Skip';
@@ -179,6 +188,7 @@ function chips(e) {
   if (e.hour.wave != null) c.push(`<span class="chip">${e.hour.wave.toFixed(1)} m sea</span>`);
   c.push(`<span class="chip">${Math.round(e.hour.low ?? 0)}/${Math.round(e.hour.mid ?? 0)}/${Math.round(e.hour.high ?? 0)}% cloud</span>`);
   if (e.personal) c.push(`<span class="chip me">Your style ${e.personal.score}</span>`);
+  if (unsure(e)) c.unshift(`<span class="chip unsure">Models disagree</span>`);
   if (e.access && !e.access.inside) c.unshift(`<span class="chip warn">Tide blocks access</span>`);
   const hl = notableHunts(e);
   if (hl.length) hl.slice().reverse().forEach(([k, v]) => c.unshift(`<span class="chip ${k === e.topHunt ? 'me' : ''}">${HUNT_LABEL[k]} ${v.score}</span>`));
@@ -323,6 +333,7 @@ async function renderForecast(v) {
           <h1>${heroTitle(best)}</h1>
           <div class="call-score"><span class="num">${best.score}</span><span>${esc(HUNT_LABEL[best.topHunt])} score</span></div>
         </div>
+        ${confLine(best)}
         <div class="call-spot">${esc(best.spot.name)}</div>
         <div class="call-meta">
           <span><strong>Leave ${fmtTime(best.leave, o)}</strong></span>
@@ -388,12 +399,12 @@ function renderMatrix(v, evs, st, failed) {
           ${cols.map(c => {
             const e = cell.get(`${sp.id}|${c.i}|${c.type}`);
             if (!e) return '<span class="mx-none" aria-hidden="true">–</span>';
-            return `<button class="mx-cell ${band(e.score)} ${e.key === matrixSel ? 'sel' : ''}" data-mx="${esc(e.key)}" aria-label="${esc(sp.name)}, ${esc(sessionName(e))}, score ${e.score}">${e.score}${e.access && !e.access.inside ? '<i class="mx-tide" aria-hidden="true"></i>' : ''}</button>`;
+            return `<button class="mx-cell ${band(e.score)} ${e.key === matrixSel ? 'sel' : ''} ${unsure(e) ? 'unsure' : ''}" data-mx="${esc(e.key)}" aria-label="${esc(sp.name)}, ${esc(sessionName(e))}, score ${e.score}">${e.score}${e.access && !e.access.inside ? '<i class="mx-tide" aria-hidden="true"></i>' : ''}</button>`;
           }).join('')}`).join('')}
       </div>
     </div>
     <div class="mx-legend">
-      <span><i class="b4"></i>80+</span><span><i class="b3"></i>65–79</span><span><i class="b2"></i>50–64</span><span><i class="b1"></i>Under 50</span>
+      <span><i class="b4"></i>80+</span><span><i class="b3"></i>65–79</span><span><i class="b2"></i>50–64</span><span><i class="b1"></i>Under 50</span><span><i class="unsure-key"></i>Models disagree</span>
     </div>
     ${sel ? `<section class="mx-detail">
       ${coverUrl(sel.spot) ? `<img src="${coverUrl(sel.spot)}" alt="">` : `<span class="mx-detail-ph" aria-hidden="true"></span>`}
@@ -451,7 +462,7 @@ function openEvent(key) {
     ${coverUrl(e.spot) ? `<img class="banner" src="${coverUrl(e.spot)}" alt="${esc(e.spot.name)}">` : ''}
     <div class="sheet-head">
       ${horizon(e, true)}
-      <div><h2>${esc(e.spot.name)}</h2><div class="muted">${e.type === 'night' ? `${cap(sessionName(e))}, best around ${fmtTime(e.t, o)}` : `${fmtDay(e.t, o)}, ${e.type} at ${fmtTime(e.t, o)}`}</div><div class="verdict">${verdict(e)}</div></div>
+      <div><h2>${esc(e.spot.name)}</h2><div class="muted">${e.type === 'night' ? `${cap(sessionName(e))}, best around ${fmtTime(e.t, o)}` : `${fmtDay(e.t, o)}, ${e.type} at ${fmtTime(e.t, o)}`}</div><div class="verdict">${verdict(e)}</div>${confLine(e)}</div>
     </div>
     <ul class="timeline">${tl.map(x => `<li class="${x.cls || ''}"><time>${fmtTime(x.t, o)}</time><span>${x.label}</span></li>`).join('')}</ul>
 
@@ -660,14 +671,12 @@ async function ratePlan(id, rating, btn) {
   update(s => {
     const pl = s.plans.find(x => x.id === id);
     pl.rating = rating;
-    if (rating !== 'meh') {
-      s.keepers.push({
-        id: uid(), label: rating === 'keeper' ? 'keeper' : 'dud', source: 'session',
-        date: p.t * 1000, lat: p.lat, lon: p.lon, spotName: p.spotName, features, thumb: null,
-      });
-    }
+    s.keepers.push({
+      id: uid(), label: rating, source: 'session', planId: p.id,   // keeper | meh | dud
+      date: p.t * 1000, lat: p.lat, lon: p.lon, spotName: p.spotName, features, thumb: null,
+    });
   });
-  toast(rating === 'meh' ? 'Saved' : 'Saved. Your coach just learned from that.');
+  toast('Saved. Your coach just learned from that.');
   render();
 }
 
@@ -1278,6 +1287,7 @@ function renderCoach(v, logLines = []) {
   const st = S();
   const good = st.keepers.filter(k => k.label === 'keeper').length;
   const duds = st.keepers.filter(k => k.label === 'dud').length;
+  const mehs = st.keepers.filter(k => k.label === 'meh').length;
   const summary = personalModelSummary(st.keepers);
   const active = good >= MIN_KEEPERS;
   const sorted = [...st.keepers].sort((a, b) => b.date - a.date);
@@ -1293,7 +1303,7 @@ function renderCoach(v, logLines = []) {
     <section class="panel">
       <h2>Your light profile</h2>
       <div class="meter"><i style="width:${Math.min(100, good / 10 * 100)}%"></i></div>
-      <p class="small muted">${good} keeper${good === 1 ? '' : 's'}, ${duds} dud${duds === 1 ? '' : 's'}. ${active ? 'Your personal score is on.' : `Add ${MIN_KEEPERS - good} more keeper${MIN_KEEPERS - good === 1 ? '' : 's'} to switch on your personal score.`} It gets more confident up to 10.</p>
+      <p class="small muted">${good} keeper${good === 1 ? '' : 's'}, ${mehs} so-so, ${duds} dud${duds === 1 ? '' : 's'}. ${active ? 'Your personal score is on.' : `Add ${MIN_KEEPERS - good} more keeper${MIN_KEEPERS - good === 1 ? '' : 's'} to switch on your personal score.`} It gets more confident up to 10.</p>
       ${summary ? `<p>Your best shots tend to have <strong>${esc(summary.text)}</strong>.</p>` : '<p class="muted">Once you add keepers, this is where you\'ll see the conditions you shoot best in.</p>'}
     </section>
 
@@ -1312,7 +1322,7 @@ function renderCoach(v, logLines = []) {
       <div class="thumbs">${sorted.map(k => `
         <div class="thumb">
           ${k.thumb ? `<img src="${k.thumb}" alt="">` : `<div class="ph">${k.source === 'session' ? 'Session' : 'Photo'}<br>${esc(k.spotName || '')}<br>${fmtDate(k.date)}</div>`}
-          <button class="tag ${k.label}" data-flip="${k.id}" title="Tap to switch keeper/dud">${k.label === 'keeper' ? 'Keeper' : 'Dud'}</button>
+          <button class="tag ${k.label}" data-flip="${k.id}" title="Tap to change: keeper, so-so, dud">${k.label === 'keeper' ? 'Keeper' : k.label === 'meh' ? 'So-so' : 'Dud'}</button>
           <button class="x" data-rm="${k.id}" aria-label="Remove">×</button>
         </div>`).join('')}</div>
     </section>
@@ -1328,7 +1338,7 @@ function renderCoach(v, logLines = []) {
   $('#keeperFiles').onchange = ev => importKeepers([...ev.target.files]);
   $('#refFile').onchange = ev => ev.target.files[0] && recreateShot(ev.target.files[0]);
   $$('[data-flip]', v).forEach(b => b.onclick = () => {
-    update(s => { const k = s.keepers.find(x => x.id === b.dataset.flip); k.label = k.label === 'keeper' ? 'dud' : 'keeper'; });
+    update(s => { const k = s.keepers.find(x => x.id === b.dataset.flip); k.label = { keeper: 'meh', meh: 'dud', dud: 'keeper' }[k.label] || 'keeper'; });
     renderCoach(v);
   });
   $$('[data-rm]', v).forEach(b => b.onclick = () => {
@@ -1535,6 +1545,7 @@ async function renderAlerts() {
     <form class="form alert-prefs" id="alertForm">
       <label class="check"><input type="checkbox" name="go" ${a.go ? 'checked' : ''}> Tell me when a session in the next 36 hours scores
         <select name="threshold" aria-label="Score threshold">${[70, 75, 80, 85, 90].map(v => opt(v, a.threshold, `${v}+`)).join('')}</select></label>
+      <label class="check"><input type="checkbox" name="confident" ${a.confident !== false ? 'checked' : ''}> Skip colour alerts when the weather models disagree (fewer false alarms)</label>
       <label class="check"><input type="checkbox" name="calledOff" ${a.calledOff ? 'checked' : ''}> Tell me if a session I was alerted about falls through</label>
       <label class="check"><input type="checkbox" name="digest" ${a.digest ? 'checked' : ''}> Weekly digest of the best 3 sessions, every
         <select name="digestDay" aria-label="Digest day">${DAYS.map((d, i) => opt(i, a.digestDay, d)).join('')}</select>
@@ -1586,7 +1597,7 @@ async function renderAlerts() {
     update(s => {
       s.settings.alerts = {
         go: !!f.get('go'), threshold: parseInt(f.get('threshold'), 10),
-        calledOff: !!f.get('calledOff'),
+        calledOff: !!f.get('calledOff'), confident: !!f.get('confident'),
         digest: !!f.get('digest'), digestDay: parseInt(f.get('digestDay'), 10), digestHour: parseInt(f.get('digestHour'), 10),
         quietStart: qs < 0 ? 0 : qs, quietEnd: qs < 0 ? 0 : qe,
       };
@@ -1741,7 +1752,18 @@ $('#refreshBtn').onclick = async () => {
   if (tab === 'forecast' || tab === 'spots') render();
 };
 
+function backfillRatings() {
+  const st = S();
+  const linked = new Set(st.keepers.map(k => k.planId).filter(Boolean));
+  const missing = st.plans.filter(p => p.rating === 'meh' && !linked.has(p.id) && p.features);
+  if (!missing.length) return;
+  update(s => {
+    for (const p of missing) s.keepers.push({ id: uid(), label: 'meh', source: 'session', planId: p.id, date: p.t * 1000, lat: p.lat, lon: p.lon, spotName: p.spotName, features: p.features, thumb: null });
+  });
+}
+
 loadAllPhotos().finally(() => {
+  backfillRatings();
   render();
   initSync(() => { for (const k in forecasts) delete forecasts[k]; if (!$('#sheet').classList.contains('hidden')) return; render(); })
     .catch(() => {});

@@ -1,5 +1,5 @@
-import { clamp, haversineKm, angleDiff, compass } from './util.js?v=3.0';
-import { computeHunts, computeNightHunts, huntsOf, NIGHT_HUNTS } from './hunts.js?v=3.0';
+import { clamp, haversineKm, angleDiff, compass } from './util.js?v=3.1';
+import { computeHunts, computeNightHunts, huntsOf, NIGHT_HUNTS } from './hunts.js?v=3.1';
 
 /* ---------- helpers ---------- */
 
@@ -83,7 +83,7 @@ export function featureVector(h, tide) {
 
 /* ---------- base score: physics-ish rules any photographer would agree with ---------- */
 
-export function baseScore(h, tide, spot) {
+export function baseScore(h, tide, spot, ctx = {}) {
   const factors = [];
   const low = h.low ?? 0, mid = h.mid ?? 0, high = h.high ?? 0;
 
@@ -123,7 +123,18 @@ export function baseScore(h, tide, spot) {
   if (wind >= 30) factors.push({ k: 'bad', t: `Strong wind (${Math.round(wind)} km/h): tripod shake and choppy water` });
   else if (wind <= 10) factors.push({ k: 'good', t: 'Light wind, good for long exposures' });
 
-  const score = 100 * canvas * block * rain * vis * tideF * windF;
+  // The horizon towards the sun: light has to pass under the clouds from 50–150 km away to paint them.
+  let horizonF = 1;
+  if (ctx.horizon) {
+    const { blk, dir, kind } = ctx.horizon;
+    horizonF = 1 - 0.7 * clamp((blk - 0.35) / 0.5);
+    const where = `towards the ${kind} (${dir})`;
+    if (blk >= 0.7) factors.unshift({ k: 'bad', t: `Cloud bank on the horizon ${where}: it may block the light` });
+    else if (blk >= 0.45) factors.push({ k: 'neutral', t: `Some cloud on the horizon ${where}` });
+    else factors.push({ k: 'good', t: `Clear horizon ${where} for the light to get under the clouds` });
+  }
+
+  const score = 100 * canvas * block * rain * vis * tideF * windF * horizonF;
   return { score: Math.round(score), factors };
 }
 
@@ -149,10 +160,15 @@ export function personalScore(f, keepers) {
   const good = keepers.filter(k => k.label === 'keeper' && k.features);
   const bad = keepers.filter(k => k.label === 'dud' && k.features);
   if (good.length < MIN_KEEPERS) return null;
+  const meh = keepers.filter(k => k.label === 'meh' && k.features);
   const g = avg(topK(f, good));
   const b = bad.length ? avg(topK(f, bad)) : 0;
+  const m = meh.length ? avg(topK(f, meh)) : 0;
+  // So-so sessions pull the score towards the middle when today looks like them.
+  let p = clamp(g - 0.5 * b);
+  p = p + (0.5 - p) * 0.5 * m;
   return {
-    score: Math.round(100 * clamp(g - 0.5 * b)),
+    score: Math.round(100 * clamp(p)),
     weight: Math.min(0.6, good.length * 0.06),
     n: good.length,
   };
@@ -182,6 +198,41 @@ export function personalModelSummary(keepers) {
 }
 
 /* ---------- events ---------- */
+
+/* ---------- horizon and model-agreement helpers ---------- */
+const timeIndex = (obj, times) => obj._idx || (obj._idx = new Map(times.map((t, i) => [t, i])));
+
+// How blocked the horizon towards the sun is at time t (0 clear … 1 solid), from points 60 and 120 km out.
+export function horizonBlock(data, type, t) {
+  const hz = data.horizon?.[type];
+  if (!hz || !hz.points?.length) return null;
+  let worst = null;
+  for (const p of hz.points) {
+    const i = nearestIndex(p.times.map(x => ({ t: x })), t);   // nearest hour (works in half-hour time zones too)
+    if (i < 0) continue;
+    if (i == null || p.low[i] == null) continue;
+    const blk = clamp(((p.low[i] ?? 0) + 0.6 * (p.mid[i] ?? 0)) / 100);
+    worst = worst == null ? blk : Math.max(worst, blk);
+  }
+  return worst == null ? null : { blk: worst, dir: compass(hz.az), kind: type };
+}
+
+// Score the same hour with each weather model's cloud; the spread is the confidence.
+export function modelConfidence(data, idx, h, tide, spot, ctx) {
+  const M = data.models;
+  if (!M || !M.models?.length) return null;
+  const i = timeIndex(M, M.times).get(h.t);
+  if (i == null) return null;
+  const scores = [];
+  for (const m of M.models) {
+    if (m.low[i] == null || m.mid[i] == null || m.high[i] == null) continue;
+    scores.push({ model: m.model, score: baseScore({ ...h, low: m.low[i], mid: m.mid[i], high: m.high[i] }, tide, spot, ctx).score });
+  }
+  if (scores.length < 2) return null;
+  const vals = scores.map(x => x.score);
+  const spread = Math.max(...vals) - Math.min(...vals);
+  return { level: spread <= 15 ? 'high' : spread <= 30 ? 'medium' : 'low', spread, min: Math.min(...vals), max: Math.max(...vals), scores };
+}
 
 let sunReady = false;
 function ensureSunCalc() {
@@ -215,7 +266,18 @@ export function evaluateEvent({ spot, data, type, t, keepers, settings }) {
   if (idx < 0) return null;
   const h = data.hours[idx];
   const tide = spot.coastal ? tideInfo(data.hours, idx) : null;
-  const base = baseScore(h, tide, spot);
+  const hz = horizonBlock(data, type, t);
+  const ctx = hz ? { horizon: hz } : {};
+  const base = baseScore(h, tide, spot, ctx);
+  const confidence = modelConfidence(data, idx, h, tide, spot, ctx);
+  if (confidence) {
+    if (confidence.level === 'low') {
+      if (base.score > 50) base.score = Math.round(50 + (base.score - 50) * 0.8);   // don't oversell a coin toss
+      base.factors.push({ k: 'bad', t: `Weather models disagree on the cloud (they range ${confidence.min}–${confidence.max}): treat it as a maybe` });
+    } else if (confidence.level === 'high') {
+      base.factors.push({ k: 'good', t: 'Weather models agree on the cloud' });
+    }
+  }
   const features = featureVector(h, tide);
   const personal = personalScore(features, keepers);
 
@@ -254,7 +316,7 @@ export function evaluateEvent({ spot, data, type, t, keepers, settings }) {
     ? accessWindow(data.hours, idx, t, (Number(spot.accessPct) || 40) / 100, Number(spot.accessBuffer ?? 30)) : null;
 
   return {
-    key: `${spot.id}:${type}:${t}`, access,
+    key: `${spot.id}:${type}:${t}`, access, confidence,
     spot, type, t, offset: data.offset, idx, hour: h, tide,
     base: top, colour: base.score, hunts, topHunt, personal, score, factors: hunts[topHunt]?.factors || base.factors,
     features, drive, hike, walkStart, leave, light, sunAz, alignment,

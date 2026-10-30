@@ -531,3 +531,14 @@ code { font: 400 .85em var(--mono); background: var(--surface-2); padding: 1px 5
 /* Hike fields */
 .form .three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .hike-line { color: var(--slate); font-size: .9rem; margin: 0 0 8px; }
+
+/* Confidence */
+.conf { font: 500 .66rem var(--mono); letter-spacing: .12em; text-transform: uppercase; margin-top: 4px; }
+.conf-high { color: var(--ok); }
+.conf-medium { color: var(--muted); }
+.conf-low { color: var(--danger); }
+.call .conf { margin-top: 8px; }
+.chip.unsure { color: var(--danger); border-style: dashed; }
+.mx-cell.unsure { outline: 2px dashed var(--danger); outline-offset: -4px; }
+.unsure-key { border: 2px dashed var(--danger); background: transparent !important; }
+.thumb .tag.meh { color: var(--muted); }

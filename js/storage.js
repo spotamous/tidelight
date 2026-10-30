@@ -11,7 +11,7 @@ const DEFAULTS = {
     arriveBeforeMin: 30,      // minutes on location before sunrise/sunset
     claudeKey: '',
     claudeModel: 'claude-sonnet-5-5',
-    alerts: { go: true, threshold: 80, calledOff: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 },
+    alerts: { go: true, threshold: 80, confident: true, calledOff: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 },
   },
   spots: [],                  // { id, name, lat, lon, events[], coastal, tide, driveMin, facing, notes }
   keepers: [],                // { id, label: keeper|dud, source, date(ms), lat, lon, spotName, features[], thumb }
