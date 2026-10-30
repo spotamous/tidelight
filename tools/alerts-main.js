@@ -36,11 +36,12 @@ const inQuiet = (h, s, e) => (s === e ? false : s < e ? h >= s && h < e : h >= s
 function sessionLabel(e) {
   const day = fmtDay(e.dayT ?? e.t, e.offset);
   if (e.type === 'night') return day === 'Today' ? 'Tonight' : `${day} night`;
+  if (e.type === 'day') return `${day} daytime`;
   return `${day} ${e.type}`;
 }
 const goTitle = e => (e.topHunt === 'colour' ? `Worth the alarm: ${e.spot.name}` : `Go for ${HUNT_VERB[e.topHunt]} at ${e.spot.name}`);
 function goBody(e) {
-  const when = e.type === 'night' ? `${sessionLabel(e)}, best around ${fmtTime(e.t, e.offset)}` : `${sessionLabel(e)} ${fmtTime(e.t, e.offset)}`;
+  const when = e.type === 'night' || e.type === 'day' ? `${sessionLabel(e)}, best around ${fmtTime(e.t, e.offset)}` : `${sessionLabel(e)} ${fmtTime(e.t, e.offset)}`;
   const hunt = e.topHunt !== 'colour' ? ` (${HUNT_LABEL[e.topHunt].toLowerCase()})` : '';
   const access = e.access && !e.access.inside ? ' Tide blocks access, check the briefing.' : '';
   const walk = e.hike ? ` (incl. ${e.hike} min hike)` : '';

@@ -1,5 +1,5 @@
-import { clamp, haversineKm, angleDiff, compass } from './util.js?v=3.1';
-import { computeHunts, computeNightHunts, huntsOf, NIGHT_HUNTS } from './hunts.js?v=3.1';
+import { clamp, haversineKm, angleDiff, compass } from './util.js?v=3.2';
+import { computeHunts, computeNightHunts, computeDayHunts, huntsOf, NIGHT_HUNTS, DAY_HUNTS, HUNT_LABEL } from './hunts.js?v=3.2';
 
 /* ---------- helpers ---------- */
 
@@ -335,6 +335,12 @@ export function evaluateSpot(spot, data, keepers, settings, { includePast = fals
       if (ev) out.push(ev);
     }
   }
+  if (huntsOf(spot).some(k => DAY_HUNTS.includes(k))) {
+    for (let d = 0; d < data.days.length; d++) {
+      const ev = evaluateDay({ spot, data, d, keepers, settings });
+      if (ev && (includePast || data.days[d].sunset > now)) out.push(ev);
+    }
+  }
   if (huntsOf(spot).some(k => NIGHT_HUNTS.includes(k))) {
     for (let d = 0; d < data.days.length - 1; d++) {
       const ev = evaluateNight({ spot, data, d, keepers, settings });
@@ -394,5 +400,46 @@ export function evaluateNight({ spot, data, d, keepers, settings }) {
     spot, type: 'night', t, dayT: sunset, offset: data.offset, idx, hour: h, tide,
     base: top, colour: null, hunts, topHunt, personal, score, factors: hunts[topHunt].factors,
     features, drive, hike, walkStart, leave, light: {}, timeline, sunAz: null, alignment: hunts.astro?.alignment || null,
+  };
+}
+
+// A "Daytime" session for rainforests and waterfalls: the best hour between mid-morning and mid-afternoon light.
+export function evaluateDay({ spot, data, d, keepers, settings }) {
+  const day = data.days[d];
+  if (!day?.sunrise || !day?.sunset) return null;
+  const i0 = nearestIndex(data.hours, day.sunrise + 3600), i1 = nearestIndex(data.hours, day.sunset - 3600);
+  if (i0 < 0 || i1 < 0 || i1 < i0) return null;
+  const hunts = computeDayHunts({ spot, data, i0, i1 });
+  const keys = Object.keys(hunts);
+  if (!keys.length) return null;
+  const topHunt = keys.sort((a, b) => hunts[b].score - hunts[a].score)[0];
+  const top = hunts[topHunt].score;
+  const t = hunts[topHunt].peak;
+  const idx = nearestIndex(data.hours, t);
+  const h = data.hours[idx];
+  const tide = spot.coastal ? tideInfo(data.hours, idx) : null;
+  const features = featureVector(h, tide);
+  const personal = personalScore(features, keepers);
+  let score = top;
+  if (personal) score = Math.round((1 - personal.weight) * top + personal.weight * personal.score);
+  const drive = driveMinutes(spot, settings);
+  const hike = hikeMinutes(spot);
+  const arrive = Number(settings.arriveBeforeMin ?? 30);
+  const leave = t - (arrive + (drive || 0) + hike) * 60;
+  const walkStart = hike ? t - (arrive + hike) * 60 : null;
+  const H = hunts[topHunt];
+  const timeline = [
+    { t, label: `Best for ${HUNT_LABEL[topHunt].toLowerCase()}`, cls: 'key' },
+    ...(H.from < t ? [{ t: H.from, label: 'Good light from' }] : []),
+    ...(H.to > t ? [{ t: H.to, label: 'Good light until' }] : []),
+    { t: day.sunset, label: 'Sunset' },
+  ];
+  const access = spot.coastal && spot.tideAccess
+    ? accessWindow(data.hours, idx, t, (Number(spot.accessPct) || 40) / 100, Number(spot.accessBuffer ?? 30)) : null;
+  return {
+    key: `${spot.id}:day:${day.t}`, access, confidence: null,
+    spot, type: 'day', t, dayT: day.sunrise, offset: data.offset, idx, hour: h, tide,
+    base: top, colour: null, hunts, topHunt, personal, score, factors: H.factors,
+    features, drive, hike, walkStart, leave, light: {}, timeline, sunAz: null, alignment: null,
   };
 }

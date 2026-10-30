@@ -1,14 +1,14 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=3.1';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=3.1';
-import { DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=3.1';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=3.1';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=3.1';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert } from './sync.js?v=3.1';
-import { VAPID_PUBLIC_KEY } from './config.js?v=3.1';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=3.1';
-import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=3.1';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=3.2';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=3.2';
+import { DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=3.2';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=3.2';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=3.2';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert } from './sync.js?v=3.2';
+import { VAPID_PUBLIC_KEY } from './config.js?v=3.2';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=3.2';
+import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=3.2';
 
-export const APP_VERSION = '3.1';
+export const APP_VERSION = '3.2';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -97,6 +97,7 @@ const huntList = e => HUNT_ORDER.filter(k => e.hunts && e.hunts[k]).map(k => [k,
 // "tonight", "tomorrow sunrise", "fri 23 oct sunset"
 function sessionName(e) {
   const day = fmtDay(e.dayT ?? e.t, e.offset).toLowerCase();
+  if (e.type === 'day') return `${day} daytime`;
   if (e.type !== 'night') return `${day} ${e.type}`;
   return day === 'today' ? 'tonight' : `${day} night`;
 }
@@ -110,7 +111,7 @@ const notableHunts = e => {
 function briefing(e) {
   const o = e.offset, h = e.hour, s = e.spot;
   const lines = [];
-  lines.push(e.type === 'night'
+  lines.push(e.type === 'night' || e.type === 'day'
     ? `${verdict(e)}. ${s.name} ${sessionName(e)}, best around ${fmtTime(e.t, o)}.`
     : `${verdict(e)}. ${s.name} ${e.type} at ${fmtTime(e.t, o)}.`);
   if (e.drive != null) {
@@ -154,6 +155,16 @@ function briefing(e) {
   if (H.lightning && H.lightning.score >= 45) lines.push(`Lightning window in the dark (${fmtTime(H.lightning.from, o)}–${fmtTime(H.lightning.to, o)}): try ISO 100–400, f/5.6–8 and 15–30 s exposures on a tripod.`);
   if (H.rainbow && H.rainbow.score >= 45) lines.push(`Rainbow chance around ${fmtTime(H.rainbow.peak, o)}: keep the sun at your back and look ${compass(H.rainbow.look)}.`);
   if (H.aurora && H.aurora.score >= 40) lines.push(`Aurora possible around ${fmtTime(H.aurora.peak, o)} (Kp ${H.aurora.kp.toFixed(1)}). Find a dark spot with a clear ${s.lat < 0 ? 'southern' : 'northern'} horizon; try ISO 1600–3200, f/2.8 and 5–15 s.`);
+  if (H.forest && H.forest.score >= 40) {
+    const x = H.forest.extra;
+    lines.push(`Rainforest: ${x.wet >= 0.7 ? 'wet, saturated greens' : x.wet >= 0.3 ? 'damp foliage' : 'dry foliage'} under ${Math.round(x.tc)}% cloud, best ${fmtTime(H.forest.from, o)}–${fmtTime(H.forest.to, o)}. A polariser cuts the glare off wet leaves; bring a lens cloth.`);
+  }
+  if (H.waterfall && H.waterfall.score >= 40) {
+    const x = H.waterfall.extra;
+    lines.push(x.flood
+      ? 'Waterfall: very heavy recent rain. Expect brown, flooding water and check for track closures before heading in.'
+      : `Waterfall: ${x.flow >= 0.6 ? 'good flow' : 'modest flow'} after ${x.r72.toFixed(0)} mm in 3 days. Try 0.5–2 s for silky water with a polariser or ND, and watch your footing on wet rock.`);
+  }
   if (H.astro && H.astro.score >= 40 && H.astro.core) lines.push(`Milky Way core ${Math.round(H.astro.core.alt)}° up in the ${compass(H.astro.core.az)} around ${fmtTime(H.astro.peak, o)}. Try ISO 3200–6400, f/2.8 or wider, and 15–20 s on a wide lens.`);
   if (e.access) {
     if (e.access.none) lines.push('Tide access: the tide never drops low enough around this session for safe access.');
@@ -258,6 +269,7 @@ function savedAgo() {
 }
 
 const SUN_ICON = {
+  day: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 9.3 4.4 4.4 0 0 0 7 18z"/><path d="M9 21l1-1.5M13 21l1-1.5"/></svg>',
   night: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
   sunrise: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 18h18M7 18a5 5 0 0 1 10 0M12 7v3M12 7l-2 2M12 7l2 2M5 12l1.5 1M19 12l-1.5 1"/></svg>',
   sunset: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 18h18M7 18a5 5 0 0 1 10 0M12 10V7M12 10l-2-2M12 10l2-2M5 12l1.5 1M19 12l-1.5 1"/></svg>',
@@ -371,7 +383,7 @@ const band = s => (s >= 80 ? 'b4' : s >= 65 ? 'b3' : s >= 50 ? 'b2' : 'b1');
 function renderMatrix(v, evs, st, failed) {
   const now = Date.now() / 1000;
   const offset = evs[0]?.offset ?? 0;
-  const types = ['sunrise', 'sunset', 'night'];
+  const types = ['sunrise', 'day', 'sunset', 'night'];
   const cols = [];
   for (let i = 0; i < 3; i++) for (const type of types) if (evs.some(e => e.dayIdx === i && e.type === type)) cols.push({ i, type });
   const cell = new Map(evs.map(e => [`${e.spot.id}|${e.dayIdx}|${e.type}`, e]));
@@ -381,7 +393,7 @@ function renderMatrix(v, evs, st, failed) {
   const sel = evs.find(e => e.key === matrixSel);
   const groups = [0, 1, 2].map(i => ({ i, n: cols.filter(c => c.i === i).length })).filter(g => g.n);
   const dayLabel = i => fmtDayDate(now + i * 86400, offset).split(' ')[0].toUpperCase();
-  const typeName = { sunrise: 'Sunrise', sunset: 'Sunset', night: 'Night' };
+  const typeName = { sunrise: 'Sunrise', day: 'Daytime', sunset: 'Sunset', night: 'Night' };
 
   v.innerHTML = `
     <button class="link-btn back" id="toCall">← Best pick</button>
@@ -462,7 +474,7 @@ function openEvent(key) {
     ${coverUrl(e.spot) ? `<img class="banner" src="${coverUrl(e.spot)}" alt="${esc(e.spot.name)}">` : ''}
     <div class="sheet-head">
       ${horizon(e, true)}
-      <div><h2>${esc(e.spot.name)}</h2><div class="muted">${e.type === 'night' ? `${cap(sessionName(e))}, best around ${fmtTime(e.t, o)}` : `${fmtDay(e.t, o)}, ${e.type} at ${fmtTime(e.t, o)}`}</div><div class="verdict">${verdict(e)}</div>${confLine(e)}</div>
+      <div><h2>${esc(e.spot.name)}</h2><div class="muted">${e.type === 'night' || e.type === 'day' ? `${cap(sessionName(e))}, best around ${fmtTime(e.t, o)}` : `${fmtDay(e.t, o)}, ${e.type} at ${fmtTime(e.t, o)}`}</div><div class="verdict">${verdict(e)}</div>${confLine(e)}</div>
     </div>
     <ul class="timeline">${tl.map(x => `<li class="${x.cls || ''}"><time>${fmtTime(x.t, o)}</time><span>${x.label}</span></li>`).join('')}</ul>
 
@@ -482,7 +494,7 @@ function openEvent(key) {
       ? `Blended score: ${e.base} from conditions, ${e.personal.score} from your ${e.personal.n} keepers (${Math.round(e.personal.weight * 100)}% weight).`
       : `Add ${MIN_KEEPERS}+ keeper photos in Coach and this score will start reflecting your taste.`}</p>
 
-    <h3>Conditions at ${e.type === 'night' ? fmtTime(e.t, o) : e.type}</h3>
+    <h3>Conditions at ${e.type === 'night' || e.type === 'day' ? fmtTime(e.t, o) : e.type}</h3>
     ${e.access && !e.access.inside ? `<div class="alert danger">${e.access.none ? 'The tide stays above your access level around this session.' : `Tide access window is ${fmtTime(e.access.start, o)} to ${fmtTime(e.access.backBy, o)}, which doesn't cover this session.`}</div>` : ''}
     <div class="cond-grid">${cond.map(([k, val]) => `<div><b>${val}</b><span>${k}</span></div>`).join('')}</div>
 

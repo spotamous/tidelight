@@ -1,5 +1,6 @@
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
-import { nearestIndex, tideInfo } from './scoring.js?v=3.1';
+import { nearestIndex, tideInfo } from './scoring.js?v=3.2';
+import { huntsOf, DAY_HUNTS } from './hunts.js?v=3.2';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
@@ -22,7 +23,7 @@ const qs = o => new URLSearchParams(o).toString();
 export function clearCache() { cache.clear(); }
 
 export async function fetchSpotForecast(spot) {
-  const key = `${spot.lat.toFixed(3)},${spot.lon.toFixed(3)}`;
+  const key = `${spot.lat.toFixed(3)},${spot.lon.toFixed(3)},${huntsOf(spot).some(k => DAY_HUNTS.includes(k)) ? 'd' : ''}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL) return hit.data;
 
@@ -44,12 +45,19 @@ export async function fetchSpotForecast(spot) {
     const hasAny = (m.wave_height || []).some(v => v != null) || (m.sea_level_height_msl || []).some(v => v != null);
     return hasAny ? mr : null;
   };
-  const [mr, hz, md] = await Promise.allSettled([getMarine(), fetchHorizon(spot), fetchModels(spot)]);
+  // Rainforest and waterfall spots also need the last two weeks of rain.
+  const getRainDaily = async () => {
+    if (!huntsOf(spot).some(k => DAY_HUNTS.includes(k))) return null;
+    const j = await getJSON(`${FORECAST}?${qs({ latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime', daily: 'precipitation_sum', past_days: 14, forecast_days: 7 })}`);
+    return (j.daily?.time || []).map((t, i) => ({ t, mm: j.daily.precipitation_sum?.[i] ?? 0 }));
+  };
+  const [mr, hz, md, rd] = await Promise.allSettled([getMarine(), fetchHorizon(spot), fetchModels(spot), getRainDaily()]);
   const marine = mr.status === 'fulfilled' ? mr.value : null;
 
   const data = normalize(wx, marine);
   data.horizon = hz.status === 'fulfilled' ? hz.value : null;   // cloud towards sunrise/sunset
   data.models = md.status === 'fulfilled' ? md.value : null;    // per-model cloud, for confidence
+  data.rainDaily = rd.status === 'fulfilled' ? rd.value : null; // daily rain, 14 days back
   cache.set(key, { at: Date.now(), data });
   return data;
 }

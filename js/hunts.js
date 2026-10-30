@@ -1,11 +1,12 @@
 // Extra things to hunt for at a spot, beyond sunrise/sunset colour.
 // Each scorer returns { score 0–100, factors: [{k: good|bad|neutral, t}], ...extras } or null when not applicable.
-import { clamp, compass, fmtTime, angleDiff } from './util.js?v=3.1';
+import { clamp, compass, fmtTime, angleDiff } from './util.js?v=3.2';
 
-export const HUNT_ORDER = ['colour', 'fog', 'storm', 'lightning', 'rainbow', 'aurora', 'astro'];
-export const NIGHT_HUNTS = ['aurora', 'astro'];   // scored as their own "Night" session
-export const HUNT_LABEL = { colour: 'Colour', fog: 'Fog', storm: 'Storm', lightning: 'Lightning', rainbow: 'Rainbow', aurora: 'Aurora', astro: 'Milky Way' };
-export const HUNT_VERB = { colour: 'colour', fog: 'fog', storm: 'storms', lightning: 'lightning', rainbow: 'a rainbow', aurora: 'aurora', astro: 'the Milky Way' };
+export const HUNT_ORDER = ['colour', 'fog', 'storm', 'lightning', 'rainbow', 'forest', 'waterfall', 'aurora', 'astro'];
+export const NIGHT_HUNTS = ['aurora', 'astro'];     // scored as their own "Night" session
+export const DAY_HUNTS = ['forest', 'waterfall'];   // scored as their own "Daytime" session
+export const HUNT_LABEL = { colour: 'Colour', fog: 'Fog', storm: 'Storm', lightning: 'Lightning', rainbow: 'Rainbow', forest: 'Forest', waterfall: 'Waterfall', aurora: 'Aurora', astro: 'Milky Way' };
+export const HUNT_VERB = { colour: 'colour', fog: 'fog', storm: 'storms', lightning: 'lightning', rainbow: 'a rainbow', forest: 'rainforest light', waterfall: 'waterfall flow', aurora: 'aurora', astro: 'the Milky Way' };
 export const huntsOf = spot => (spot.hunts && spot.hunts.length ? spot.hunts : ['colour']);
 
 const THUNDER = c => c === 95 || c === 96 || c === 99;
@@ -250,5 +251,106 @@ export function computeNightHunts({ spot, data, i0, i1 }) {
   const sel = huntsOf(spot), out = {};
   if (sel.includes('aurora')) { const r = auroraScore(data.hours, i0, i1, spot, data.offset); if (r) out.aurora = r; }
   if (sel.includes('astro')) { const r = astroScore(data.hours, i0, i1, spot, data.offset); if (r) out.astro = r; }
+  return out;
+}
+
+/* =================== Daytime hunts: rainforest and waterfall =================== */
+
+// Rain (mm) in the hours before index i: from `from` hours back to `to` hours back.
+function rainBefore(hours, i, from, to) {
+  let mm = 0;
+  for (let k = Math.max(0, i - from); k < Math.max(0, i - to); k++) mm += hours[k]?.precip ?? 0;
+  return mm;
+}
+// Rain over the 7 days before the session, from daily totals plus today's hours so far.
+function rainWeek(data, i) {
+  const t = data.hours[i].t, daily = data.rainDaily || [];
+  const today = daily.find(d => t >= d.t && t < d.t + 86400);
+  if (!today) return null;
+  const week = daily.filter(d => d.t < today.t && d.t >= today.t - 7 * 86400).reduce((a, d) => a + (d.mm || 0), 0);
+  let todaySoFar = 0;
+  for (const h of data.hours) if (h.t >= today.t && h.t < t) todaySoFar += h.precip ?? 0;
+  return week + todaySoFar;
+}
+
+function softLight(h) {
+  const tc = h.total ?? Math.max(h.low ?? 0, h.mid ?? 0, h.high ?? 0);
+  return { tc, soft: clamp((tc - 40) / 50) };   // 40% cloud = harsh/dappled, 90%+ = soft and even
+}
+function rainingNow(h) {
+  const heavy = (h.pp ?? 0) >= 70 && (h.precip ?? 0) >= 2;
+  const light = !heavy && (h.precip ?? 0) >= 0.2;
+  return { heavy, light, f: heavy ? 0.55 : light ? 0.92 : 1 };
+}
+
+export function forestAt(data, i) {
+  const h = data.hours[i];
+  const { tc, soft } = softLight(h);
+  const r24 = rainBefore(data.hours, i, 24, 0), r48 = rainBefore(data.hours, i, 48, 24);
+  const wet = clamp((r24 + 0.5 * r48) / 6);
+  const windOK = 1 - 0.5 * clamp(((h.wind ?? 0) - 8) / 20);
+  const now = rainingNow(h);
+  const mist = (h.rh ?? 0) >= 95 || (h.vis != null && h.vis < 2000);
+  const score = Math.round(clamp((100 * (0.45 * soft + 0.35 * wet + 0.2 * windOK) * now.f + (mist ? 10 : 0)) / 100) * 100);
+  return { score, tc, r24, r48, wet, wind: h.wind, now, mist };
+}
+
+export function waterfallAt(data, i) {
+  const h = data.hours[i];
+  const { tc, soft } = softLight(h);
+  const r24 = rainBefore(data.hours, i, 24, 0), r72 = rainBefore(data.hours, i, 72, 0);
+  const r7 = rainWeek(data, i);
+  const flow = r7 == null ? clamp(r72 / 15) : 0.7 * clamp(r72 / 15) + 0.3 * clamp(r7 / 40);
+  const windOK = 1 - 0.5 * clamp(((h.wind ?? 0) - 15) / 25);
+  const now = rainingNow(h);
+  const flood = r24 >= 40 || r72 >= 80;
+  const score = Math.round(100 * clamp((0.55 * flow + 0.35 * soft + 0.1 * windOK) * now.f * (flood ? 0.5 : 1)));
+  return { score, tc, r24, r72, r7, flow, now, flood };
+}
+
+function lightFactor(tc) {
+  return tc >= 85 ? { k: 'good', t: `Overcast (${Math.round(tc)}% cloud): soft, even light with no harsh highlights` }
+    : tc >= 60 ? { k: 'neutral', t: `Mostly cloudy (${Math.round(tc)}%): softish light, some bright patches` }
+    : { k: 'bad', t: `Only ${Math.round(tc)}% cloud: harsh, dappled light under the canopy` };
+}
+
+export function computeDayHunts({ spot, data, i0, i1 }) {
+  const sel = huntsOf(spot), out = {};
+  for (const kind of DAY_HUNTS) {
+    if (!sel.includes(kind)) continue;
+    let best = null, bi = -1;
+    const per = [];
+    for (let i = i0; i <= i1; i++) {
+      if (!data.hours[i]) continue;
+      const r = kind === 'forest' ? forestAt(data, i) : waterfallAt(data, i);
+      per.push({ i, t: data.hours[i].t, score: r.score });
+      // Ties go to the hour nearest the middle of the window (more forgiving light either side).
+      const mid = (i0 + i1) / 2;
+      if (!best || r.score > best.score || (r.score === best.score && Math.abs(i - mid) < Math.abs(bi - mid))) { best = r; bi = i; }
+    }
+    if (!best) continue;
+    // The run of hours within 10 points of the best hour.
+    let from = data.hours[bi].t, to = data.hours[bi].t;
+    for (let k = per.findIndex(p => p.i === bi); k >= 0 && per[k].score >= best.score - 10; k--) from = per[k].t;
+    for (let k = per.findIndex(p => p.i === bi); k < per.length && per[k].score >= best.score - 10; k++) to = per[k].t;
+    const f = [lightFactor(best.tc)];
+    if (kind === 'forest') {
+      f.push(best.wet >= 0.7 ? { k: 'good', t: `Wet forest: ${best.r24.toFixed(1)} mm of rain in the 24 hours before` }
+        : best.wet >= 0.3 ? { k: 'neutral', t: `Damp: ${(best.r24 + best.r48).toFixed(1)} mm of rain over the past 2 days` }
+        : { k: 'bad', t: 'Dry: little or no rain in the past 2 days, so the greens won\'t glow' });
+      if ((best.wind ?? 0) >= 20) f.push({ k: 'bad', t: `Breezy (${Math.round(best.wind)} km/h): leaves will blur on long exposures` });
+      else f.push({ k: 'good', t: 'Light wind: leaves stay still for long exposures' });
+      if (best.mist) f.push({ k: 'good', t: 'Mist or very humid air: extra atmosphere between the trees' });
+    } else {
+      const week = best.r7 != null ? `, ${best.r7.toFixed(0)} mm over the week` : '';
+      f.push(best.flow >= 0.6 ? { k: 'good', t: `Good flow: ${best.r72.toFixed(0)} mm of rain in the past 3 days${week}` }
+        : best.flow >= 0.25 ? { k: 'neutral', t: `Modest flow: ${best.r72.toFixed(0)} mm in the past 3 days${week}` }
+        : { k: 'bad', t: `Low flow likely: only ${best.r72.toFixed(1)} mm in the past 3 days${week}` });
+      if (best.flood) f.unshift({ k: 'bad', t: 'Very heavy recent rain: likely flooding, brown water and dangerous access. Check track closures.' });
+    }
+    if (best.now.heavy) f.push({ k: 'bad', t: 'Heavy rain at the time: hard on gear and visibility' });
+    else if (best.now.light) f.push({ k: 'neutral', t: 'Light rain at the time: bring a rain cover, keep the lens dry' });
+    out[kind] = { score: best.score, factors: f, peak: data.hours[bi].t, from, to, extra: best };
+  }
   return out;
 }

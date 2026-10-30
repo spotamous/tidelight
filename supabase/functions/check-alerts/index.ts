@@ -121,10 +121,11 @@ const M_hunts = (() => {
 // Extra things to hunt for at a spot, beyond sunrise/sunset colour.
 // Each scorer returns { score 0–100, factors: [{k: good|bad|neutral, t}], ...extras } or null when not applicable.
 const { clamp, compass, fmtTime, angleDiff } = M_util;
-const HUNT_ORDER = ['colour', 'fog', 'storm', 'lightning', 'rainbow', 'aurora', 'astro'];
-const NIGHT_HUNTS = ['aurora', 'astro'];   // scored as their own "Night" session
-const HUNT_LABEL = { colour: 'Colour', fog: 'Fog', storm: 'Storm', lightning: 'Lightning', rainbow: 'Rainbow', aurora: 'Aurora', astro: 'Milky Way' };
-const HUNT_VERB = { colour: 'colour', fog: 'fog', storm: 'storms', lightning: 'lightning', rainbow: 'a rainbow', aurora: 'aurora', astro: 'the Milky Way' };
+const HUNT_ORDER = ['colour', 'fog', 'storm', 'lightning', 'rainbow', 'forest', 'waterfall', 'aurora', 'astro'];
+const NIGHT_HUNTS = ['aurora', 'astro'];     // scored as their own "Night" session
+const DAY_HUNTS = ['forest', 'waterfall'];   // scored as their own "Daytime" session
+const HUNT_LABEL = { colour: 'Colour', fog: 'Fog', storm: 'Storm', lightning: 'Lightning', rainbow: 'Rainbow', forest: 'Forest', waterfall: 'Waterfall', aurora: 'Aurora', astro: 'Milky Way' };
+const HUNT_VERB = { colour: 'colour', fog: 'fog', storm: 'storms', lightning: 'lightning', rainbow: 'a rainbow', forest: 'rainforest light', waterfall: 'waterfall flow', aurora: 'aurora', astro: 'the Milky Way' };
 const huntsOf = spot => (spot.hunts && spot.hunts.length ? spot.hunts : ['colour']);
 
 const THUNDER = c => c === 95 || c === 96 || c === 99;
@@ -372,13 +373,114 @@ function computeNightHunts({ spot, data, i0, i1 }) {
   return out;
 }
 
-return { HUNT_ORDER, NIGHT_HUNTS, HUNT_LABEL, HUNT_VERB, huntsOf, fogScore, stormScore, lightningScore, rainbowScore, computeHunts, setKp, hasKp, geomagLat, kpNeeded, auroraScore, coreAltAz, astroScore, computeNightHunts };
+/* =================== Daytime hunts: rainforest and waterfall =================== */
+
+// Rain (mm) in the hours before index i: from `from` hours back to `to` hours back.
+function rainBefore(hours, i, from, to) {
+  let mm = 0;
+  for (let k = Math.max(0, i - from); k < Math.max(0, i - to); k++) mm += hours[k]?.precip ?? 0;
+  return mm;
+}
+// Rain over the 7 days before the session, from daily totals plus today's hours so far.
+function rainWeek(data, i) {
+  const t = data.hours[i].t, daily = data.rainDaily || [];
+  const today = daily.find(d => t >= d.t && t < d.t + 86400);
+  if (!today) return null;
+  const week = daily.filter(d => d.t < today.t && d.t >= today.t - 7 * 86400).reduce((a, d) => a + (d.mm || 0), 0);
+  let todaySoFar = 0;
+  for (const h of data.hours) if (h.t >= today.t && h.t < t) todaySoFar += h.precip ?? 0;
+  return week + todaySoFar;
+}
+
+function softLight(h) {
+  const tc = h.total ?? Math.max(h.low ?? 0, h.mid ?? 0, h.high ?? 0);
+  return { tc, soft: clamp((tc - 40) / 50) };   // 40% cloud = harsh/dappled, 90%+ = soft and even
+}
+function rainingNow(h) {
+  const heavy = (h.pp ?? 0) >= 70 && (h.precip ?? 0) >= 2;
+  const light = !heavy && (h.precip ?? 0) >= 0.2;
+  return { heavy, light, f: heavy ? 0.55 : light ? 0.92 : 1 };
+}
+
+function forestAt(data, i) {
+  const h = data.hours[i];
+  const { tc, soft } = softLight(h);
+  const r24 = rainBefore(data.hours, i, 24, 0), r48 = rainBefore(data.hours, i, 48, 24);
+  const wet = clamp((r24 + 0.5 * r48) / 6);
+  const windOK = 1 - 0.5 * clamp(((h.wind ?? 0) - 8) / 20);
+  const now = rainingNow(h);
+  const mist = (h.rh ?? 0) >= 95 || (h.vis != null && h.vis < 2000);
+  const score = Math.round(clamp((100 * (0.45 * soft + 0.35 * wet + 0.2 * windOK) * now.f + (mist ? 10 : 0)) / 100) * 100);
+  return { score, tc, r24, r48, wet, wind: h.wind, now, mist };
+}
+
+function waterfallAt(data, i) {
+  const h = data.hours[i];
+  const { tc, soft } = softLight(h);
+  const r24 = rainBefore(data.hours, i, 24, 0), r72 = rainBefore(data.hours, i, 72, 0);
+  const r7 = rainWeek(data, i);
+  const flow = r7 == null ? clamp(r72 / 15) : 0.7 * clamp(r72 / 15) + 0.3 * clamp(r7 / 40);
+  const windOK = 1 - 0.5 * clamp(((h.wind ?? 0) - 15) / 25);
+  const now = rainingNow(h);
+  const flood = r24 >= 40 || r72 >= 80;
+  const score = Math.round(100 * clamp((0.55 * flow + 0.35 * soft + 0.1 * windOK) * now.f * (flood ? 0.5 : 1)));
+  return { score, tc, r24, r72, r7, flow, now, flood };
+}
+
+function lightFactor(tc) {
+  return tc >= 85 ? { k: 'good', t: `Overcast (${Math.round(tc)}% cloud): soft, even light with no harsh highlights` }
+    : tc >= 60 ? { k: 'neutral', t: `Mostly cloudy (${Math.round(tc)}%): softish light, some bright patches` }
+    : { k: 'bad', t: `Only ${Math.round(tc)}% cloud: harsh, dappled light under the canopy` };
+}
+
+function computeDayHunts({ spot, data, i0, i1 }) {
+  const sel = huntsOf(spot), out = {};
+  for (const kind of DAY_HUNTS) {
+    if (!sel.includes(kind)) continue;
+    let best = null, bi = -1;
+    const per = [];
+    for (let i = i0; i <= i1; i++) {
+      if (!data.hours[i]) continue;
+      const r = kind === 'forest' ? forestAt(data, i) : waterfallAt(data, i);
+      per.push({ i, t: data.hours[i].t, score: r.score });
+      // Ties go to the hour nearest the middle of the window (more forgiving light either side).
+      const mid = (i0 + i1) / 2;
+      if (!best || r.score > best.score || (r.score === best.score && Math.abs(i - mid) < Math.abs(bi - mid))) { best = r; bi = i; }
+    }
+    if (!best) continue;
+    // The run of hours within 10 points of the best hour.
+    let from = data.hours[bi].t, to = data.hours[bi].t;
+    for (let k = per.findIndex(p => p.i === bi); k >= 0 && per[k].score >= best.score - 10; k--) from = per[k].t;
+    for (let k = per.findIndex(p => p.i === bi); k < per.length && per[k].score >= best.score - 10; k++) to = per[k].t;
+    const f = [lightFactor(best.tc)];
+    if (kind === 'forest') {
+      f.push(best.wet >= 0.7 ? { k: 'good', t: `Wet forest: ${best.r24.toFixed(1)} mm of rain in the 24 hours before` }
+        : best.wet >= 0.3 ? { k: 'neutral', t: `Damp: ${(best.r24 + best.r48).toFixed(1)} mm of rain over the past 2 days` }
+        : { k: 'bad', t: 'Dry: little or no rain in the past 2 days, so the greens won\'t glow' });
+      if ((best.wind ?? 0) >= 20) f.push({ k: 'bad', t: `Breezy (${Math.round(best.wind)} km/h): leaves will blur on long exposures` });
+      else f.push({ k: 'good', t: 'Light wind: leaves stay still for long exposures' });
+      if (best.mist) f.push({ k: 'good', t: 'Mist or very humid air: extra atmosphere between the trees' });
+    } else {
+      const week = best.r7 != null ? `, ${best.r7.toFixed(0)} mm over the week` : '';
+      f.push(best.flow >= 0.6 ? { k: 'good', t: `Good flow: ${best.r72.toFixed(0)} mm of rain in the past 3 days${week}` }
+        : best.flow >= 0.25 ? { k: 'neutral', t: `Modest flow: ${best.r72.toFixed(0)} mm in the past 3 days${week}` }
+        : { k: 'bad', t: `Low flow likely: only ${best.r72.toFixed(1)} mm in the past 3 days${week}` });
+      if (best.flood) f.unshift({ k: 'bad', t: 'Very heavy recent rain: likely flooding, brown water and dangerous access. Check track closures.' });
+    }
+    if (best.now.heavy) f.push({ k: 'bad', t: 'Heavy rain at the time: hard on gear and visibility' });
+    else if (best.now.light) f.push({ k: 'neutral', t: 'Light rain at the time: bring a rain cover, keep the lens dry' });
+    out[kind] = { score: best.score, factors: f, peak: data.hours[bi].t, from, to, extra: best };
+  }
+  return out;
+}
+
+return { HUNT_ORDER, NIGHT_HUNTS, DAY_HUNTS, HUNT_LABEL, HUNT_VERB, huntsOf, fogScore, stormScore, lightningScore, rainbowScore, computeHunts, setKp, hasKp, geomagLat, kpNeeded, auroraScore, coreAltAz, astroScore, computeNightHunts, forestAt, waterfallAt, computeDayHunts };
 })();
 
 /* ===== js/scoring.js ===== */
 const M_scoring = (() => {
 const { clamp, haversineKm, angleDiff, compass } = M_util;
-const { computeHunts, computeNightHunts, huntsOf, NIGHT_HUNTS } = M_hunts;
+const { computeHunts, computeNightHunts, computeDayHunts, huntsOf, NIGHT_HUNTS, DAY_HUNTS, HUNT_LABEL } = M_hunts;
 /* ---------- helpers ---------- */
 
 function nearestIndex(hours, t) {
@@ -713,6 +815,12 @@ function evaluateSpot(spot, data, keepers, settings, { includePast = false } = {
       if (ev) out.push(ev);
     }
   }
+  if (huntsOf(spot).some(k => DAY_HUNTS.includes(k))) {
+    for (let d = 0; d < data.days.length; d++) {
+      const ev = evaluateDay({ spot, data, d, keepers, settings });
+      if (ev && (includePast || data.days[d].sunset > now)) out.push(ev);
+    }
+  }
   if (huntsOf(spot).some(k => NIGHT_HUNTS.includes(k))) {
     for (let d = 0; d < data.days.length - 1; d++) {
       const ev = evaluateNight({ spot, data, d, keepers, settings });
@@ -775,13 +883,55 @@ function evaluateNight({ spot, data, d, keepers, settings }) {
   };
 }
 
-return { nearestIndex, tideInfo, accessWindow, FEATURE_NAMES, featureVector, baseScore, similarity, MIN_KEEPERS, personalScore, personalModelSummary, horizonBlock, modelConfidence, HIKE_SPEED, DIFFICULTIES, hikeMinutes, hikeIsEstimate, driveMinutes, evaluateEvent, evaluateSpot, evaluateNight };
+// A "Daytime" session for rainforests and waterfalls: the best hour between mid-morning and mid-afternoon light.
+function evaluateDay({ spot, data, d, keepers, settings }) {
+  const day = data.days[d];
+  if (!day?.sunrise || !day?.sunset) return null;
+  const i0 = nearestIndex(data.hours, day.sunrise + 3600), i1 = nearestIndex(data.hours, day.sunset - 3600);
+  if (i0 < 0 || i1 < 0 || i1 < i0) return null;
+  const hunts = computeDayHunts({ spot, data, i0, i1 });
+  const keys = Object.keys(hunts);
+  if (!keys.length) return null;
+  const topHunt = keys.sort((a, b) => hunts[b].score - hunts[a].score)[0];
+  const top = hunts[topHunt].score;
+  const t = hunts[topHunt].peak;
+  const idx = nearestIndex(data.hours, t);
+  const h = data.hours[idx];
+  const tide = spot.coastal ? tideInfo(data.hours, idx) : null;
+  const features = featureVector(h, tide);
+  const personal = personalScore(features, keepers);
+  let score = top;
+  if (personal) score = Math.round((1 - personal.weight) * top + personal.weight * personal.score);
+  const drive = driveMinutes(spot, settings);
+  const hike = hikeMinutes(spot);
+  const arrive = Number(settings.arriveBeforeMin ?? 30);
+  const leave = t - (arrive + (drive || 0) + hike) * 60;
+  const walkStart = hike ? t - (arrive + hike) * 60 : null;
+  const H = hunts[topHunt];
+  const timeline = [
+    { t, label: `Best for ${HUNT_LABEL[topHunt].toLowerCase()}`, cls: 'key' },
+    ...(H.from < t ? [{ t: H.from, label: 'Good light from' }] : []),
+    ...(H.to > t ? [{ t: H.to, label: 'Good light until' }] : []),
+    { t: day.sunset, label: 'Sunset' },
+  ];
+  const access = spot.coastal && spot.tideAccess
+    ? accessWindow(data.hours, idx, t, (Number(spot.accessPct) || 40) / 100, Number(spot.accessBuffer ?? 30)) : null;
+  return {
+    key: `${spot.id}:day:${day.t}`, access, confidence: null,
+    spot, type: 'day', t, dayT: day.sunrise, offset: data.offset, idx, hour: h, tide,
+    base: top, colour: null, hunts, topHunt, personal, score, factors: H.factors,
+    features, drive, hike, walkStart, leave, light: {}, timeline, sunAz: null, alignment: null,
+  };
+}
+
+return { nearestIndex, tideInfo, accessWindow, FEATURE_NAMES, featureVector, baseScore, similarity, MIN_KEEPERS, personalScore, personalModelSummary, horizonBlock, modelConfidence, HIKE_SPEED, DIFFICULTIES, hikeMinutes, hikeIsEstimate, driveMinutes, evaluateEvent, evaluateSpot, evaluateNight, evaluateDay };
 })();
 
 /* ===== js/api.js ===== */
 const M_api = (() => {
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
 const { nearestIndex, tideInfo } = M_scoring;
+const { huntsOf, DAY_HUNTS } = M_hunts;
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
 const ARCHIVE = 'https://archive-api.open-meteo.com/v1/archive';
@@ -803,7 +953,7 @@ const qs = o => new URLSearchParams(o).toString();
 function clearCache() { cache.clear(); }
 
 async function fetchSpotForecast(spot) {
-  const key = `${spot.lat.toFixed(3)},${spot.lon.toFixed(3)}`;
+  const key = `${spot.lat.toFixed(3)},${spot.lon.toFixed(3)},${huntsOf(spot).some(k => DAY_HUNTS.includes(k)) ? 'd' : ''}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL) return hit.data;
 
@@ -825,12 +975,19 @@ async function fetchSpotForecast(spot) {
     const hasAny = (m.wave_height || []).some(v => v != null) || (m.sea_level_height_msl || []).some(v => v != null);
     return hasAny ? mr : null;
   };
-  const [mr, hz, md] = await Promise.allSettled([getMarine(), fetchHorizon(spot), fetchModels(spot)]);
+  // Rainforest and waterfall spots also need the last two weeks of rain.
+  const getRainDaily = async () => {
+    if (!huntsOf(spot).some(k => DAY_HUNTS.includes(k))) return null;
+    const j = await getJSON(`${FORECAST}?${qs({ latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime', daily: 'precipitation_sum', past_days: 14, forecast_days: 7 })}`);
+    return (j.daily?.time || []).map((t, i) => ({ t, mm: j.daily.precipitation_sum?.[i] ?? 0 }));
+  };
+  const [mr, hz, md, rd] = await Promise.allSettled([getMarine(), fetchHorizon(spot), fetchModels(spot), getRainDaily()]);
   const marine = mr.status === 'fulfilled' ? mr.value : null;
 
   const data = normalize(wx, marine);
   data.horizon = hz.status === 'fulfilled' ? hz.value : null;   // cloud towards sunrise/sunset
   data.models = md.status === 'fulfilled' ? md.value : null;    // per-model cloud, for confidence
+  data.rainDaily = rd.status === 'fulfilled' ? rd.value : null; // daily rain, 14 days back
   cache.set(key, { at: Date.now(), data });
   return data;
 }
@@ -1118,11 +1275,12 @@ const inQuiet = (h, s, e) => (s === e ? false : s < e ? h >= s && h < e : h >= s
 function sessionLabel(e) {
   const day = fmtDay(e.dayT ?? e.t, e.offset);
   if (e.type === 'night') return day === 'Today' ? 'Tonight' : `${day} night`;
+  if (e.type === 'day') return `${day} daytime`;
   return `${day} ${e.type}`;
 }
 const goTitle = e => (e.topHunt === 'colour' ? `Worth the alarm: ${e.spot.name}` : `Go for ${HUNT_VERB[e.topHunt]} at ${e.spot.name}`);
 function goBody(e) {
-  const when = e.type === 'night' ? `${sessionLabel(e)}, best around ${fmtTime(e.t, e.offset)}` : `${sessionLabel(e)} ${fmtTime(e.t, e.offset)}`;
+  const when = e.type === 'night' || e.type === 'day' ? `${sessionLabel(e)}, best around ${fmtTime(e.t, e.offset)}` : `${sessionLabel(e)} ${fmtTime(e.t, e.offset)}`;
   const hunt = e.topHunt !== 'colour' ? ` (${HUNT_LABEL[e.topHunt].toLowerCase()})` : '';
   const access = e.access && !e.access.inside ? ' Tide blocks access, check the briefing.' : '';
   const walk = e.hike ? ` (incl. ${e.hike} min hike)` : '';

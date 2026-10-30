@@ -12,6 +12,9 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
   - *Storm* uses storm energy (CAPE), lifted index, convective inhibition, gusts and thunderstorm forecasts in the hours around the session.
   - *Lightning* looks for storm potential in the dark hours after sunset or before sunrise, when lightning is easiest to shoot.
   - *Rainbow* needs showers, breaks in the cloud and the sun below 42°, and tells you which way to look.
+- **Daytime sessions: Forest and Waterfall.** Tick these hunts on a spot and each day gets a *Daytime* session, timed to the best hour between an hour after sunrise and an hour before sunset, with the window of good light either side.
+  - *Forest* wants soft overcast light (85%+ cloud is ideal, under 40% means harsh dappled light), wet foliage from rain in the previous 24–48 hours, light wind so leaves stay sharp on long exposures, and gets a bonus for mist. Heavy rain during the session counts against it.
+  - *Waterfall* wants flow from rain over the past 3 days and the past week (from 14 days of daily rain history), plus soft light. Very heavy recent rain triggers a flood warning (brown water, dangerous access) and lowers the score.
 - **Night sessions: Aurora and Milky Way.** Tick these hunts on a spot and each day gets a *Night* session, timed to the best hour between sunset and sunrise.
   - *Aurora* uses NOAA's free 3-day Kp forecast, your spot's geomagnetic latitude (Melbourne needs roughly Kp 5.5, Hobart about Kp 4), darkness, cloud and moonlight.
   - *Milky Way* calculates where the galactic core sits each hour, and combines that with true darkness, moon phase and position, and cloud. If you've set a facing direction, it tells you how well the core lines up with your composition.
@@ -92,7 +95,7 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=3.1`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=3.2`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:

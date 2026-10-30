@@ -3,7 +3,7 @@
 // - Forecast, tide and aurora data: network first, falling back to the last saved copy.
 // - Map tiles you've viewed are kept for offline use; live radar is never cached.
 // Bump VERSION with each release (matches APP_VERSION in js/app.js).
-const VERSION = '3.1';
+const VERSION = '3.2';
 const SHELL = `tidelight-shell-${VERSION}`;
 const DATA = 'tidelight-data';
 const TILES = 'tidelight-tiles';
