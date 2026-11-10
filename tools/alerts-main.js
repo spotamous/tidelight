@@ -169,6 +169,28 @@ async function handler(req) {
   let body = {};
   try { body = await req.json(); } catch { /* empty body from cron is fine */ }
 
+  // A crewmate shared a plan: tell everyone else in that crew.
+  if (body.action === 'crew') {
+    const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+    const { data, error } = await admin.auth.getUser(jwt);
+    if (error || !data?.user) return json({ error: 'Not signed in.' }, 401);
+    const { data: cp, error: e1 } = await admin.from('crew_plans').select('*').eq('id', body.crewPlanId).maybeSingle();
+    if (e1 || !cp) return json({ error: 'That crew plan was not found.' }, 404);
+    if (cp.user_id !== data.user.id) return json({ error: 'You can only announce your own plans.' }, 403);
+    const { data: mates } = await admin.from('crew_members').select('user_id').eq('crew_id', cp.crew_id).neq('user_id', data.user.id);
+    const e = { type: cp.type, t: cp.t, dayT: cp.day_t ?? cp.t, offset: cp.offset_s || 0 };
+    const hunt = cp.hunt && cp.hunt !== 'colour' && HUNT_LABEL[cp.hunt] ? ` (${HUNT_LABEL[cp.hunt].toLowerCase()})` : '';
+    const payload = {
+      title: `${cp.display_name} is heading to ${cp.spot_name}`,
+      body: `${sessionLabel(e)} ${fmtTime(cp.t, e.offset)}${cp.score != null ? `, score ${cp.score}${hunt}` : ''}.${cp.note ? ` "${cp.note}"` : ''} Open Plans to join them.`,
+      tag: `crew-${cp.session_key}`, url: './',
+    };
+    let sent = 0;
+    for (const m of mates || []) { try { sent += await sendToUser(admin, m.user_id, payload); } catch (err) { console.error('crew push failed', err?.message); } }
+    console.log(`crew plan ${cp.id}: ${mates?.length || 0} crewmates, ${sent} notifications`);
+    return json({ sent });
+  }
+
   if (body.action === 'test') {
     const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
     const { data, error } = await admin.auth.getUser(jwt);

@@ -179,7 +179,16 @@ function fogScore(hours, idx, spot, elevation) {
     }
     if (vis != null && vis < 1000) { score *= 0.8; f.push({ k: 'neutral', t: 'The fog may reach the lookout itself' }); }
   }
-  return { score: Math.round(clamp(score, 0, 100)), factors: f, spread };
+  const pc = x => Math.round(clamp(x) * 100);
+  const parts = [
+    { label: 'Saturation', value: pc(s1), note: `${spread.toFixed(1)}° above dew point` },
+    { label: 'Humidity', value: pc(s2), note: `${Math.round(rh)}%` },
+    { label: 'Calm night', value: pc(s3), note: `${Math.round(wind)} km/h overnight` },
+    { label: 'Clear night', value: pc(s4), note: `${Math.round(cloudNight)}% cloud overnight` },
+    { label: 'Visibility', value: pc(s5), note: vis != null ? `${(vis / 1000).toFixed(1)} km forecast` : 'No forecast' },
+  ];
+  if (spot.fogMode === 'above' && elevation != null) parts.push({ label: 'Elevation', value: pc((elevation - 50) / 250), note: `About ${Math.round(elevation)} m` });
+  return { score: Math.round(clamp(score, 0, 100)), factors: f, spread, parts };
 }
 
 /* ---------- Storms: instability + trigger near the session ---------- */
@@ -189,6 +198,17 @@ function stormAt(h) {
   const th = THUNDER(h.code) ? 1 : SHOWERY(h.code) ? 0.3 : 0;
   const cinF = h.cin != null ? 1 - 0.5 * clamp((Math.abs(h.cin) - 50) / 200) : 1;
   return clamp(0.4 * c + 0.25 * li + 0.35 * th) * cinF;
+}
+
+const pct = x => Math.round(clamp(x) * 100);
+function stormParts(h) {
+  const c = h.cape != null ? clamp((h.cape - 200) / 1800) : 0;
+  const li = h.li != null ? clamp(-h.li / 6) : c;
+  return [
+    { label: 'Storm energy', value: pct(c), note: h.cape != null ? `${Math.round(h.cape)} J/kg` : 'Not forecast' },
+    { label: 'Instability', value: pct(li), note: h.li != null ? `Lifted index ${h.li.toFixed(1)}` : 'From storm energy' },
+    { label: 'Thunder', value: THUNDER(h.code) ? 100 : SHOWERY(h.code) ? 30 : 0, note: THUNDER(h.code) ? 'Thunderstorms forecast' : SHOWERY(h.code) ? 'Showers forecast' : 'None forecast' },
+  ];
 }
 
 function stormFactors(h) {
@@ -209,7 +229,7 @@ function stormScore(hours, idx, type) {
   let best = -1, bh = null;
   for (const h of w) { const s = stormAt(h); if (s > best) { best = s; bh = h; } }
   if (!bh) return null;
-  return { score: Math.round(100 * best), factors: stormFactors(bh), peak: bh.t };
+  return { score: Math.round(100 * best), factors: stormFactors(bh), peak: bh.t, parts: stormParts(bh) };
 }
 
 /* ---------- Lightning: storm potential in darkness, when it's easiest to shoot ---------- */
@@ -225,14 +245,14 @@ function lightningScore(hours, idx, type) {
   if (!bh) return null;
   const f = stormFactors(bh);
   f.unshift({ k: 'neutral', t: type === 'sunset' ? 'Looks at the hours after dark' : 'Looks at the dark hours before dawn' });
-  return { score: Math.round(100 * best), factors: f, peak: bh.t, from: w[0].t, to: w[w.length - 1].t };
+  return { score: Math.round(100 * best), factors: f, peak: bh.t, from: w[0].t, to: w[w.length - 1].t, parts: stormParts(bh) };
 }
 
 /* ---------- Rainbows: showers + breaks + sun below 42° ---------- */
 function rainbowScore(hours, idx, type, spot) {
   if (!window.SunCalc) return null;
   const w = type === 'sunset' ? win(hours, idx - 3, idx) : win(hours, idx, idx + 3);
-  let best = -1, bh = null, bAz = null;
+  let best = -1, bh = null, bAz = null, bParts = null;
   for (const h of w) {
     const pos = window.SunCalc.getPosition(new Date(h.t * 1000), spot.lat, spot.lon);
     const alt = pos.altitude * 180 / Math.PI;
@@ -242,7 +262,14 @@ function rainbowScore(hours, idx, type, spot) {
     const gaps = 1 - clamp(((h.total ?? 50) - 55) / 40);
     const low = 1 - clamp(((h.low ?? 0) - 60) / 40);
     const s = showers * gaps * low;
-    if (s > best) { best = s; bh = h; bAz = (pos.azimuth * 180 / Math.PI + 180 + 360) % 360; }
+    if (s > best) {
+      best = s; bh = h; bAz = (pos.azimuth * 180 / Math.PI + 180 + 360) % 360;
+      bParts = [
+        { label: 'Showers', value: pct(showers), note: `${Math.round(pp)}% chance` },
+        { label: 'Breaks', value: pct(gaps * low), note: `${Math.round(h.total ?? 50)}% total cloud` },
+        { label: 'Sun angle', value: 100, note: `${Math.round(alt)}° up (needs under 42°)` },
+      ];
+    }
   }
   if (!bh) return { score: 0, factors: [{ k: 'bad', t: 'Sun is too high or below the horizon for a rainbow then' }] };
   const look = (bAz + 180) % 360;
@@ -250,7 +277,7 @@ function rainbowScore(hours, idx, type, spot) {
   if (SHOWERY(bh.code) || (bh.pp ?? 0) >= 35) f.push({ k: 'good', t: 'Showers about' }); else f.push({ k: 'bad', t: 'Not much rain around' });
   if ((bh.total ?? 50) <= 80) f.push({ k: 'good', t: 'Breaks in the cloud for the sun' }); else f.push({ k: 'bad', t: 'Too much cloud for the sun to break through' });
   f.push({ k: 'neutral', t: `Look ${compass(look)} (${Math.round(look)}°), with the sun behind you` });
-  return { score: Math.round(100 * best), factors: f, peak: bh.t, look };
+  return { score: Math.round(100 * best), factors: f, peak: bh.t, look, parts: bParts };
 }
 
 /* ---------- combine ---------- */
@@ -300,7 +327,7 @@ function auroraScore(hours, i0, i1, spot, offset) {
   if (!KP.length) return { score: 0, factors: [{ k: 'neutral', t: 'Aurora forecast unavailable right now (NOAA space weather feed)' }] };
   const need = kpNeeded(spot.lat, spot.lon);
   const south = spot.lat < 0;
-  let best = -1, bh = null, bkp = null, bmoon = null, maxKp = 0;
+  let best = -1, bh = null, bkp = null, bmoon = null, maxKp = 0, bParts = null;
   for (let i = i0; i <= i1; i++) {
     const h = hours[i];
     if (!h || sunAlt(h.t, spot) > -12) continue;
@@ -311,7 +338,14 @@ function auroraScore(hours, i0, i1, spot, offset) {
     const clear = 1 - clamp(((h.total ?? 50) - 20) / 70);
     const m = moonInfo(h.t, spot);
     const s = sKp * clear * (m.up ? 1 - 0.3 * m.frac : 1);
-    if (s > best) { best = s; bh = h; bkp = kp; bmoon = m; }
+    if (s > best) {
+      best = s; bh = h; bkp = kp; bmoon = m;
+      bParts = [
+        { label: 'Kp vs needed', value: pct(sKp), note: `Kp ${kp.toFixed(1)}, about ${need.toFixed(1)} needed here` },
+        { label: 'Clear sky', value: pct(clear), note: `${Math.round(h.total ?? 50)}% cloud` },
+        { label: 'Moonlight', value: m.up ? pct(1 - m.frac) : 100, note: m.up ? `Moon up, ${Math.round(m.frac * 100)}% lit` : 'Moon down' },
+      ];
+    }
   }
   if (!bh) return { score: 0, factors: [{ k: 'neutral', t: 'No aurora forecast for these dark hours yet' }] };
   const f = [];
@@ -321,7 +355,7 @@ function auroraScore(hours, i0, i1, spot, offset) {
   f.push(cl <= 30 ? { k: 'good', t: 'Mostly clear skies' } : cl >= 70 ? { k: 'bad', t: `Cloudy (${Math.round(cl)}%)` } : { k: 'neutral', t: `Some cloud (${Math.round(cl)}%)` });
   if (bmoon.up && bmoon.frac > 0.5) f.push({ k: 'bad', t: `Bright moon up (${Math.round(bmoon.frac * 100)}% lit)` });
   f.push({ k: 'neutral', t: `Look ${south ? 'south' : 'north'}, low over the horizon. Cameras see it before your eyes do.` });
-  return { score: Math.round(100 * best), factors: f, peak: bh.t, kp: bkp, need };
+  return { score: Math.round(100 * best), factors: f, peak: bh.t, kp: bkp, need, parts: bParts };
 }
 
 // Galactic centre (RA 266.417°, Dec −29.008°): altitude and azimuth for a time and place.
@@ -337,7 +371,7 @@ function coreAltAz(t, lat, lon) {
 
 function astroScore(hours, i0, i1, spot, offset) {
   if (!window.SunCalc) return null;
-  let best = -1, bh = null, bcore = null, bmoon = null, anyCore = false;
+  let best = -1, bh = null, bcore = null, bmoon = null, anyCore = false, bParts = null;
   for (let i = i0; i <= i1; i++) {
     const h = hours[i];
     if (!h) continue;
@@ -349,7 +383,15 @@ function astroScore(hours, i0, i1, spot, offset) {
     const m = moonInfo(h.t, spot);
     const clear = 1 - clamp(((h.total ?? 50) - 15) / 60);
     const s = dark * clamp((core.alt - 5) / 20) * (m.up ? 1 - 0.85 * m.frac : 1) * clear;
-    if (s > best) { best = s; bh = h; bcore = core; bmoon = m; }
+    if (s > best) {
+      best = s; bh = h; bcore = core; bmoon = m;
+      bParts = [
+        { label: 'Core height', value: pct((core.alt - 5) / 20), note: `${Math.round(core.alt)}° up` },
+        { label: 'Darkness', value: pct(dark), note: dark === 1 ? 'Full darkness' : 'Late twilight' },
+        { label: 'Moonlight', value: m.up ? pct(1 - 0.85 * m.frac) : 100, note: m.up ? `Moon up, ${Math.round(m.frac * 100)}% lit` : 'Moon down' },
+        { label: 'Clear sky', value: pct(clear), note: `${Math.round(h.total ?? 50)}% cloud` },
+      ];
+    }
   }
   if (!bh || !anyCore) return { score: 0, factors: [{ k: 'bad', t: "The Milky Way core isn't up during dark hours at this time of year" }] };
   const f = [];
@@ -363,7 +405,7 @@ function astroScore(hours, i0, i1, spot, offset) {
     alignment = { diff, text: `Core sits ${Math.round(diff)}° from where you face` };
     f.push({ k: diff <= 30 ? 'good' : 'neutral', t: alignment.text });
   }
-  return { score: Math.round(100 * best), factors: f, peak: bh.t, core: bcore, moon: bmoon, alignment };
+  return { score: Math.round(100 * best), factors: f, peak: bh.t, core: bcore, moon: bmoon, alignment, parts: bParts };
 }
 
 function computeNightHunts({ spot, data, i0, i1 }) {
@@ -469,7 +511,18 @@ function computeDayHunts({ spot, data, i0, i1 }) {
     }
     if (best.now.heavy) f.push({ k: 'bad', t: 'Heavy rain at the time: hard on gear and visibility' });
     else if (best.now.light) f.push({ k: 'neutral', t: 'Light rain at the time: bring a rain cover, keep the lens dry' });
-    out[kind] = { score: best.score, factors: f, peak: data.hours[bi].t, from, to, extra: best };
+    const softV = pct((best.tc - 40) / 50);
+    const parts = kind === 'forest' ? [
+      { label: 'Soft light', value: softV, note: `${Math.round(best.tc)}% cloud` },
+      { label: 'Wetness', value: pct(best.wet), note: `${best.r24.toFixed(1)} mm in 24 h, ${best.r48.toFixed(1)} mm the day before` },
+      { label: 'Still air', value: pct(1 - ((best.wind ?? 0) - 8) / 20), note: `${Math.round(best.wind ?? 0)} km/h` },
+      ...(best.mist ? [{ label: 'Mist', value: 100, note: 'Very humid or misty' }] : []),
+    ] : [
+      { label: 'Flow', value: pct(best.flow), note: `${best.r72.toFixed(0)} mm in 3 days${best.r7 != null ? `, ${best.r7.toFixed(0)} mm in 7` : ''}` },
+      { label: 'Soft light', value: softV, note: `${Math.round(best.tc)}% cloud` },
+      ...(best.flood ? [{ label: 'Flood risk', value: 0, note: 'Very heavy recent rain' }] : []),
+    ];
+    out[kind] = { score: best.score, factors: f, peak: data.hours[bi].t, from, to, extra: best, parts };
   }
   return out;
 }
@@ -615,7 +668,18 @@ function baseScore(h, tide, spot, ctx = {}) {
   }
 
   const score = 100 * canvas * block * rain * vis * tideF * windF * horizonF;
-  return { score: Math.round(score), factors };
+  // Each factor as 0–100, for the "why" bars.
+  const pct = x => Math.round(clamp(x) * 100);
+  const parts = [
+    { label: 'Cloud canvas', value: pct((canvas - 0.35) / 0.65), note: `${Math.round(canvasCover)}% mid/high cloud (best near 50%)` },
+    { label: 'Low cloud', value: pct(block), note: `${Math.round(low)}% low cloud overhead` },
+  ];
+  if (ctx.horizon) parts.push({ label: 'Horizon', value: pct(horizonF), note: `Towards the ${ctx.horizon.kind} (${ctx.horizon.dir})` });
+  parts.push({ label: 'Rain', value: pct(rain), note: `${Math.round(pp)}% chance` });
+  if (vis < 1) parts.push({ label: 'Visibility', value: pct(vis), note: 'Fog or mist' });
+  if (spot.coastal && spot.tide !== 'any' && tide) parts.push({ label: 'Tide', value: pct((tideF - 0.6) / 0.4), note: `${Math.round(tide.pos * 100)}% of range, ${spot.tide} wanted` });
+  parts.push({ label: 'Wind', value: pct((windF - 0.7) / 0.3), note: `${Math.round(wind)} km/h` });
+  return { score: Math.round(score), factors, parts };
 }
 
 /* ---------- personal model: learns from your keepers and duds ---------- */
@@ -762,10 +826,10 @@ function evaluateEvent({ spot, data, type, t, keepers, settings }) {
   const personal = personalScore(features, keepers);
 
   // Each hunt chosen for this spot gets its own score; the session's score is the best of them.
-  const hunts = computeHunts({ spot, data, idx, type, colour: { score: base.score, factors: base.factors } });
+  const hunts = computeHunts({ spot, data, idx, type, colour: { score: base.score, factors: base.factors, parts: base.parts } });
   let topHunt = null, top = -1;
   for (const [k, v] of Object.entries(hunts)) if (v && v.score > top) { top = v.score; topHunt = k; }
-  if (!topHunt) { topHunt = 'colour'; top = base.score; hunts.colour = { score: base.score, factors: base.factors }; }
+  if (!topHunt) { topHunt = 'colour'; top = base.score; hunts.colour = { score: base.score, factors: base.factors, parts: base.parts }; }
 
   let score = top;
   if (personal) score = Math.round((1 - personal.weight) * top + personal.weight * personal.score);
@@ -1407,6 +1471,28 @@ async function handler(req) {
   }
   let body = {};
   try { body = await req.json(); } catch { /* empty body from cron is fine */ }
+
+  // A crewmate shared a plan: tell everyone else in that crew.
+  if (body.action === 'crew') {
+    const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+    const { data, error } = await admin.auth.getUser(jwt);
+    if (error || !data?.user) return json({ error: 'Not signed in.' }, 401);
+    const { data: cp, error: e1 } = await admin.from('crew_plans').select('*').eq('id', body.crewPlanId).maybeSingle();
+    if (e1 || !cp) return json({ error: 'That crew plan was not found.' }, 404);
+    if (cp.user_id !== data.user.id) return json({ error: 'You can only announce your own plans.' }, 403);
+    const { data: mates } = await admin.from('crew_members').select('user_id').eq('crew_id', cp.crew_id).neq('user_id', data.user.id);
+    const e = { type: cp.type, t: cp.t, dayT: cp.day_t ?? cp.t, offset: cp.offset_s || 0 };
+    const hunt = cp.hunt && cp.hunt !== 'colour' && HUNT_LABEL[cp.hunt] ? ` (${HUNT_LABEL[cp.hunt].toLowerCase()})` : '';
+    const payload = {
+      title: `${cp.display_name} is heading to ${cp.spot_name}`,
+      body: `${sessionLabel(e)} ${fmtTime(cp.t, e.offset)}${cp.score != null ? `, score ${cp.score}${hunt}` : ''}.${cp.note ? ` "${cp.note}"` : ''} Open Plans to join them.`,
+      tag: `crew-${cp.session_key}`, url: './',
+    };
+    let sent = 0;
+    for (const m of mates || []) { try { sent += await sendToUser(admin, m.user_id, payload); } catch (err) { console.error('crew push failed', err?.message); } }
+    console.log(`crew plan ${cp.id}: ${mates?.length || 0} crewmates, ${sent} notifications`);
+    return json({ sent });
+  }
 
   if (body.action === 'test') {
     const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');

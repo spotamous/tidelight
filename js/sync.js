@@ -2,9 +2,9 @@
 // Local-first: the app always works from this device's copy. When signed in, it merges with your
 // private copy in Supabase record by record (newest change wins, deletions are remembered), then
 // uploads the result. Spot photos sync through a private storage bucket. The Claude key never syncs.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=3.2';
-import { getState, applyMerged, onLocalChange, COLLECTIONS, syncedSettings } from './storage.js?v=3.2';
-import { getPhotoBlob, putPhotoBlob, hasPhoto } from './photos.js?v=3.2';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=4.0';
+import { getState, applyMerged, onLocalChange, COLLECTIONS, syncedSettings } from './storage.js?v=4.0';
+import { getPhotoBlob, putPhotoBlob, hasPhoto } from './photos.js?v=4.0';
 
 const TABLE = 'user_state';
 const BUCKET = 'photos';
@@ -16,6 +16,8 @@ let syncing = false, again = false, timer = null;
 const status = { state: 'idle', error: null, lastSync: Number(localStorage.getItem('tidelight:lastSync') || 0) };
 const statusListeners = new Set();
 let onRemoteChange = () => {};
+let onRecovery = () => {};
+export const onPasswordRecovery = fn => { onRecovery = fn; };
 
 export const isConfigured = () =>
   !!(window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.startsWith('PASTE'));
@@ -36,6 +38,7 @@ export async function initSync(remoteChanged) {
   client.auth.onAuthStateChange((event, s) => {
     const wasSignedIn = !!session;
     session = s;
+    if (event === 'PASSWORD_RECOVERY') { setStatus({}); onRecovery(); return; }   // opened from a reset email
     setStatus({});
     if (s && (!wasSignedIn || event === 'SIGNED_IN')) syncNow();
   });
@@ -247,4 +250,83 @@ function explainFunctionError(name, status, detail) {
   if (status >= 500 || d.includes('boot') || d.includes('worker')) return `The function failed to start or crashed${status ? ` (error ${status})` : ''}. Open Edge Functions → check-alerts → Logs in Supabase and send me what it says.`;
   if (name === 'FunctionsFetchError') return 'Couldn\'t reach the alerts function. This usually means it isn\'t deployed yet, or it failed to start: check Edge Functions → check-alerts → Logs.';
   return `The alerts function returned an error${status ? ` (${status})` : ''}${detail ? `: ${detail.slice(0, 160)}` : ''}.`;
+}
+
+/* ---------- password reset (needs custom SMTP so Supabase can send the email) ---------- */
+export async function sendPasswordReset(email) {
+  if (!client) throw new Error('Sync is not set up yet.');
+  const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+  if (error) throw new Error(/rate|limit/i.test(error.message) ? 'Too many emails just now. Wait a few minutes and try again.' : error.message);
+}
+export async function setNewPassword(password) {
+  if (!client || !session) throw new Error('Open the link in your reset email first.');
+  if (password.length < 8) throw new Error('Choose a password of at least 8 characters.');
+  const { error } = await client.auth.updateUser({ password });
+  if (error) throw new Error(error.message);
+}
+
+/* ---------- crews: friends who share plans ---------- */
+const need = () => { if (!client || !session) throw new Error('Sign in first to use crews.'); return session.user.id; };
+const crewErr = e => new Error(/crew/.test(e?.message || '') && /does not exist/.test(e?.message || '') ? 'Crews aren\'t set up in your Supabase project yet.' : (e?.message || 'Something went wrong'));
+
+export async function myCrews() {
+  const uid = need();
+  const { data, error } = await client.from('crew_members').select('crew_id, display_name, crews ( id, name, invite_code, created_by )').eq('user_id', uid);
+  if (error) throw crewErr(error);
+  return (data || []).filter(r => r.crews).map(r => ({ ...r.crews, myName: r.display_name }));
+}
+export async function crewMembers(crewIds) {
+  need();
+  if (!crewIds.length) return [];
+  const { data, error } = await client.from('crew_members').select('crew_id, user_id, display_name, joined_at').in('crew_id', crewIds);
+  if (error) throw crewErr(error);
+  return data || [];
+}
+export async function crewPlans(crewIds, fromT) {
+  need();
+  if (!crewIds.length) return [];
+  const { data, error } = await client.from('crew_plans').select('*').in('crew_id', crewIds).gte('t', fromT).order('t', { ascending: true });
+  if (error) throw crewErr(error);
+  return data || [];
+}
+export async function createCrew(name, displayName) {
+  need();
+  const { data, error } = await client.rpc('create_crew', { p_name: name, p_display_name: displayName });
+  if (error) throw crewErr(error);
+  return data;
+}
+export async function joinCrew(code, displayName) {
+  need();
+  const { data, error } = await client.rpc('join_crew', { p_code: code, p_display_name: displayName });
+  if (error) throw crewErr(error);
+  return data;
+}
+export async function leaveCrew(crewId) {
+  const uid = need();
+  await client.from('crew_plans').delete().eq('crew_id', crewId).eq('user_id', uid);
+  const { error } = await client.from('crew_members').delete().eq('crew_id', crewId).eq('user_id', uid);
+  if (error) throw crewErr(error);
+}
+export async function renameInCrew(crewId, displayName) {
+  const uid = need();
+  const { error } = await client.from('crew_members').update({ display_name: displayName }).eq('crew_id', crewId).eq('user_id', uid);
+  if (error) throw crewErr(error);
+}
+// Share one of your plans with a crew (or update it if already shared), then tell the crew.
+export async function shareToCrew(crewId, displayName, p, note = '') {
+  const uid = need();
+  const row = {
+    crew_id: crewId, user_id: uid, display_name: displayName, session_key: p.sessionKey,
+    spot_name: p.spotName, lat: p.lat, lon: p.lon, type: p.type, t: p.t, day_t: p.dayT ?? null, leave: p.leave ?? null,
+    offset_s: p.offset || 0, score: p.score ?? null, hunt: p.hunt ?? null, note: note || null,
+  };
+  const { data, error } = await client.from('crew_plans').upsert(row, { onConflict: 'crew_id,user_id,session_key' }).select('id').single();
+  if (error) throw crewErr(error);
+  client.functions.invoke('check-alerts', { body: { action: 'crew', crewPlanId: data.id } }).catch(() => {});   // best effort
+  return data.id;
+}
+export async function unshareFromCrew(crewId, sessionKey) {
+  const uid = need();
+  const { error } = await client.from('crew_plans').delete().eq('crew_id', crewId).eq('user_id', uid).eq('session_key', sessionKey);
+  if (error) throw crewErr(error);
 }

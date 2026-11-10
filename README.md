@@ -6,7 +6,9 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 
 ## What it does
 
-- **Forecast page: The Call + spot matrix.** The page opens on the single best session in the next 3 days: your spot photo, a plain verdict ("Go for *fog.*"), the score, leave time and the main reason, with *Read the briefing* and *Plan it*. Below that are three runners-up, preferring different spots. *All 3 days* opens a grid of every spot against every session (sunrise, sunset, night), shaded in four score bands, with tide-blocked sessions marked. Tap a square for its summary and briefing.
+- **Home page: day by day.** Pills switch between today, the next two days and *All spots* (the spot matrix). A best-of-the-day card leads, then one row per session (sunrise, daytime, sunset, night) with its best spot and a one-line reason. Tap a row for the *why* panel: a plain-English sentence, a bar for every factor (with the confidence and your personal score), what could change it, and *Plan it*. *+ more spots* shows every spot for that session.
+- **Spots tab: a card per spot.** Each card shows the spot's best session in the next 3 days, why, and tags (hunt, hike, tide window, models agree or disagree, crewmates going). Filter by session type; the map and search are still there for adding spots.
+- **Previously: The Call + spot matrix.** The page opens on the single best session in the next 3 days: your spot photo, a plain verdict ("Go for *fog.*"), the score, leave time and the main reason, with *Read the briefing* and *Plan it*. Below that are three runners-up, preferring different spots. *All 3 days* opens a grid of every spot against every session (sunrise, sunset, night), shaded in four score bands, with tide-blocked sessions marked. Tap a square for its summary and briefing.
 - **Hunts per spot: Colour, Fog, Storm, Lightning, Rainbow.** Choose what you shoot at each spot. Each hunt gets its own 0–100 score, and the session shows the best one:
   - *Fog* (sunrise) uses the dew point gap, humidity, overnight wind and cloud, forecast visibility and recent rain. Mark a spot "above the fog" for lookouts; it then also checks the spot's elevation.
   - *Storm* uses storm energy (CAPE), lifted index, convective inhibition, gusts and thunderstorm forecasts in the hours around the session.
@@ -72,6 +74,27 @@ How it works: the app always runs from the device's own copy (so it works offlin
 
 Free-plan note: Supabase pauses free projects after a week without use. Opening the app syncs and counts as use; if it does pause, restore it from the Supabase dashboard.
 
+## Custom email (password resets and tester sign-ups)
+
+Supabase's built-in sender only allows a couple of emails an hour, and new free projects can't edit email templates without your own sender. Setting one up enables password resets and branded emails.
+
+1. **Pick an email provider with a free tier** that supports SMTP, such as Resend or Brevo, and create an account.
+2. **Verify your domain** (e.g. tysonwaldron.com) with the provider. It gives you a few DNS records; add them in Shopify admin → Settings → Domains → your domain → DNS settings (or wherever your domain's DNS is managed). Verification can take from minutes to a few hours.
+3. **Connect it to Supabase:** Authentication → Emails → SMTP Settings → enable Custom SMTP, then enter the provider's host, port, username and password (often an API key), a sender address such as `hello@tysonwaldron.com`, and the sender name `Tidelight`.
+4. **Raise the email rate limit** (Authentication → Rate Limits) to something like 30 an hour.
+5. **Brand the emails:** Authentication → Emails → Templates. Paste `supabase/email-templates/reset-password.html` into *Reset Password* (subject: "Reset your Tidelight password") and `confirm-signup.html` into *Confirm signup* (subject: "Welcome to Tidelight").
+6. **Optional:** switch *Confirm email* back on (Authentication → Sign In / Providers → Email) so new testers verify their address.
+
+Password resets in the app: Settings → Account and sync → type your email → *Forgot your password?* The email link opens Tidelight in the browser, where you choose a new password; then sign in with it everywhere, including the home-screen app. Make sure your GitHub Pages address is listed under Authentication → URL Configuration → Redirect URLs.
+
+## Crews
+
+Crews let photographers who shoot together share plans. Plans → Crew → *Create a crew* gives a 6-character invite code; friends join with *Join a crew*. Share any plan (with an optional note) from Upcoming or a session's details: crewmates get a notification, see who's going where under *Who's going where*, and can tap *I'm in* to add it to their own Plans with their own leave time. Sessions show "Sam is going" when a crewmate has planned the same place and time. Crew data lives in the `crews`, `crew_members` and `crew_plans` tables with row-level security: only members of a crew can see it. See `supabase/crews.sql`.
+
+## Gear checklists
+
+Every session lists what to bring, with a reason for each item: kit for the hunts in play (ND and polariser for waterfalls, red headtorch for astro, rain cover for forests), plus items the conditions call for (headtorch for walks in the dark, water and first aid for long or hard hikes, warm layers when it's cold, gumboots for low-tide rock shelves) and your own *always bring* list (Settings → My kit). Planned sessions keep the list so you can tick items off as you pack.
+
 ## Alerts (push notifications)
 
 Every hour, a Supabase Edge Function scores your spots with the app's own engine (including your personal score) and sends:
@@ -95,7 +118,7 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=3.2`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=4.0`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:
@@ -180,6 +203,9 @@ js/sync.js            Sign-in and sync with Supabase
 js/config.js          Supabase project URL and anon key
 supabase/schema.sql   Table, photo bucket and security rules to run in Supabase
 supabase/alerts.sql   Alert tables and the hourly schedule
+supabase/crews.sql    Crew tables, security rules and functions (already applied to your project)
+supabase/email-templates/   Branded reset-password and confirm-signup emails
+js/gear.js            Gear checklists
 supabase/functions/check-alerts/index.ts   The hourly alerts function (generated)
 tools/vapid-keys.html Generates your alert keys in the browser
 tools/build-alerts.mjs, tools/alerts-main.js   Builds the alerts function from the app's scoring code

@@ -1,5 +1,5 @@
-import { clamp, haversineKm, angleDiff, compass } from './util.js?v=3.2';
-import { computeHunts, computeNightHunts, computeDayHunts, huntsOf, NIGHT_HUNTS, DAY_HUNTS, HUNT_LABEL } from './hunts.js?v=3.2';
+import { clamp, haversineKm, angleDiff, compass } from './util.js?v=4.0';
+import { computeHunts, computeNightHunts, computeDayHunts, huntsOf, NIGHT_HUNTS, DAY_HUNTS, HUNT_LABEL } from './hunts.js?v=4.0';
 
 /* ---------- helpers ---------- */
 
@@ -135,7 +135,18 @@ export function baseScore(h, tide, spot, ctx = {}) {
   }
 
   const score = 100 * canvas * block * rain * vis * tideF * windF * horizonF;
-  return { score: Math.round(score), factors };
+  // Each factor as 0–100, for the "why" bars.
+  const pct = x => Math.round(clamp(x) * 100);
+  const parts = [
+    { label: 'Cloud canvas', value: pct((canvas - 0.35) / 0.65), note: `${Math.round(canvasCover)}% mid/high cloud (best near 50%)` },
+    { label: 'Low cloud', value: pct(block), note: `${Math.round(low)}% low cloud overhead` },
+  ];
+  if (ctx.horizon) parts.push({ label: 'Horizon', value: pct(horizonF), note: `Towards the ${ctx.horizon.kind} (${ctx.horizon.dir})` });
+  parts.push({ label: 'Rain', value: pct(rain), note: `${Math.round(pp)}% chance` });
+  if (vis < 1) parts.push({ label: 'Visibility', value: pct(vis), note: 'Fog or mist' });
+  if (spot.coastal && spot.tide !== 'any' && tide) parts.push({ label: 'Tide', value: pct((tideF - 0.6) / 0.4), note: `${Math.round(tide.pos * 100)}% of range, ${spot.tide} wanted` });
+  parts.push({ label: 'Wind', value: pct((windF - 0.7) / 0.3), note: `${Math.round(wind)} km/h` });
+  return { score: Math.round(score), factors, parts };
 }
 
 /* ---------- personal model: learns from your keepers and duds ---------- */
@@ -282,10 +293,10 @@ export function evaluateEvent({ spot, data, type, t, keepers, settings }) {
   const personal = personalScore(features, keepers);
 
   // Each hunt chosen for this spot gets its own score; the session's score is the best of them.
-  const hunts = computeHunts({ spot, data, idx, type, colour: { score: base.score, factors: base.factors } });
+  const hunts = computeHunts({ spot, data, idx, type, colour: { score: base.score, factors: base.factors, parts: base.parts } });
   let topHunt = null, top = -1;
   for (const [k, v] of Object.entries(hunts)) if (v && v.score > top) { top = v.score; topHunt = k; }
-  if (!topHunt) { topHunt = 'colour'; top = base.score; hunts.colour = { score: base.score, factors: base.factors }; }
+  if (!topHunt) { topHunt = 'colour'; top = base.score; hunts.colour = { score: base.score, factors: base.factors, parts: base.parts }; }
 
   let score = top;
   if (personal) score = Math.round((1 - personal.weight) * top + personal.weight * personal.score);

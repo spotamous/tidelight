@@ -1,14 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=3.2';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=3.2';
-import { DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=3.2';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=3.2';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=3.2';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert } from './sync.js?v=3.2';
-import { VAPID_PUBLIC_KEY } from './config.js?v=3.2';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=3.2';
-import { compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=3.2';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.0';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.0';
+import { driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.0';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.0';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=4.0';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.0';
+import { gearFor } from './gear.js?v=4.0';
+import { VAPID_PUBLIC_KEY } from './config.js?v=4.0';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.0';
+import { haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.0';
 
-export const APP_VERSION = '3.2';
+export const APP_VERSION = '4.0';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -241,7 +242,7 @@ function closeSheet() {
 
 /* ================= router ================= */
 
-function setTab(t) { if (t === 'forecast' && tab !== 'forecast') forecastView = 'call'; tab = t; closeSheet(); render(); window.scrollTo(0, 0); }
+function setTab(t) { if (t === 'forecast' && tab !== 'forecast') { homeDay = 0; homeOpen = null; } tab = t; closeSheet(); render(); window.scrollTo(0, 0); }
 
 function render() {
   if (map) { map.remove(); map = null; }
@@ -276,7 +277,6 @@ const SUN_ICON = {
 };
 
 
-let forecastView = 'call';   // 'call' (best pick) or 'matrix' (all spots × sessions)
 let matrixSel = null;          // selected session key in the matrix
 
 // Sessions in the next 3 days (today, tomorrow, the day after), each tagged with its day index.
@@ -302,6 +302,110 @@ function forecastAlerts(st, failed) {
     ${!st.settings.home ? `<div class="alert info">Set your home location in Settings to get drive-aware leave times.</div>` : ''}`;
 }
 
+let homeDay = 0;          // 0 today, 1 tomorrow, 2 the day after, or 'all' for the spot matrix
+let homeOpen = null;      // session whose "why" panel is open
+const homeMore = {};      // session type → showing every spot
+
+const SESSION_TYPES = ['sunrise', 'day', 'sunset', 'night'];
+const TYPE_NAME = { sunrise: 'Sunrise', day: 'Daytime', sunset: 'Sunset', night: 'Night' };
+
+function dayPills(offset) {
+  const now = Date.now() / 1000;
+  const label = i => (i === 0 ? 'Today' : fmtWeekday(now + i * 86400, offset).slice(0, 3));
+  return `<div class="day-pills" role="tablist" aria-label="Choose a day">
+    ${[0, 1, 2].map(i => `<button role="tab" aria-selected="${homeDay === i}" class="${homeDay === i ? 'on' : ''}" data-day="${i}">${label(i)}</button>`).join('')}
+    <button role="tab" aria-selected="${homeDay === 'all'}" class="${homeDay === 'all' ? 'on' : ''}" data-day="all">All spots</button>
+  </div>`;
+}
+function wirePills(v) {
+  $$('[data-day]', v).forEach(b => b.onclick = () => {
+    homeDay = b.dataset.day === 'all' ? 'all' : Number(b.dataset.day);
+    homeOpen = null;
+    renderForecast(v);
+  });
+}
+
+// One line on why: the strongest point in its favour, or the main thing against it.
+function whyLine(e) {
+  const fs = e.hunts?.[e.topHunt]?.factors || e.factors || [];
+  const good = fs.find(f => f.k === 'good'), bad = fs.find(f => f.k === 'bad');
+  return (e.score >= 50 ? (good || bad) : (bad || good))?.t || '';
+}
+function whySentence(e) {
+  const fs = e.hunts?.[e.topHunt]?.factors || e.factors || [];
+  const goods = fs.filter(f => f.k === 'good').slice(0, 2).map((f, i) => (i ? f.t.charAt(0).toLowerCase() + f.t.slice(1) : f.t));
+  const bad = fs.find(f => f.k === 'bad')?.t;
+  let txt = goods.length ? goods.join('; ') + '.' : '';
+  if (bad) txt += `${txt ? ' ' : ''}${goods.length ? 'Against it: ' + bad.charAt(0).toLowerCase() + bad.slice(1) : bad}.`;
+  return txt || 'Nothing stands out either way.';
+}
+function couldChange(e) {
+  const H = e.hunts?.[e.topHunt] || {};
+  switch (e.topHunt) {
+    case 'colour': {
+      if (e.confidence?.level === 'low') return 'The weather models disagree, so check again the evening before.';
+      const hz = (H.parts || []).find(p => p.label === 'Horizon');
+      if (hz && hz.value < 60) return 'Cloud on the horizon could block the light. Check the radar before you leave.';
+      return 'Low cloud rolling in on the horizon is the main risk. Re-check the evening before.';
+    }
+    case 'fog': return 'A breeze overnight would mix the fog out. Check the wind before you set the alarm.';
+    case 'storm': case 'lightning': return 'Storms are hit and miss. Watch the radar from mid-afternoon.';
+    case 'rainbow': return 'Rainbows need sun and showers at the same moment. Watch the sky in that hour.';
+    case 'forest': return 'Sun breaking through would harshen the light. Keep an eye on the cloud.';
+    case 'waterfall': return H.extra?.flood ? 'Heavy rain can close tracks and make crossings dangerous. Check before heading in.' : 'More rain before you go means more flow; a dry spell means less.';
+    case 'aurora': return 'Aurora forecasts shift by the hour. Check the Kp again at dusk.';
+    case 'astro': return 'Cloud can creep in after dark. Check the radar before heading out.';
+    default: return '';
+  }
+}
+function partBar(p, cls = '') {
+  return `<div class="part ${cls}"><span class="part-label">${esc(p.label)}</span>
+    <span class="part-track"><i style="width:${Math.max(0, Math.min(100, p.value))}%"></i></span>
+    <span class="part-val num">${Math.round(p.value)}</span>
+    <span class="part-note">${esc(p.note || '')}</span></div>`;
+}
+function whyPanel(e) {
+  const H = e.hunts?.[e.topHunt] || {};
+  const parts = [...(H.parts || [])];
+  const extra = [];
+  if (e.topHunt === 'colour' && e.confidence) extra.push({ label: 'Models agree', value: Math.max(0, 100 - e.confidence.spread * 2), note: `${cap(e.confidence.level)} confidence: within ${e.confidence.spread} points` });
+  if (e.personal) extra.push({ label: 'Your style', value: e.personal.score, note: `Compared with your ${e.personal.n} keepers` });
+  const planned = S().plans.some(p => p.key === e.key);
+  const going = crewGoing(e);
+  return `<div class="why">
+    <p class="eyebrow">Why ${e.score}</p>
+    <p class="why-sentence">${esc(whySentence(e))}</p>
+    ${parts.map(p => partBar(p)).join('')}${extra.map(p => partBar(p, 'alt')).join('')}
+    ${couldChange(e) ? `<p class="could">${esc(couldChange(e))}</p>` : ''}
+    ${going.length ? `<p class="crew-going">${esc(goingText(going))}</p>` : ''}
+    <div class="row">
+      <button class="btn primary" data-plan="${esc(e.key)}" ${planned ? 'disabled' : ''}>${planned ? 'Planned' : 'Plan it'}</button>
+      <button class="btn" data-ev="${esc(e.key)}">Full briefing</button>
+    </div>
+  </div>`;
+}
+// "6:17am", "best 2:10am", or a daytime window "10:00am–2:00pm"
+function sessionWhen(e) {
+  const o = e.offset, H = e.hunts?.[e.topHunt];
+  if (e.type === 'day' && H?.from) return H.from === H.to ? fmtTime(e.t, o) : `${fmtTime(H.from, o)}–${fmtTime(H.to, o)}`;
+  return e.type === 'night' ? `best ${fmtTime(e.t, o)}` : fmtTime(e.t, o);
+}
+function sessionRow(e, open) {
+  const when = sessionWhen(e);
+  return `<div class="srow ${open ? 'open' : ''}">
+    <button class="srow-main" data-why="${esc(e.key)}" aria-expanded="${open}">
+      ${horizon(e, false, coverUrl(e.spot))}
+      <span class="srow-text">
+        <span class="srow-kind">${TYPE_NAME[e.type]} — ${when}${e.topHunt !== 'colour' ? ` — ${HUNT_LABEL[e.topHunt]}` : ''}</span>
+        <span class="srow-name">${esc(e.spot.name)}</span>
+        <span class="srow-why">${unsure(e) ? 'Models disagree. ' : ''}${esc(whyLine(e))}</span>
+      </span>
+      <span class="srow-toggle">${open ? 'Hide' : 'Why'}</span>
+    </button>
+    ${open ? whyPanel(e) : ''}
+  </div>`;
+}
+
 async function renderForecast(v) {
   const st = S();
   if (!st.spots.length) return emptySpots(v);
@@ -310,72 +414,48 @@ async function renderForecast(v) {
   if (tab !== 'forecast') return;
   const evs = next3Days();
   indexEvents(evs);
-  if (forecastView === 'matrix') return renderMatrix(v, evs, st, failed);
+  const offset = evs[0]?.offset ?? 0;
+  if (homeDay === 'all') return renderMatrix(v, evs, st, failed);
 
-  const ranked = [...evs].sort((a, b) => b.score - a.score);
-  const best = ranked[0];
-  if (!best) {
-    v.innerHTML = `${forecastAlerts(st, failed)}<div class="empty"><h1>No sessions <em>yet.</em></h1><p>Check your spots have sunrise, sunset or a night hunt turned on.</p></div>`;
-    return;
-  }
-  const o = best.offset;
-  const photo = coverUrl(best.spot);
-  const reason = (best.hunts?.[best.topHunt]?.factors || best.factors).find(f => f.k === 'good')?.t;
-  const planned = S().plans.some(p => p.key === best.key);
-  // Runners-up: prefer other spots first, so the list offers real alternatives.
-  const rest = ranked.slice(1);
-  const seen = new Set([best.spot.id]);
-  const also = [];
-  for (const e of rest) if (also.length < 3 && !seen.has(e.spot.id)) { also.push(e); seen.add(e.spot.id); }
-  for (const e of rest) if (also.length < 3 && !also.includes(e)) also.push(e);
-  also.sort((a, b) => b.score - a.score);
-  const tag = e => e.access && !e.access.inside ? '<span class="also-tag warn">Tide blocks</span>'
-    : e.dayIdx === 0 ? `<span class="also-tag hot">${e.type === 'night' ? 'Tonight' : 'Today'}</span>`
-    : `<span class="also-tag">${HUNT_LABEL[e.topHunt]}</span>`;
+  const dayEvs = evs.filter(e => e.dayIdx === homeDay);
+  const best = [...dayEvs].sort((a, b) => b.score - a.score)[0];
+  const dayWord = homeDay === 0 ? 'today' : homeDay === 1 ? 'tomorrow' : fmtWeekday(Date.now() / 1000 + homeDay * 86400, offset);
+  const sections = SESSION_TYPES.map(type => {
+    const list = dayEvs.filter(e => e.type === type).sort((a, b) => b.score - a.score);
+    if (!list.length) return '';
+    const shown = homeMore[type] ? list : list.slice(0, 1);
+    return `<section class="sgroup">
+      ${shown.map(e => sessionRow(e, homeOpen === e.key)).join('')}
+      ${list.length > 1 ? `<button class="link-btn more" data-more="${type}">${homeMore[type] ? 'Show just the best' : `+ ${list.length - 1} more spot${list.length > 2 ? 's' : ''} for ${TYPE_NAME[type].toLowerCase()}`}</button>` : ''}
+    </section>`;
+  }).join('');
 
   v.innerHTML = `
+    ${dayPills(offset)}
     ${forecastAlerts(st, failed)}
-    <section class="call">
-      <div class="call-photo ${photo ? '' : 'no-photo'}" style="--p:${best.score}">
-        ${photo ? `<img src="${photo}" alt="${esc(best.spot.name)}">` : ''}
-      </div>
-      <div class="call-panel">
-        <p class="eyebrow">${esc(cap(sessionName(best)))} — ${fmtTime(best.t, o)}</p>
-        <div class="call-head">
-          <h1>${heroTitle(best)}</h1>
-          <div class="call-score"><span class="num">${best.score}</span><span>${esc(HUNT_LABEL[best.topHunt])} score</span></div>
-        </div>
-        ${confLine(best)}
-        <div class="call-spot">${esc(best.spot.name)}</div>
-        <div class="call-meta">
-          <span><strong>Leave ${fmtTime(best.leave, o)}</strong></span>
-          ${travelText(best) ? `<span>${travelText(best)}</span>` : ''}
-          ${reason ? `<span>${esc(reason)}</span>` : ''}
-        </div>
-        ${best.access && !best.access.inside ? '<div class="call-warn">The tide blocks access for this session. Check the briefing.</div>' : ''}
-        <div class="row call-actions">
-          <button class="btn primary" data-ev="${esc(best.key)}">Read the briefing</button>
-          <button class="btn" id="planBest" ${planned ? 'disabled' : ''}>${planned ? 'Planned' : 'Plan it'}</button>
-        </div>
-      </div>
-    </section>
+    ${best ? `<button class="best-card" data-why="${esc(best.key)}">
+        ${coverUrl(best.spot) ? `<img src="${coverUrl(best.spot)}" alt="">` : `<span class="best-ph" style="--p:${best.score}"></span>`}
+        <span class="best-text">
+          <span class="eyebrow">Best ${esc(dayWord)}</span>
+          <span class="best-title">${heroTitle(best)}</span>
+          <span class="best-sub">${esc(best.spot.name)}, ${TYPE_NAME[best.type].toLowerCase()} ${sessionWhen(best)}. Leave ${fmtTime(best.leave, best.offset)}.</span>
+          ${confLine(best)}
+        </span>
+        <span class="best-score num">${best.score}</span>
+      </button>` : `<div class="empty"><h2>Nothing left ${esc(dayWord)}.</h2><p>Try another day, or check your spots have sessions and hunts turned on.</p></div>`}
+    ${sections}
+    <p class="small muted" style="margin-top:22px">Tap a session to see why it scored that way. Forecasts are estimates; always check official warnings before heading out.</p>`;
 
-    ${also.length ? `<section class="also">
-      <div class="also-head"><span class="eyebrow">Also worth the alarm</span><button class="link-btn" id="toMatrix">All 3 days</button></div>
-      ${also.map(e => `<button class="also-row" data-ev="${esc(e.key)}">
-          ${horizon(e, false, coverUrl(e.spot))}
-          <span class="also-text">
-            <span class="also-name">${esc(e.spot.name)}</span>
-            <span class="also-sub">${esc(cap(sessionName(e)))} ${fmtTime(e.t, e.offset)}, ${esc(HUNT_LABEL[e.topHunt].toLowerCase())}</span>
-          </span>
-          ${tag(e)}
-        </button>`).join('')}
-    </section>` : `<div class="row"><button class="btn block" id="toMatrix">See all 3 days</button></div>`}
-    <p class="small muted" style="margin-top:22px">Forecasts are estimates; always check official marine and weather warnings before heading out.</p>`;
-
-  $('#toMatrix').onclick = () => { forecastView = 'matrix'; matrixSel = null; renderForecast(v); window.scrollTo(0, 0); };
-  const pb = $('#planBest');
-  if (pb) pb.onclick = () => { addPlan(best); pb.textContent = 'Planned'; pb.disabled = true; toast('Planned. Rate it afterwards so the coach learns.'); };
+  wirePills(v);
+  $$('[data-why]', v).forEach(b => b.onclick = () => { homeOpen = homeOpen === b.dataset.why ? null : b.dataset.why; renderForecast(v); });
+  $$('[data-more]', v).forEach(b => b.onclick = () => { homeMore[b.dataset.more] = !homeMore[b.dataset.more]; renderForecast(v); });
+  $$('[data-plan]', v).forEach(b => b.onclick = () => {
+    const e = eventIndex.get(b.dataset.plan);
+    if (!e) return;
+    addPlan(e);
+    b.textContent = 'Planned'; b.disabled = true;
+    toast(crewState.crews.length ? 'Planned. Share it with your crew from Plans.' : 'Planned. Rate it afterwards so the coach learns.');
+  });
 }
 
 const band = s => (s >= 80 ? 'b4' : s >= 65 ? 'b3' : s >= 50 ? 'b2' : 'b1');
@@ -396,8 +476,8 @@ function renderMatrix(v, evs, st, failed) {
   const typeName = { sunrise: 'Sunrise', day: 'Daytime', sunset: 'Sunset', night: 'Night' };
 
   v.innerHTML = `
-    <button class="link-btn back" id="toCall">← Best pick</button>
-    <p class="eyebrow" style="margin-top:10px">Every spot, next 3 days</p>
+    ${dayPills(offset)}
+    <p class="eyebrow" style="margin-top:14px">Every spot, next 3 days</p>
     <h1>Where's the <em>light?</em></h1>
     ${forecastAlerts(st, failed)}
     <div class="mx-wrap">
@@ -428,7 +508,7 @@ function renderMatrix(v, evs, st, failed) {
     </section>
     <div class="row"><button class="btn primary block" data-ev="${esc(sel.key)}">Open the briefing</button></div>` : '<p class="muted">No sessions in the next 3 days.</p>'}
   `;
-  $('#toCall').onclick = () => { forecastView = 'call'; renderForecast(v); window.scrollTo(0, 0); };
+  wirePills(v);
   $$('[data-mx]', v).forEach(b => b.onclick = () => {
     const keepScroll = $('.mx-wrap').scrollLeft;
     matrixSel = b.dataset.mx;
@@ -474,7 +554,7 @@ function openEvent(key) {
     ${coverUrl(e.spot) ? `<img class="banner" src="${coverUrl(e.spot)}" alt="${esc(e.spot.name)}">` : ''}
     <div class="sheet-head">
       ${horizon(e, true)}
-      <div><h2>${esc(e.spot.name)}</h2><div class="muted">${e.type === 'night' || e.type === 'day' ? `${cap(sessionName(e))}, best around ${fmtTime(e.t, o)}` : `${fmtDay(e.t, o)}, ${e.type} at ${fmtTime(e.t, o)}`}</div><div class="verdict">${verdict(e)}</div>${confLine(e)}</div>
+      <div><h2>${esc(e.spot.name)}</h2><div class="muted">${e.type === 'night' || e.type === 'day' ? `${cap(sessionName(e))}, best around ${fmtTime(e.t, o)}` : `${fmtDay(e.t, o)}, ${e.type} at ${fmtTime(e.t, o)}`}</div><div class="verdict">${verdict(e)}</div>${confLine(e)}${crewGoing(e).length ? `<div class="crew-going">${esc(goingText(crewGoing(e)))}</div>` : ''}</div>
     </div>
     <ul class="timeline">${tl.map(x => `<li class="${x.cls || ''}"><time>${fmtTime(x.t, o)}</time><span>${x.label}</span></li>`).join('')}</ul>
 
@@ -498,11 +578,21 @@ function openEvent(key) {
     ${e.access && !e.access.inside ? `<div class="alert danger">${e.access.none ? 'The tide stays above your access level around this session.' : `Tide access window is ${fmtTime(e.access.start, o)} to ${fmtTime(e.access.backBy, o)}, which doesn't cover this session.`}</div>` : ''}
     <div class="cond-grid">${cond.map(([k, val]) => `<div><b>${val}</b><span>${k}</span></div>`).join('')}</div>
 
+    <h3>What to bring</h3>
+    <ul class="gear-preview">${gearFor(e, S().settings).map(g => `<li><strong>${esc(g.label)}</strong><span>${esc(g.why)}</span></li>`).join('')}</ul>
+    <p class="small muted">Plan the shoot to tick these off as you pack. Add your own always-bring items in Settings → My kit.</p>
+
     <div class="row" style="margin-top:20px">
       <button class="btn primary" id="planBtn" ${planned ? 'disabled' : ''}>${planned ? 'Planned' : 'Plan this shoot'}</button>
+      ${currentUser() && crewState.crews.length ? '<button class="btn" id="shareBtn">Share with crew</button>' : ''}
       <button class="btn" id="icsBtn">Add to calendar</button>
     </div>
   `);
+  const sb = $('#shareBtn');
+  if (sb) sb.onclick = () => {
+    if (!S().plans.some(p => p.key === e.key)) addPlan(e);
+    openShareSheet(S().plans.find(p => p.key === e.key).id);
+  };
 
   $('#planBtn').onclick = () => {
     addPlan(e);
@@ -527,6 +617,194 @@ function openEvent(key) {
   };
 }
 
+/* ================= crews ================= */
+
+const crewState = { loaded: false, crews: [], members: [], plans: [], error: null };
+const sessionKeyOf = (lat, lon, type, t) => `${lat.toFixed(3)},${lon.toFixed(3)}:${type}:${Math.round(t / 3600)}`;
+
+async function loadCrew() {
+  if (!currentUser()) { Object.assign(crewState, { loaded: true, crews: [], members: [], plans: [], error: null }); return; }
+  try {
+    const crews = await myCrews();
+    const ids = crews.map(c => c.id);
+    const [members, plans] = await Promise.all([crewMembers(ids), crewPlans(ids, Math.floor(Date.now() / 1000) - 3 * 3600)]);
+    Object.assign(crewState, { loaded: true, crews, members, plans, error: null });
+  } catch (e) {
+    Object.assign(crewState, { loaded: true, error: e.message });
+  }
+}
+
+// Crewmates heading to roughly the same place and session (within ~1.5 km and 2 hours).
+function crewGoing(e) {
+  const me = currentUser()?.id;
+  if (!crewState.plans.length || !e?.spot) return [];
+  const names = new Set();
+  for (const cp of crewState.plans) {
+    if (cp.user_id === me || cp.type !== e.type || Math.abs(cp.t - e.t) > 7200) continue;
+    if (haversineKm({ lat: cp.lat, lon: cp.lon }, e.spot) > 1.5) continue;
+    names.add(cp.display_name);
+  }
+  return [...names];
+}
+function goingText(names) {
+  if (!names.length) return '';
+  const list = names.length <= 2 ? names.join(' and ') : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
+  return `${list} ${names.length === 1 ? 'is' : 'are'} going`;
+}
+function myNameIn(crew) { return crew.myName || (currentUser()?.email || 'Me').split('@')[0]; }
+
+// Share one of your plans with one or more crews, with an optional note.
+function openShareSheet(planId) {
+  const p = S().plans.find(x => x.id === planId);
+  if (!p) return;
+  if (!crewState.crews.length) { toast('Make or join a crew first, at the top of Plans.'); return; }
+  openSheet(`
+    <h2>Share with your crew</h2>
+    <p class="muted small">${esc(p.spotName)}, ${esc(fmtDay(p.dayT ?? p.t, p.offset))} ${esc(TYPE_NAME[p.type] || p.type)} ${fmtTime(p.t, p.offset)}. Crewmates see the spot, the time and the score, and get a notification.</p>
+    <form class="form" id="shareForm">
+      <fieldset><legend>Crews</legend>
+        ${crewState.crews.map((c, i) => `<label class="check"><input type="checkbox" name="crew" value="${c.id}" ${i === 0 ? 'checked' : ''}> ${esc(c.name)}</label>`).join('')}
+      </fieldset>
+      <label>Note (optional)<input name="note" maxlength="200" placeholder="e.g. Meeting at the car park 5:10am"></label>
+      <div class="row"><button class="btn primary" type="submit">Share</button><button class="btn ghost" type="button" data-close>Cancel</button></div>
+    </form>`);
+  $('#shareForm').onsubmit = async ev => {
+    ev.preventDefault();
+    const f = new FormData(ev.target);
+    const ids = f.getAll('crew');
+    if (!ids.length) return toast('Pick a crew');
+    const btn = ev.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Sharing…';
+    try {
+      if (!p.sessionKey) update(s => { const x = s.plans.find(y => y.id === p.id); x.sessionKey = sessionKeyOf(x.lat, x.lon, x.type, x.t); });
+      const plan = S().plans.find(x => x.id === p.id);
+      for (const id of ids) {
+        const crew = crewState.crews.find(c => c.id === id);
+        await shareToCrew(id, myNameIn(crew), plan, String(f.get('note') || '').trim());
+      }
+      update(s => { const x = s.plans.find(y => y.id === p.id); x.sharedTo = [...new Set([...(x.sharedTo || []), ...ids])]; });
+      await loadCrew();
+      closeSheet();
+      toast('Shared. Your crew has been notified.');
+      render();
+    } catch (e) { toast(e.message, 6000); btn.disabled = false; btn.textContent = 'Share'; }
+  };
+}
+
+// Join a crewmate's plan: add it to your Plans (with your own leave time) and tell the crew you're in.
+async function joinCrewPlan(cpId) {
+  const cp = crewState.plans.find(x => x.id === cpId);
+  if (!cp) return;
+  const st = S();
+  const drive = driveMinutes({ lat: cp.lat, lon: cp.lon }, st.settings);
+  const arrive = Number(st.settings.arriveBeforeMin ?? 30);
+  const plan = {
+    id: uid(), key: `crew:${cp.session_key}`, spotId: null, spotName: cp.spot_name, lat: cp.lat, lon: cp.lon,
+    type: cp.type, t: cp.t, dayT: cp.day_t, leave: cp.t - (arrive + (drive || 0)) * 60, offset: cp.offset_s, score: cp.score,
+    hunt: cp.hunt, sessionKey: cp.session_key, features: null, brief: cp.note ? `Crew note: ${cp.note}` : '',
+    gear: gearFor({ type: cp.type, t: cp.t, topHunt: cp.hunt || 'colour', hunts: { [cp.hunt || 'colour']: { score: 100 } }, spot: {}, hour: {} }, st.settings),
+    packed: [], rating: null, sharedTo: [cp.crew_id],
+  };
+  if (!S().plans.some(p => p.sessionKey === cp.session_key)) update(s => { s.plans.push(plan); });
+  const crew = crewState.crews.find(c => c.id === cp.crew_id);
+  try { await shareToCrew(cp.crew_id, myNameIn(crew), S().plans.find(p => p.sessionKey === cp.session_key), ''); } catch (e) { toast(e.message, 6000); }
+  await loadCrew();
+  toast("You're in. It's in your Plans and the crew knows.");
+  render();
+}
+
+function crewPanel() {
+  if (!currentUser()) return `<section class="panel"><h2>Crew</h2><p class="small muted">Sign in under Settings → Account and sync to make or join a crew and share plans with the people you shoot with.</p></section>`;
+  if (!crewState.loaded) return `<section class="panel" id="crewPanel"><h2>Crew</h2><p class="loading">Loading your crew…</p></section>`;
+  if (crewState.error) return `<section class="panel"><h2>Crew</h2><p class="small sync-err">${esc(crewState.error)}</p></section>`;
+  const me = currentUser().id;
+  if (!crewState.crews.length) return `<section class="panel">
+    <h2>Crew</h2>
+    <p class="small muted">Share plans with the people you shoot with: see who's heading where, join their sessions, and get a notification when someone shares.</p>
+    <form class="form" id="crewCreate">
+      <div class="two"><label>Crew name<input name="name" maxlength="60" required placeholder="e.g. Dawn patrol"></label><label>Your name<input name="me" maxlength="40" required value="${esc((currentUser().email || '').split('@')[0])}"></label></div>
+      <button class="btn primary" type="submit">Create a crew</button>
+    </form>
+    <form class="form" id="crewJoin" style="margin-top:16px">
+      <div class="two"><label>Invite code<input name="code" maxlength="6" required autocapitalize="characters" placeholder="ABC123"></label><label>Your name<input name="me" maxlength="40" required value="${esc((currentUser().email || '').split('@')[0])}"></label></div>
+      <button class="btn" type="submit">Join a crew</button>
+    </form>
+  </section>`;
+
+  // Group crew plans by session: shared sessions show everyone who's in.
+  const groups = [];
+  for (const cp of crewState.plans) {
+    const g = groups.find(x => x.type === cp.type && Math.abs(x.t - cp.t) <= 7200 && haversineKm(x, cp) <= 1.5);
+    if (g) g.items.push(cp); else groups.push({ type: cp.type, t: cp.t, lat: cp.lat, lon: cp.lon, items: [cp] });
+  }
+  const groupRow = g => {
+    const first = g.items[0];
+    const mine = g.items.some(x => x.user_id === me);
+    const people = [...new Set(g.items.map(x => x.user_id === me ? 'You' : x.display_name))];
+    const notes = g.items.filter(x => x.note).map(x => `<p class="crew-note">“${esc(x.note)}” <span class="muted">${esc(x.user_id === me ? 'You' : x.display_name)}</span></p>`).join('');
+    const scores = g.items.map(x => x.score).filter(x => x != null);
+    return `<div class="plan crew-plan">
+      <div class="ev-title">${esc(first.spot_name)}</div>
+      <div class="ev-sub"><span><strong>${esc(fmtDay(first.day_t ?? first.t, first.offset_s))}, ${esc(TYPE_NAME[first.type] || first.type)} ${fmtTime(first.t, first.offset_s)}</strong></span>${scores.length ? `<span>Score ${Math.max(...scores)}</span>` : ''}</div>
+      <p class="crew-people">${esc(people.join(', '))}</p>
+      ${notes}
+      ${mine ? '<p class="small caramel">You\'re in</p>' : `<div class="row"><button class="btn" data-join="${first.id}">I'm in</button></div>`}
+    </div>`;
+  };
+  return `<section class="panel">
+    <h2>Crew</h2>
+    ${crewState.crews.map(c => {
+      const mem = crewState.members.filter(m => m.crew_id === c.id);
+      return `<div class="crew-head">
+        <div><div class="ev-title">${esc(c.name)}</div><div class="ev-sub"><span>${esc(mem.map(m => m.user_id === me ? 'You' : m.display_name).join(', '))}</span></div></div>
+        <div class="crew-code"><span class="num">${esc(c.invite_code)}</span><button class="btn ghost small-btn" data-invite="${c.id}">Invite</button></div>
+      </div>`;
+    }).join('')}
+    <h3>Who's going where</h3>
+    ${groups.length ? groups.map(groupRow).join('') : '<p class="small muted">No crew plans yet. Share one of yours from Upcoming below.</p>'}
+    <div class="row"><button class="btn ghost small-btn" id="crewMore">Join or make another crew</button>${crewState.crews.length ? `<button class="btn ghost small-btn" id="crewLeave">Leave a crew</button>` : ''}</div>
+  </section>`;
+}
+
+function wireCrewPanel(v) {
+  const meName = f => String(f.get('me') || '').trim();
+  const cf = $('#crewCreate', v);
+  if (cf) cf.onsubmit = async ev => {
+    ev.preventDefault();
+    const f = new FormData(cf);
+    try { const c = await createCrew(String(f.get('name')).trim(), meName(f)); await loadCrew(); closeSheet(); toast(`Crew made. Invite code ${c.invite_code}.`, 5000); render(); }
+    catch (e) { toast(e.message, 6000); }
+  };
+  const jf = $('#crewJoin', v);
+  if (jf) jf.onsubmit = async ev => {
+    ev.preventDefault();
+    const f = new FormData(jf);
+    try { const c = await joinCrew(String(f.get('code')).trim(), meName(f)); await loadCrew(); closeSheet(); toast(`You've joined ${c.name}.`); render(); }
+    catch (e) { toast(e.message, 6000); }
+  };
+  $$('[data-invite]', v).forEach(b => b.onclick = async () => {
+    const c = crewState.crews.find(x => x.id === b.dataset.invite);
+    const text = `Join my Tidelight crew "${c.name}" with the code ${c.invite_code}: open Tidelight, then Plans → Crew → Join a crew. ${location.origin + location.pathname}`;
+    try {
+      if (navigator.share) await navigator.share({ title: 'Join my Tidelight crew', text });
+      else { await navigator.clipboard.writeText(text); toast('Invite copied. Paste it in a message.'); }
+    } catch { /* cancelled */ }
+  });
+  $$('[data-join]', v).forEach(b => b.onclick = () => { b.disabled = true; joinCrewPlan(b.dataset.join); });
+  const more = $('#crewMore', v);
+  if (more) more.onclick = () => { openSheet(`<h2>Another crew</h2>
+    <form class="form" id="crewCreate"><div class="two"><label>Crew name<input name="name" maxlength="60" required></label><label>Your name<input name="me" maxlength="40" required value="${esc(myNameIn(crewState.crews[0] || {}))}"></label></div><button class="btn primary" type="submit">Create a crew</button></form>
+    <form class="form" id="crewJoin" style="margin-top:16px"><div class="two"><label>Invite code<input name="code" maxlength="6" required autocapitalize="characters"></label><label>Your name<input name="me" maxlength="40" required value="${esc(myNameIn(crewState.crews[0] || {}))}"></label></div><button class="btn" type="submit">Join a crew</button></form>`); wireCrewPanel($('#sheetBody')); };
+  const leave = $('#crewLeave', v);
+  if (leave) leave.onclick = () => {
+    openSheet(`<h2>Leave a crew</h2><p class="small muted">Your shared plans in that crew are removed. You can rejoin with the invite code.</p>
+      ${crewState.crews.map(c => `<div class="row"><button class="btn danger block" data-leave="${c.id}">Leave ${esc(c.name)}</button></div>`).join('')}`);
+    $$('[data-leave]').forEach(b => b.onclick = async () => {
+      try { await leaveCrew(b.dataset.leave); await loadCrew(); closeSheet(); toast('Left the crew.'); render(); } catch (e) { toast(e.message, 6000); }
+    });
+  };
+}
+
 /* ================= plans ================= */
 
 function addPlan(e) {
@@ -534,8 +812,9 @@ function addPlan(e) {
     if (s.plans.some(p => p.key === e.key)) return;
     s.plans.push({
       id: uid(), key: e.key, spotId: e.spot.id, spotName: e.spot.name, lat: e.spot.lat, lon: e.spot.lon,
-      type: e.type, t: e.t, leave: e.leave, offset: e.offset, score: e.score, features: e.features,
-      brief: briefing(e), rating: null,
+      type: e.type, t: e.t, dayT: e.dayT ?? null, leave: e.leave, offset: e.offset, score: e.score, hunt: e.topHunt,
+      sessionKey: sessionKeyOf(e.spot.lat, e.spot.lon, e.type, e.t), features: e.features,
+      brief: briefing(e), gear: gearFor(e, s.settings), packed: [], rating: null,
     });
   });
 }
@@ -596,6 +875,8 @@ function hitPanel(st) {
   </section>`;
 }
 
+const openGear = new Set();   // which plans have their gear list open
+
 async function renderPlans(v) {
   const st = S();
   const now = Date.now() / 1000;
@@ -604,13 +885,23 @@ async function renderPlans(v) {
   const toRate = past.filter(p => !p.rating);
   const rated = past.filter(p => p.rating);
 
-  const planRow = p => `<div class="plan">
+  const planRow = p => {
+    const gear = p.gear || [];
+    const packed = new Set(p.packed || []);
+    const shared = (p.sharedTo || []).length;
+    return `<div class="plan">
     <div class="ev-title">${esc(p.spotName)}</div>
-    <div class="ev-sub"><span><strong>${fmtDay(p.t, p.offset)}, ${p.type} ${fmtTime(p.t, p.offset)}</strong></span><span>Leave ${fmtTime(p.leave, p.offset)}</span><span>Score when planned: ${p.score}</span></div>
+    <div class="ev-sub"><span><strong>${fmtDay(p.dayT ?? p.t, p.offset)}, ${esc(TYPE_NAME[p.type] || p.type)} ${fmtTime(p.t, p.offset)}</strong></span><span>Leave ${fmtTime(p.leave, p.offset)}</span>${p.score != null ? `<span>Score when planned: ${p.score}</span>` : ''}</div>
+    ${gear.length ? `<details class="gear-list" ${openGear.has(p.id) ? 'open' : ''} data-gearbox="${p.id}">
+      <summary>Gear: ${gear.filter(g => packed.has(g.id)).length} of ${gear.length} packed</summary>
+      ${gear.map(g => `<label class="check gear-item"><input type="checkbox" data-pack="${p.id}" value="${esc(g.id)}" ${packed.has(g.id) ? 'checked' : ''}><span>${esc(g.label)}<small>${esc(g.why)}</small></span></label>`).join('')}
+    </details>` : ''}
     <div class="row">
+      ${currentUser() ? `<button class="btn ${shared ? 'ghost' : ''}" data-share="${p.id}">${shared ? 'Shared with crew' : 'Share with crew'}</button>` : ''}
       <button class="btn" data-ics="${p.id}">Add to calendar</button>
       <button class="btn danger" data-del="${p.id}">Remove</button>
     </div></div>`;
+  };
 
   const rateRow = p => `<div class="plan">
     <div class="ev-title">${esc(p.spotName)}</div>
@@ -626,6 +917,7 @@ async function renderPlans(v) {
 
   v.innerHTML = `
     <p class="eyebrow">Plans</p><h1>Sessions <em>ahead.</em></h1>
+    ${crewPanel()}
     ${hitPanel(st)}
     ${toRate.length ? `<section class="panel"><h2>Rate your sessions</h2><p class="muted small">Each rating teaches your personal score what a good morning looks like for you.</p>${toRate.map(rateRow).join('')}</section>` : ''}
     <section class="panel">
@@ -642,7 +934,26 @@ async function renderPlans(v) {
       desc: p.brief || '', lat: p.lat, lon: p.lon,
     }), 'text/calendar');
   });
-  $$('[data-del]', v).forEach(b => b.onclick = () => { update(s => { s.plans = s.plans.filter(p => p.id !== b.dataset.del); }); render(); });
+  $$('[data-del]', v).forEach(b => b.onclick = async () => {
+    const p = S().plans.find(x => x.id === b.dataset.del);
+    update(s => { s.plans = s.plans.filter(x => x.id !== b.dataset.del); });
+    if (p?.sharedTo?.length && p.sessionKey) { for (const c of p.sharedTo) await unshareFromCrew(c, p.sessionKey).catch(() => {}); await loadCrew(); }
+    render();
+  });
+  $$('[data-share]', v).forEach(b => b.onclick = () => openShareSheet(b.dataset.share));
+  $$('[data-pack]', v).forEach(cb => cb.onchange = () => {
+    update(s => {
+      const p = s.plans.find(x => x.id === cb.dataset.pack);
+      const set = new Set(p.packed || []);
+      if (cb.checked) set.add(cb.value); else set.delete(cb.value);
+      p.packed = [...set];
+    });
+    const p = S().plans.find(x => x.id === cb.dataset.pack);
+    cb.closest('details').querySelector('summary').textContent = `Gear: ${(p.packed || []).length} of ${(p.gear || []).length} packed`;
+  });
+  $$('[data-gearbox]', v).forEach(d => d.ontoggle = () => { if (d.open) openGear.add(d.dataset.gearbox); else openGear.delete(d.dataset.gearbox); });
+  wireCrewPanel(v);
+  if (currentUser() && !crewState.loaded) loadCrew().then(() => { if (tab === 'plans') renderPlans(v); });
   $$('[data-rate]', v).forEach(b => b.onclick = () => ratePlan(b.dataset.id, b.dataset.rate, b));
 
   // Log sessions you shot without planning them (last 2 days), so they can be rated too.
@@ -694,30 +1005,58 @@ async function ratePlan(id, rating, btn) {
 
 /* ================= spots ================= */
 
-function renderSpots(v) {
+let spotFilter = 'all';     // all | sunrise | day | sunset | night
+let spotsShowMap = false;
+
+function spotChips(sp, e) {
+  const c = [];
+  if (e) c.push(`<span class="tag-chip">${esc(HUNT_LABEL[e.topHunt])}</span>`);
+  const hk = hikeSummary(sp);
+  if (hk) c.push(`<span class="tag-chip">${esc(hk.replace('Hike: ', 'Hike '))}</span>`);
+  if (e?.access && !e.access.none) c.push(e.access.inside
+    ? `<span class="tag-chip">Tide open ${fmtTime(e.access.start, e.offset)}–${fmtTime(e.access.backBy, e.offset)}</span>`
+    : '<span class="tag-chip warn">Tide blocks access</span>');
+  if (e && unsure(e)) c.push('<span class="tag-chip unsure">Models disagree</span>');
+  else if (e?.confidence?.level === 'high' && e.topHunt === 'colour') c.push('<span class="tag-chip">Models agree</span>');
+  const going = e ? crewGoing(e) : [];
+  if (going.length) c.push(`<span class="tag-chip crew">${esc(goingText(going))}</span>`);
+  return c.join('');
+}
+
+function spotCard(sp, e) {
+  return `<button class="spot-card" data-spot="${sp.id}">
+    ${coverUrl(sp) ? `<img class="spot-card-img" src="${coverUrl(sp)}" alt="">` : `<span class="spot-card-img empty" aria-hidden="true">${esc(sp.name.charAt(0))}</span>`}
+    <span class="spot-card-body">
+      <span class="spot-card-head"><span class="spot-card-name">${esc(sp.name)}</span>${e ? `<span class="spot-card-score num">${e.score}</span>` : ''}</span>
+      ${e ? `<span class="spot-card-when">${esc(cap(sessionName(e)))} — ${sessionWhen(e)}</span>
+             <span class="spot-card-why">${esc(whyLine(e))}</span>`
+          : `<span class="spot-card-why">${spotFilter === 'all' ? 'No sessions in the next 3 days. Check its sessions and hunts.' : `No ${TYPE_NAME[spotFilter].toLowerCase()} sessions here.`}</span>`}
+      <span class="spot-card-chips">${spotChips(sp, e)}</span>
+    </span>
+  </button>`;
+}
+
+async function renderSpots(v) {
+  if (map) { map.remove(); map = null; }
   const st = S();
   v.innerHTML = `
-    <p class="eyebrow">Spots</p><h1>Where you <em>shoot.</em></h1>
+    <p class="eyebrow">Your spots, next 3 days</p><h1>Where you <em>shoot.</em></h1>
     <form class="search" id="placeSearch" role="search">
-      <input type="search" id="placeQ" placeholder="Search a beach, landmark or town" autocomplete="off" enterkeyhint="search" aria-label="Search for a place">
+      <input type="search" id="placeQ" placeholder="Search to add a beach, falls or lookout" autocomplete="off" enterkeyhint="search" aria-label="Search for a place to add">
       <button class="btn primary" type="submit">Search</button>
     </form>
     <div id="placeResults" class="results" hidden></div>
-    <div id="map" role="application" aria-label="Map of your spots. Tap to add a spot."></div>
-    <p class="small muted" style="margin-top:8px">Tap anywhere on the map to add a spot there.</p>
-    <div class="row">
-      <button class="btn primary" id="addSpot">Add spot</button>
+    <div class="row spot-actions">
+      <button class="btn" id="addSpot">Add spot</button>
       <button class="btn" id="hereSpot">Add where I am</button>
+      <button class="btn ${spotsShowMap ? 'primary' : 'ghost'}" id="mapToggle" aria-pressed="${spotsShowMap}">${spotsShowMap ? 'Hide map' : 'Map'}</button>
     </div>
-    <section>
-      ${st.spots.length ? st.spots.map(s => `
-        <button class="spot-row" data-spot="${s.id}">
-          ${coverUrl(s) ? `<img class="spot-thumb" src="${coverUrl(s)}" alt="">` : `<span class="spot-thumb empty" aria-hidden="true">${esc(s.name.charAt(0))}</span>`}
-          <div class="spot-text"><div class="ev-title">${esc(s.name)}</div>
-          <div class="ev-sub"><span>${(s.events || []).map(cap).join(' and ') || 'No events'}</span><span>${huntsOf(s).map(k => HUNT_LABEL[k]).join(', ')}</span>${hikeSummary(s) ? `<span>${esc(hikeSummary(s))}</span>` : ''}</div></div>
-          <span class="muted" aria-hidden="true">›</span>
-        </button>`).join('') : '<p class="muted">No spots yet. Your favourite locations go here.</p>'}
-    </section>`;
+    ${spotsShowMap ? `<div id="map" role="application" aria-label="Map of your spots. Tap to add a spot."></div>
+      <p class="small muted" style="margin-top:8px">Tap anywhere on the map to add a spot there.</p>` : ''}
+    <div class="day-pills filter" role="tablist" aria-label="Filter by session">
+      ${['all', ...SESSION_TYPES].map(f => `<button role="tab" aria-selected="${spotFilter === f}" class="${spotFilter === f ? 'on' : ''}" data-filter="${f}">${f === 'all' ? 'All' : TYPE_NAME[f]}</button>`).join('')}
+    </div>
+    <section id="spotCards">${st.spots.length ? '<p class="loading">Scoring your spots…</p>' : '<p class="muted">No spots yet. Search above, tap the map, or add where you are.</p>'}</section>`;
 
   $('#addSpot').onclick = () => openSpotForm();
   found = null;
@@ -725,31 +1064,46 @@ function renderSpots(v) {
   $('#hereSpot').onclick = async () => {
     try { const p = await getPosition(); openSpotForm(p); } catch (e) { toast(e.message, 4000); }
   };
-  $$('[data-spot]', v).forEach(b => b.onclick = () => openSpotDetail(b.dataset.spot));
+  $('#mapToggle').onclick = () => { spotsShowMap = !spotsShowMap; renderSpots(v); };
+  $$('[data-filter]', v).forEach(b => b.onclick = () => { spotFilter = b.dataset.filter; renderSpots(v); });
+  if (spotsShowMap) initSpotsMap(st);
 
-  if (window.L) {
-    const home = st.settings.home;
-    map = window.L.map('map', { zoomControl: false, attributionControl: true })
-      .setView(home ? [home.lat, home.lon] : [10, 0], home ? 9 : 2);
-    window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, className: 'base-tiles', attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(map);
-    const pts = [];
-    st.spots.forEach(s => {
-      window.L.circleMarker([s.lat, s.lon], { radius: 9, color: '#0F1111', weight: 2, fillColor: '#D9A066', fillOpacity: 1 })
-        .addTo(map).bindTooltip(s.name).on('click', ev => { window.L.DomEvent.stopPropagation(ev); openSpotDetail(s.id); });
-      pts.push([s.lat, s.lon]);
-    });
-    if (home) window.L.circleMarker([home.lat, home.lon], { radius: 6, color: '#ECE8E1', fillColor: '#ECE8E1', fillOpacity: 1 }).addTo(map).bindTooltip('Home');
-    if (pts.length > 1) map.fitBounds(pts, { padding: [30, 30], maxZoom: 12 });
-    else if (pts.length === 1) map.setView(pts[0], 11);
-    map.on('click', ev => {
-      // Fine-tuning near a searched place keeps its name.
-      const near = found && Math.abs(found.lat - ev.latlng.lat) < 0.03 && Math.abs(found.lon - ev.latlng.lng) < 0.03;
-      openSpotForm({ lat: ev.latlng.lat, lon: ev.latlng.lng, name: near ? found.name : '' });
-    });
-    setTimeout(() => map && map.invalidateSize(), 60);
-  }
+  if (!st.spots.length) return;
+  await ensureForecasts();
+  if (tab !== 'spots' || !$('#spotCards')) return;
+  const evs = next3Days();
+  indexEvents(evs);
+  const bestFor = sp => evs.filter(e => e.spot.id === sp.id && (spotFilter === 'all' || e.type === spotFilter)).sort((a, b) => b.score - a.score)[0];
+  const rows = st.spots.map(sp => ({ sp, e: bestFor(sp) }))
+    .filter(r => spotFilter === 'all' || r.e)
+    .sort((a, b) => (b.e?.score ?? -1) - (a.e?.score ?? -1));
+  $('#spotCards').innerHTML = rows.length ? rows.map(r => spotCard(r.sp, r.e)).join('') : `<p class="muted">None of your spots have ${TYPE_NAME[spotFilter].toLowerCase()} sessions in the next 3 days.</p>`;
+  $$('#spotCards [data-spot]').forEach(b => b.onclick = () => openSpotDetail(b.dataset.spot));
+}
+
+function initSpotsMap(st) {
+  if (!window.L || !$('#map')) return;
+  const home = st.settings.home;
+  map = window.L.map('map', { zoomControl: false, attributionControl: true })
+    .setView(home ? [home.lat, home.lon] : [10, 0], home ? 9 : 2);
+  window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, className: 'base-tiles', attribution: '&copy; OpenStreetMap contributors',
+  }).addTo(map);
+  const pts = [];
+  st.spots.forEach(s => {
+    window.L.circleMarker([s.lat, s.lon], { radius: 9, color: '#0F1111', weight: 2, fillColor: '#D9A066', fillOpacity: 1 })
+      .addTo(map).bindTooltip(s.name).on('click', ev => { window.L.DomEvent.stopPropagation(ev); openSpotDetail(s.id); });
+    pts.push([s.lat, s.lon]);
+  });
+  if (home) window.L.circleMarker([home.lat, home.lon], { radius: 6, color: '#ECE8E1', fillColor: '#ECE8E1', fillOpacity: 1 }).addTo(map).bindTooltip('Home');
+  if (pts.length > 1) map.fitBounds(pts, { padding: [30, 30], maxZoom: 12 });
+  else if (pts.length === 1) map.setView(pts[0], 11);
+  map.on('click', ev => {
+    // Fine-tuning near a searched place keeps its name.
+    const near = found && Math.abs(found.lat - ev.latlng.lat) < 0.03 && Math.abs(found.lon - ev.latlng.lng) < 0.03;
+    openSpotForm({ lat: ev.latlng.lat, lon: ev.latlng.lng, name: near ? found.name : '' });
+  });
+  setTimeout(() => map && map.invalidateSize(), 60);
 }
 
 let lastSearchAt = 0;
@@ -786,6 +1140,11 @@ async function runPlaceSearch() {
 }
 
 function showFoundPlace(r) {
+  if (window.L && !map && tab === 'spots') {
+    spotsShowMap = true;
+    renderSpots($('#view'));
+    if (map) return showFoundPlace(r);
+  }
   if (!map || !window.L) { openSpotForm({ lat: r.lat, lon: r.lon, name: r.name }); return; }
   if (found?.marker) found.marker.remove();
   map.setView([r.lat, r.lon], 15);
@@ -1477,7 +1836,14 @@ function renderAccount() {
         <button class="btn ghost" type="submit" value="create">Create account</button>
       </div>
     </form>
-    <p class="small muted">First time? Tap Create account once on any device, then Sign in everywhere else with the same details.</p>`;
+    <p class="small muted">First time? Tap Create account once on any device, then Sign in everywhere else with the same details.</p>
+    <button class="link-btn" id="forgotBtn" type="button">Forgot your password?</button>`;
+  $('#forgotBtn').onclick = async () => {
+    const email = $('#authForm').email.value.trim();
+    if (!email) { toast('Type your email above first, then tap "Forgot your password?"'); $('#authForm').email.focus(); return; }
+    try { await sendPasswordReset(email); toast('Check your email for a reset link. Open it on this device.', 7000); }
+    catch (e) { toast(e.message, 7000); }
+  };
   const form = $('#authForm');
   form.onsubmit = async ev => {
     ev.preventDefault();
@@ -1625,6 +1991,14 @@ function renderSettings(v) {
     <section class="panel" id="accountPanel"></section>
     <section class="panel" id="alertsPanel"></section>
     <section class="panel">
+      <h2>My kit</h2>
+      <p class="small muted">Things you always bring. They're added to every session's gear checklist, alongside what the conditions call for. One item per line.</p>
+      <form class="form" id="kitForm">
+        <textarea name="kit" rows="5" placeholder="Camera and spare battery&#10;Tripod&#10;Memory cards&#10;Phone charger">${esc((S().settings.gearAlways || []).join('\n'))}</textarea>
+        <div class="row"><button class="btn primary" type="submit">Save my kit</button></div>
+      </form>
+    </section>
+    <section class="panel">
       <h2>Home</h2>
       <p class="small muted">Used to estimate drive times and leave times. Stays on this device.</p>
       <form class="form" id="homeForm">
@@ -1670,6 +2044,12 @@ function renderSettings(v) {
 
   renderAccount();
   renderAlerts();
+  $('#kitForm').onsubmit = ev => {
+    ev.preventDefault();
+    const items = String(new FormData(ev.target).get('kit') || '').split('\n').map(x => x.trim()).filter(Boolean).slice(0, 40);
+    update(s => { s.settings.gearAlways = items; });
+    toast('Kit saved. It syncs to your account.');
+  };
 
   $('#homeHere').onclick = async () => {
     try {
@@ -1764,6 +2144,22 @@ $('#refreshBtn').onclick = async () => {
   if (tab === 'forecast' || tab === 'spots') render();
 };
 
+// Opened from a password-reset email: choose a new password.
+function openRecoverySheet() {
+  openSheet(`
+    <h2>Choose a new password</h2>
+    <p class="small muted">You opened a password reset link. Pick a new password (at least 8 characters). Then sign in with it on your other devices and in the home-screen app.</p>
+    <form class="form" id="recoverForm">
+      <label>New password<input type="password" name="pw" autocomplete="new-password" minlength="8" required></label>
+      <div class="row"><button class="btn primary" type="submit">Save new password</button></div>
+    </form>`);
+  $('#recoverForm').onsubmit = async ev => {
+    ev.preventDefault();
+    try { await setNewPassword(new FormData(ev.target).get('pw')); closeSheet(); toast('Password changed. Use it to sign in everywhere.', 6000); }
+    catch (e) { toast(e.message, 6000); }
+  };
+}
+
 function backfillRatings() {
   const st = S();
   const linked = new Set(st.keepers.map(k => k.planId).filter(Boolean));
@@ -1777,7 +2173,14 @@ function backfillRatings() {
 loadAllPhotos().finally(() => {
   backfillRatings();
   render();
+  onPasswordRecovery(openRecoverySheet);
   initSync(() => { for (const k in forecasts) delete forecasts[k]; if (!$('#sheet').classList.contains('hidden')) return; render(); })
+    .then(() => loadCrew()).then(() => { if (['forecast', 'plans', 'spots'].includes(tab) && $('#sheet').classList.contains('hidden')) render(); })
     .catch(() => {});
-  onSyncStatus(() => { if (tab === 'settings') { renderAccount(); renderAlerts(); } });
+  let wasSignedIn = !!currentUser();
+  onSyncStatus(st => {
+    if (tab === 'settings') { renderAccount(); renderAlerts(); }
+    const signedIn = !!st.email;
+    if (signedIn !== wasSignedIn) { wasSignedIn = signedIn; crewState.loaded = false; loadCrew().then(() => { if (tab === 'plans') render(); }); }
+  });
 });
