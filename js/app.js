@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.0';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.0';
-import { driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.0';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.0';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=4.0';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.0';
-import { gearFor } from './gear.js?v=4.0';
-import { VAPID_PUBLIC_KEY } from './config.js?v=4.0';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.0';
-import { haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.0';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.1';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.1';
+import { driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.1';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.1';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=4.1';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.1';
+import { gearFor } from './gear.js?v=4.1';
+import { VAPID_PUBLIC_KEY } from './config.js?v=4.1';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.1';
+import { haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.1';
 
-export const APP_VERSION = '4.0';
+export const APP_VERSION = '4.1';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -242,7 +242,7 @@ function closeSheet() {
 
 /* ================= router ================= */
 
-function setTab(t) { if (t === 'forecast' && tab !== 'forecast') { homeDay = 0; homeOpen = null; } tab = t; closeSheet(); render(); window.scrollTo(0, 0); }
+function setTab(t) { if (t === 'forecast' && tab !== 'forecast') { homeDay = 0; homeSel = null; } tab = t; closeSheet(); render(); window.scrollTo(0, 0); }
 
 function render() {
   if (map) { map.remove(); map = null; }
@@ -303,8 +303,6 @@ function forecastAlerts(st, failed) {
 }
 
 let homeDay = 0;          // 0 today, 1 tomorrow, 2 the day after, or 'all' for the spot matrix
-let homeOpen = null;      // session whose "why" panel is open
-const homeMore = {};      // session type → showing every spot
 
 const SESSION_TYPES = ['sunrise', 'day', 'sunset', 'night'];
 const TYPE_NAME = { sunrise: 'Sunrise', day: 'Daytime', sunset: 'Sunset', night: 'Night' };
@@ -320,7 +318,7 @@ function dayPills(offset) {
 function wirePills(v) {
   $$('[data-day]', v).forEach(b => b.onclick = () => {
     homeDay = b.dataset.day === 'all' ? 'all' : Number(b.dataset.day);
-    homeOpen = null;
+    homeSel = null;
     renderForecast(v);
   });
 }
@@ -364,52 +362,88 @@ function partBar(p, cls = '') {
     <span class="part-val num">${Math.round(p.value)}</span>
     <span class="part-note">${esc(p.note || '')}</span></div>`;
 }
-function whyPanel(e) {
-  const H = e.hunts?.[e.topHunt] || {};
-  const parts = [...(H.parts || [])];
-  const extra = [];
-  if (e.topHunt === 'colour' && e.confidence) extra.push({ label: 'Models agree', value: Math.max(0, 100 - e.confidence.spread * 2), note: `${cap(e.confidence.level)} confidence: within ${e.confidence.spread} points` });
-  if (e.personal) extra.push({ label: 'Your style', value: e.personal.score, note: `Compared with your ${e.personal.n} keepers` });
-  const planned = S().plans.some(p => p.key === e.key);
-  const going = crewGoing(e);
-  return `<div class="why">
-    <p class="eyebrow">Why ${e.score}</p>
-    <p class="why-sentence">${esc(whySentence(e))}</p>
-    ${parts.map(p => partBar(p)).join('')}${extra.map(p => partBar(p, 'alt')).join('')}
-    ${couldChange(e) ? `<p class="could">${esc(couldChange(e))}</p>` : ''}
-    ${going.length ? `<p class="crew-going">${esc(goingText(going))}</p>` : ''}
-    <div class="row">
-      <button class="btn primary" data-plan="${esc(e.key)}" ${planned ? 'disabled' : ''}>${planned ? 'Planned' : 'Plan it'}</button>
-      <button class="btn" data-ev="${esc(e.key)}">Full briefing</button>
-    </div>
-  </div>`;
-}
 // "6:17am", "best 2:10am", or a daytime window "10:00am–2:00pm"
 function sessionWhen(e) {
   const o = e.offset, H = e.hunts?.[e.topHunt];
   if (e.type === 'day' && H?.from) return H.from === H.to ? fmtTime(e.t, o) : `${fmtTime(H.from, o)}–${fmtTime(H.to, o)}`;
   return e.type === 'night' ? `best ${fmtTime(e.t, o)}` : fmtTime(e.t, o);
 }
-function sessionRow(e, open) {
-  const when = sessionWhen(e);
-  return `<div class="srow ${open ? 'open' : ''}">
-    <button class="srow-main" data-why="${esc(e.key)}" aria-expanded="${open}">
-      ${horizon(e, false, coverUrl(e.spot))}
-      <span class="srow-text">
-        <span class="srow-kind">${TYPE_NAME[e.type]} — ${when}${e.topHunt !== 'colour' ? ` — ${HUNT_LABEL[e.topHunt]}` : ''}</span>
-        <span class="srow-name">${esc(e.spot.name)}</span>
-        <span class="srow-why">${unsure(e) ? 'Models disagree. ' : ''}${esc(whyLine(e))}</span>
-      </span>
-      <span class="srow-toggle">${open ? 'Hide' : 'Why'}</span>
-    </button>
-    ${open ? whyPanel(e) : ''}
-  </div>`;
+
+let homeSel = null;   // the session shown in the detail panel
+let bandRevealed = false;   // the band's reveal plays once per app open
+
+// Light phases for a day, from the sun's real position at a reference place (home, or the first spot).
+// Window runs 3am to 3am so a pre-dawn start and a late night both fit.
+const BAND = { night: '#141A23', twilight: '#22304A', blue: '#3A5072', golden: '#B9824E', day: '#59605C' };
+function lightBand(w0, place) {
+  const w1 = w0 + 86400;
+  const pos = t => Math.max(0, Math.min(100, ((t - w0) / 86400) * 100));
+  let marks = null;
+  if (window.SunCalc && place) {
+    const T = window.SunCalc.getTimes(new Date((w0 + 9 * 3600) * 1000), place.lat, place.lon);
+    const ok = d => d instanceof Date && !isNaN(d);
+    const sec = d => d.getTime() / 1000;
+    if (['nightEnd', 'dawn', 'sunrise', 'goldenHourEnd', 'goldenHour', 'sunset', 'dusk', 'night'].every(k => ok(T[k]))) {
+      marks = { nightEnd: sec(T.nightEnd), dawn: sec(T.dawn), sunrise: sec(T.sunrise), gEnd: sec(T.goldenHourEnd), gStart: sec(T.goldenHour), sunset: sec(T.sunset), dusk: sec(T.dusk), night: sec(T.night) };
+    }
+  }
+  if (!marks) {   // no sun data: a plain 6am–8pm day
+    const m = h => w0 + (h - 3) * 3600;
+    marks = { nightEnd: m(4.5), dawn: m(5.5), sunrise: m(6), gEnd: m(7), gStart: m(18.5), sunset: m(19.5), dusk: m(20), night: m(21.5) };
+  }
+  const stops = [
+    [BAND.night, w0], [BAND.night, marks.nightEnd], [BAND.twilight, (marks.nightEnd + marks.dawn) / 2], [BAND.blue, marks.dawn],
+    [BAND.golden, marks.sunrise], [BAND.golden, marks.gEnd], [BAND.day, marks.gEnd + 3600], [BAND.day, marks.gStart - 3600],
+    [BAND.golden, marks.gStart], [BAND.golden, marks.sunset], [BAND.blue, marks.dusk], [BAND.twilight, (marks.dusk + marks.night) / 2],
+    [BAND.night, marks.night], [BAND.night, w1],
+  ];
+  return { gradient: `linear-gradient(to right, ${stops.map(([c, t]) => `${c} ${pos(t).toFixed(2)}%`).join(', ')})`, pos, marks };
+}
+
+const bandFill = s => (s >= 80 ? '#D9A066' : s >= 65 ? '#8F6B44' : s >= 50 ? '#3A342B' : '#1E2222');
+const bandInk = s => (s >= 80 ? '#1A130B' : '#ECE8E1');
+
+function huntPhrase(e) {
+  const v = HUNT_VERB[e.topHunt];
+  if (e.score >= 75) return e.topHunt === 'colour' ? 'Worth the alarm' : `Go for ${v}`;
+  if (e.score >= 50) return e.topHunt === 'colour' ? 'Worth a look' : `Maybe ${v}`;
+  return 'Probably not worth it';
+}
+
+function sessionDetail(e, isBest = false) {
+  const H = e.hunts?.[e.topHunt] || {};
+  const parts = [...(H.parts || [])];
+  if (e.topHunt === 'colour' && e.confidence) parts.push({ label: 'Models agree', value: Math.max(0, 100 - e.confidence.spread * 2), note: `${cap(e.confidence.level)} confidence: within ${e.confidence.spread} points`, alt: true });
+  if (e.personal) parts.push({ label: 'Your style', value: e.personal.score, note: `Compared with your ${e.personal.n} keepers`, alt: true });
+  const planned = S().plans.some(p => p.key === e.key);
+  const going = crewGoing(e);
+  const photo = coverUrl(e.spot);
+  return `<article class="detail" aria-live="polite">
+    ${photo ? `<img class="detail-photo" src="${photo}" alt="${esc(e.spot.name)}">` : ''}
+    <div class="detail-head">
+      <div>
+        <h2 class="detail-name">${esc(e.spot.name)}</h2>
+        <p class="detail-when">${TYPE_NAME[e.type]} ${sessionWhen(e)}. Leave ${fmtTime(e.leave, e.offset)}${e.hike ? `, ${e.hike} min walk in` : ''}.</p>
+      </div>
+      <p class="detail-score num" aria-label="Score ${e.score} out of 100">${e.score}</p>
+    </div>
+    <p class="detail-verdict">${isBest ? '' : `${esc(huntPhrase(e))}. `}${esc(whySentence(e))}</p>
+    ${e.topHunt === 'colour' && e.confidence ? `<p class="detail-conf conf-${e.confidence.level}">${{ high: 'The weather models agree.', medium: 'The weather models roughly agree.', low: 'The weather models disagree, so treat this as a maybe.' }[e.confidence.level]}</p>` : ''}
+    ${e.access && !e.access.inside ? '<p class="detail-warn">The tide blocks access for this session.</p>' : ''}
+    ${going.length ? `<p class="crew-going">${esc(goingText(going))}.</p>` : ''}
+    <div class="parts">${parts.map(p => partBar(p, p.alt ? 'alt' : '')).join('')}</div>
+    ${couldChange(e) ? `<p class="could">${esc(couldChange(e))}</p>` : ''}
+    <div class="row">
+      <button class="btn primary" data-plan="${esc(e.key)}" ${planned ? 'disabled' : ''}>${planned ? 'Planned' : 'Plan this shoot'}</button>
+      <button class="btn" data-ev="${esc(e.key)}">Full briefing</button>
+    </div>
+  </article>`;
 }
 
 async function renderForecast(v) {
   const st = S();
   if (!st.spots.length) return emptySpots(v);
-  v.innerHTML = `<p class="loading">Reading the sky for ${st.spots.length} spot${st.spots.length > 1 ? 's' : ''}…</p>`;
+  v.innerHTML = `<p class="loading-plain">Reading the sky for ${st.spots.length} spot${st.spots.length > 1 ? 's' : ''}…</p>`;
   const failed = await ensureForecasts();
   if (tab !== 'forecast') return;
   const evs = next3Days();
@@ -417,38 +451,72 @@ async function renderForecast(v) {
   const offset = evs[0]?.offset ?? 0;
   if (homeDay === 'all') return renderMatrix(v, evs, st, failed);
 
-  const dayEvs = evs.filter(e => e.dayIdx === homeDay);
-  const best = [...dayEvs].sort((a, b) => b.score - a.score)[0];
-  const dayWord = homeDay === 0 ? 'today' : homeDay === 1 ? 'tomorrow' : fmtWeekday(Date.now() / 1000 + homeDay * 86400, offset);
-  const sections = SESSION_TYPES.map(type => {
-    const list = dayEvs.filter(e => e.type === type).sort((a, b) => b.score - a.score);
-    if (!list.length) return '';
-    const shown = homeMore[type] ? list : list.slice(0, 1);
-    return `<section class="sgroup">
-      ${shown.map(e => sessionRow(e, homeOpen === e.key)).join('')}
-      ${list.length > 1 ? `<button class="link-btn more" data-more="${type}">${homeMore[type] ? 'Show just the best' : `+ ${list.length - 1} more spot${list.length > 2 ? 's' : ''} for ${TYPE_NAME[type].toLowerCase()}`}</button>` : ''}
-    </section>`;
+  const now = Date.now() / 1000;
+  const dayEvs = evs.filter(e => e.dayIdx === homeDay).sort((a, b) => b.score - a.score);
+  const best = dayEvs[0];
+  if (!homeSel || !dayEvs.some(e => e.key === homeSel)) homeSel = best?.key || null;
+  const sel = dayEvs.find(e => e.key === homeSel);
+
+  // The day's 3am-to-3am window in local time.
+  const dayRef = now + homeDay * 86400;
+  const local = new Date((dayRef + offset) * 1000);
+  const midnight = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) / 1000 - offset;
+  const w0 = midnight + 3 * 3600;
+  const place = st.settings.home || st.spots[0];
+  const band = lightBand(w0, place);
+  const dateLine = fmtDayDate(dayRef, offset).split(' ').slice(1).join(' ');   // "11 Nov", in the spots' time zone
+  const weekday = fmtWeekday(dayRef, offset);
+
+  // One marker per session type: the best spot for it. Daytime sessions also draw their window.
+  const perType = SESSION_TYPES.map(type => dayEvs.find(e => e.type === type)).filter(Boolean);
+  const counts = Object.fromEntries(SESSION_TYPES.map(t => [t, dayEvs.filter(e => e.type === t).length]));
+  const markers = perType.map(e => {
+    const H = e.hunts?.[e.topHunt];
+    const span = e.type === 'day' && H?.from && H.to > H.from
+      ? `<span class="band-span" style="left:${band.pos(H.from)}%; width:${Math.max(1, band.pos(H.to) - band.pos(H.from))}%"></span>` : '';
+    const more = counts[e.type] > 1 ? `<span class="band-more">+${counts[e.type] - 1}</span>` : '';
+    return `${span}<button class="band-mark ${e.key === homeSel ? 'on' : ''}" style="left:${band.pos(e.t)}%; --fill:${bandFill(e.score)}; --ink:${bandInk(e.score)}" data-sel="${esc(e.key)}"
+      aria-label="${TYPE_NAME[e.type]} at ${esc(e.spot.name)}, ${sessionWhen(e)}, score ${e.score}">${e.score}${more}</button>`;
   }).join('');
+  const ticks = [[w0 + 3 * 3600, '6am'], [w0 + 9 * 3600, 'Noon'], [w0 + 15 * 3600, '6pm'], [w0 + 21 * 3600, 'Midnight']]
+    .map(([t, l]) => `<span class="band-tick" style="left:${band.pos(t)}%">${l}</span>`).join('');
+  const nowLine = now > w0 && now < w0 + 86400 ? `<span class="band-now" style="left:${band.pos(now)}%" aria-hidden="true"></span>` : '';
+
+  const others = dayEvs.filter(e => e.key !== homeSel).sort((a, b) => a.t - b.t);
 
   v.innerHTML = `
     ${dayPills(offset)}
     ${forecastAlerts(st, failed)}
-    ${best ? `<button class="best-card" data-why="${esc(best.key)}">
-        ${coverUrl(best.spot) ? `<img src="${coverUrl(best.spot)}" alt="">` : `<span class="best-ph" style="--p:${best.score}"></span>`}
-        <span class="best-text">
-          <span class="eyebrow">Best ${esc(dayWord)}</span>
-          <span class="best-title">${heroTitle(best)}</span>
-          <span class="best-sub">${esc(best.spot.name)}, ${TYPE_NAME[best.type].toLowerCase()} ${sessionWhen(best)}. Leave ${fmtTime(best.leave, best.offset)}.</span>
-          ${confLine(best)}
-        </span>
-        <span class="best-score num">${best.score}</span>
-      </button>` : `<div class="empty"><h2>Nothing left ${esc(dayWord)}.</h2><p>Try another day, or check your spots have sessions and hunts turned on.</p></div>`}
-    ${sections}
-    <p class="small muted" style="margin-top:22px">Tap a session to see why it scored that way. Forecasts are estimates; always check official warnings before heading out.</p>`;
+    <header class="day-head-v2">
+      <h1 class="day-title">${homeDay === 0 ? 'Today' : homeDay === 1 ? 'Tomorrow' : esc(weekday)}<span>, ${esc(homeDay > 1 ? dateLine : `${weekday} ${dateLine}`)}</span></h1>
+      <p class="day-lede">${best ? `${esc(huntPhrase(best))} at ${esc(best.spot.name)}, ${TYPE_NAME[best.type].toLowerCase()} ${sessionWhen(best)}.` : 'No sessions left for this day. Try another day.'}</p>
+    </header>
+    <figure class="band-wrap">
+      <div class="band ${bandRevealed ? '' : 'reveal'}" style="background:${band.gradient}" role="group" aria-label="The day's light, 3am to 3am, with each session marked">
+        ${nowLine}${markers}
+      </div>
+      <div class="band-ticks" aria-hidden="true">${ticks}</div>
+      <figcaption class="band-key">
+        <span><i style="background:${BAND.blue}"></i>Blue hour</span><span><i style="background:${BAND.golden}"></i>Golden hour</span><span><i style="background:${BAND.day}"></i>Daylight</span><span><i style="background:${BAND.night}; outline:1px solid var(--line)"></i>Dark</span>
+      </figcaption>
+    </figure>
+    ${sel ? sessionDetail(sel, sel.key === best?.key) : ''}
+    ${others.length ? `<section class="others">
+      <h3 class="others-title">Other sessions ${homeDay === 0 ? 'today' : homeDay === 1 ? 'tomorrow' : `on ${esc(weekday)}`}</h3>
+      ${others.map(e => `<button class="other-row" data-sel="${esc(e.key)}">
+        <span class="other-time num">${sessionWhen(e)}</span>
+        <span class="other-name">${esc(e.spot.name)}<small>${TYPE_NAME[e.type]}${e.topHunt !== 'colour' ? `, ${HUNT_LABEL[e.topHunt].toLowerCase()}` : ''}${unsure(e) ? ', models disagree' : ''}</small></span>
+        <span class="other-score num" style="--fill:${bandFill(e.score)}; --ink:${bandInk(e.score)}">${e.score}</span>
+      </button>`).join('')}
+    </section>` : ''}
+    <p class="small muted foot-note">Scores are estimates from forecast data. Check official warnings before heading out.</p>`;
 
+  bandRevealed = true;
   wirePills(v);
-  $$('[data-why]', v).forEach(b => b.onclick = () => { homeOpen = homeOpen === b.dataset.why ? null : b.dataset.why; renderForecast(v); });
-  $$('[data-more]', v).forEach(b => b.onclick = () => { homeMore[b.dataset.more] = !homeMore[b.dataset.more]; renderForecast(v); });
+  $$('[data-sel]', v).forEach(b => b.onclick = () => {
+    homeSel = b.dataset.sel;
+    renderForecast(v).then(() => { const d = $('.detail'); if (d && b.classList.contains('other-row')) d.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); });
+  });
   $$('[data-plan]', v).forEach(b => b.onclick = () => {
     const e = eventIndex.get(b.dataset.plan);
     if (!e) return;

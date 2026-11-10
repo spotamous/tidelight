@@ -6,7 +6,7 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 
 ## What it does
 
-- **Home page: day by day.** Pills switch between today, the next two days and *All spots* (the spot matrix). A best-of-the-day card leads, then one row per session (sunrise, daytime, sunset, night) with its best spot and a one-line reason. Tap a row for the *why* panel: a plain-English sentence, a bar for every factor (with the confidence and your personal score), what could change it, and *Plan it*. *+ more spots* shows every spot for that session.
+- **Home page: the light band.** Pick today, the next two days or *All spots* (the spot matrix). Each day opens with a plain-language headline for its best session, then a band showing that day's real light from 3am to 3am (dark, blue hour, golden hour, daylight, worked out from the sun's position where you live), with each session marked on it by score. Tap a marker, or any session in the list below, to see it in the detail panel: photo, score, leave time, why it scored that way (a bar for every factor, plus confidence and your style), what could change it, and *Plan this shoot*.
 - **Spots tab: a card per spot.** Each card shows the spot's best session in the next 3 days, why, and tags (hunt, hike, tide window, models agree or disagree, crewmates going). Filter by session type; the map and search are still there for adding spots.
 - **Previously: The Call + spot matrix.** The page opens on the single best session in the next 3 days: your spot photo, a plain verdict ("Go for *fog.*"), the score, leave time and the main reason, with *Read the briefing* and *Plan it*. Below that are three runners-up, preferring different spots. *All 3 days* opens a grid of every spot against every session (sunrise, sunset, night), shaded in four score bands, with tide-blocked sessions marked. Tap a square for its summary and briefing.
 - **Hunts per spot: Colour, Fog, Storm, Lightning, Rainbow.** Choose what you shoot at each spot. Each hunt gets its own 0–100 score, and the session shows the best one:
@@ -118,7 +118,7 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=4.0`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=4.1`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:
