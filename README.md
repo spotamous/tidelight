@@ -118,7 +118,7 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=4.1`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=4.2`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:

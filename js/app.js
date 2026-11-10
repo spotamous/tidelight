@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.1';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.1';
-import { driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.1';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.1';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=4.1';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.1';
-import { gearFor } from './gear.js?v=4.1';
-import { VAPID_PUBLIC_KEY } from './config.js?v=4.1';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.1';
-import { haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.1';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.2';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.2';
+import { driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.2';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.2';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=4.2';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.2';
+import { gearFor } from './gear.js?v=4.2';
+import { VAPID_PUBLIC_KEY } from './config.js?v=4.2';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.2';
+import { haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.2';
 
-export const APP_VERSION = '4.1';
+export const APP_VERSION = '4.2';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -440,6 +440,26 @@ function sessionDetail(e, isBest = false) {
   </article>`;
 }
 
+// Spread markers that would overlap so each stays easy to tap. A pin on the band keeps each session's
+// exact time; a marker only moves sideways as far as it needs to.
+function layoutBandMarks() {
+  const bandEl = $('.band');
+  if (!bandEl || !bandEl.clientWidth) return;
+  const W = bandEl.clientWidth;
+  const gap = (52 / W) * 100, edge = (24 / W) * 100;
+  const marks = $$('.band-mark', bandEl).map(el => ({ el, x: parseFloat(el.dataset.pos) })).sort((a, b) => a.x - b.x);
+  marks.forEach((m, i) => { m.p = Math.max(m.x, edge, i ? marks[i - 1].p + gap : -Infinity); });
+  for (let i = marks.length - 1; i >= 0; i--) {
+    const max = i === marks.length - 1 ? 100 - edge : marks[i + 1].p - gap;
+    if (marks[i].p > max) marks[i].p = max;
+  }
+  marks.forEach(m => {
+    m.el.style.left = `${m.p}%`;
+    m.el.classList.toggle('nudged', Math.abs(m.p - m.x) > 0.5);
+  });
+}
+window.addEventListener('resize', () => { if (tab === 'forecast') layoutBandMarks(); });
+
 async function renderForecast(v) {
   const st = S();
   if (!st.spots.length) return emptySpots(v);
@@ -475,7 +495,7 @@ async function renderForecast(v) {
     const span = e.type === 'day' && H?.from && H.to > H.from
       ? `<span class="band-span" style="left:${band.pos(H.from)}%; width:${Math.max(1, band.pos(H.to) - band.pos(H.from))}%"></span>` : '';
     const more = counts[e.type] > 1 ? `<span class="band-more">+${counts[e.type] - 1}</span>` : '';
-    return `${span}<button class="band-mark ${e.key === homeSel ? 'on' : ''}" style="left:${band.pos(e.t)}%; --fill:${bandFill(e.score)}; --ink:${bandInk(e.score)}" data-sel="${esc(e.key)}"
+    return `${span}<span class="band-pin" style="left:${band.pos(e.t)}%" aria-hidden="true"></span><button class="band-mark ${e.key === homeSel ? 'on' : ''}" data-pos="${band.pos(e.t)}" style="left:${band.pos(e.t)}%; --fill:${bandFill(e.score)}; --ink:${bandInk(e.score)}" data-sel="${esc(e.key)}"
       aria-label="${TYPE_NAME[e.type]} at ${esc(e.spot.name)}, ${sessionWhen(e)}, score ${e.score}">${e.score}${more}</button>`;
   }).join('');
   const ticks = [[w0 + 3 * 3600, '6am'], [w0 + 9 * 3600, 'Noon'], [w0 + 15 * 3600, '6pm'], [w0 + 21 * 3600, 'Midnight']]
@@ -512,6 +532,7 @@ async function renderForecast(v) {
     <p class="small muted foot-note">Scores are estimates from forecast data. Check official warnings before heading out.</p>`;
 
   bandRevealed = true;
+  layoutBandMarks();
   wirePills(v);
   $$('[data-sel]', v).forEach(b => b.onclick = () => {
     homeSel = b.dataset.sel;

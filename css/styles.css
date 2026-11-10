@@ -675,3 +675,14 @@ code { font: 400 .85em var(--mono); background: var(--surface-2); padding: 1px 5
 .other-name small { font: 400 .78rem var(--sans); color: var(--muted); margin-top: 2px; }
 .other-score { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--fill); color: var(--ink); font: 400 1.05rem var(--serif); }
 .foot-note { margin-top: 24px; }
+
+/* Light band markers: never overlap; counts sit on the marker's corner; pins mark exact times */
+.band-mark { width: 44px; height: 44px; }
+.band-mark.on { transform: translate(-50%, -50%) scale(1.1); }
+.band-more {
+  top: -7px; left: auto; right: -9px; transform: none;
+  min-width: 22px; height: 18px; padding: 0 5px; border-radius: 999px;
+  display: grid; place-items: center; background: var(--ground); color: var(--text);
+  font: 700 .62rem/1 var(--sans); box-shadow: 0 0 0 1px var(--line);
+}
+.band-pin { position: absolute; bottom: 0; width: 2px; height: 10px; margin-left: -1px; background: rgba(236, 232, 225, .7); border-radius: 1px 1px 0 0; pointer-events: none; }
