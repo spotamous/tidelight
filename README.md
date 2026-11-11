@@ -7,6 +7,9 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 ## What it does
 
 - **Home page: the light band.** Pick today, the next two days or *All spots* (the spot matrix). Each day opens with a plain-language headline for its best session, then a band showing that day's real light from 3am to 3am (dark, blue hour, golden hour, daylight, worked out from the sun's position where you live), with each session marked on it by score. Tap a marker, or any session in the list below, to see it in the detail panel: photo, score, leave time, why it scored that way (a bar for every factor, plus confidence and your style), what could change it, and *Plan this shoot*.
+- **Scrub the light band.** Drag along the band (or focus it and use the arrow keys) to see any hour's light phase, cloud layers, rain, wind and temperature, plus the selected session's score at that hour where an hourly score makes sense (colour, forest, waterfall, storms).
+- **Swipe.** Swipe the detail panel left or right to step through the day's sessions in time order (or use the arrows under it); swipe the day's headline to change day.
+- **Field compass.** *Compass* on any session shows a dial with where the sun rises or sets, the Milky Way core, aurora, a rainbow, and your composition's facing direction. *Point with my phone* uses the phone's compass (corrected from magnetic to true north for Australia and New Zealand) and says which way to turn.
 - **Spots tab: a card per spot.** Each card shows the spot's best session in the next 3 days, why, and tags (hunt, hike, tide window, models agree or disagree, crewmates going). Filter by session type; the map and search are still there for adding spots.
 - **Previously: The Call + spot matrix.** The page opens on the single best session in the next 3 days: your spot photo, a plain verdict ("Go for *fog.*"), the score, leave time and the main reason, with *Read the briefing* and *Plan it*. Below that are three runners-up, preferring different spots. *All 3 days* opens a grid of every spot against every session (sunrise, sunset, night), shaded in four score bands, with tide-blocked sessions marked. Tap a square for its summary and briefing.
 - **Hunts per spot: Colour, Fog, Storm, Lightning, Rainbow.** Choose what you shoot at each spot. Each hunt gets its own 0–100 score, and the session shows the best one:
@@ -118,7 +121,7 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=4.2`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=4.3`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:

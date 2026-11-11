@@ -1,6 +1,6 @@
 // Extra things to hunt for at a spot, beyond sunrise/sunset colour.
 // Each scorer returns { score 0–100, factors: [{k: good|bad|neutral, t}], ...extras } or null when not applicable.
-import { clamp, compass, fmtTime, angleDiff } from './util.js?v=4.2';
+import { clamp, compass, fmtTime, angleDiff } from './util.js?v=4.3';
 
 export const HUNT_ORDER = ['colour', 'fog', 'storm', 'lightning', 'rainbow', 'forest', 'waterfall', 'aurora', 'astro'];
 export const NIGHT_HUNTS = ['aurora', 'astro'];     // scored as their own "Night" session
@@ -73,7 +73,7 @@ export function fogScore(hours, idx, spot, elevation) {
 }
 
 /* ---------- Storms: instability + trigger near the session ---------- */
-function stormAt(h) {
+export function stormAt(h) {
   const c = h.cape != null ? clamp((h.cape - 200) / 1800) : 0;
   const li = h.li != null ? clamp(-h.li / 6) : c;
   const th = THUNDER(h.code) ? 1 : SHOWERY(h.code) ? 0.3 : 0;

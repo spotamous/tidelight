@@ -527,7 +527,7 @@ function computeDayHunts({ spot, data, i0, i1 }) {
   return out;
 }
 
-return { HUNT_ORDER, NIGHT_HUNTS, DAY_HUNTS, HUNT_LABEL, HUNT_VERB, huntsOf, fogScore, stormScore, lightningScore, rainbowScore, computeHunts, setKp, hasKp, geomagLat, kpNeeded, auroraScore, coreAltAz, astroScore, computeNightHunts, forestAt, waterfallAt, computeDayHunts };
+return { HUNT_ORDER, NIGHT_HUNTS, DAY_HUNTS, HUNT_LABEL, HUNT_VERB, huntsOf, fogScore, stormAt, stormScore, lightningScore, rainbowScore, computeHunts, setKp, hasKp, geomagLat, kpNeeded, auroraScore, coreAltAz, astroScore, computeNightHunts, forestAt, waterfallAt, computeDayHunts };
 })();
 
 /* ===== js/scoring.js ===== */

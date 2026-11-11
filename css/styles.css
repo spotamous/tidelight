@@ -686,3 +686,39 @@ code { font: 400 .85em var(--mono); background: var(--surface-2); padding: 1px 5
   font: 700 .62rem/1 var(--sans); box-shadow: 0 0 0 1px var(--line);
 }
 .band-pin { position: absolute; bottom: 0; width: 2px; height: 10px; margin-left: -1px; background: rgba(236, 232, 225, .7); border-radius: 1px 1px 0 0; pointer-events: none; }
+
+/* ---------- Scrub readout on the light band ---------- */
+.band { touch-action: pan-y; cursor: crosshair; }
+.band:focus-visible { outline: 2px solid var(--caramel); outline-offset: 3px; }
+.scrub-line { position: absolute; top: -6px; bottom: -6px; width: 2px; margin-left: -1px; background: var(--text); pointer-events: none; z-index: 3; }
+.scrub {
+  position: absolute; bottom: calc(100% + 10px); transform: translateX(-50%); z-index: 4; pointer-events: none;
+  display: grid; gap: 2px; min-width: 210px; max-width: 260px; padding: 10px 12px; border-radius: 10px;
+  background: var(--text); color: var(--ground); font: 400 .78rem/1.35 var(--sans);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+}
+.scrub strong { font: 700 .86rem var(--sans); }
+.scrub[data-edge="left"] { transform: translateX(-12%); }
+.scrub[data-edge="right"] { transform: translateX(-88%); }
+
+/* ---------- Session navigation inside the detail panel ---------- */
+.detail-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 12px 14px; color: var(--muted); font: 400 .78rem var(--sans); text-align: center; }
+.detail-nav .icon-btn:disabled { opacity: .35; cursor: default; }
+.detail.slide-right { animation: slide-in-right .22s ease-out; }
+.detail.slide-left { animation: slide-in-left .22s ease-out; }
+@keyframes slide-in-right { from { transform: translateX(28px); opacity: .5; } to { transform: none; opacity: 1; } }
+@keyframes slide-in-left { from { transform: translateX(-28px); opacity: .5; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .detail.slide-right, .detail.slide-left { animation: none; } }
+
+/* ---------- Field compass ---------- */
+.compass { display: grid; place-items: center; margin: 8px 0 4px; }
+.compass svg { width: min(78vw, 300px); height: auto; }
+.cp-letter { font: 700 15px var(--sans); fill: var(--muted); }
+.cp-letter.n { fill: var(--caramel); }
+.compass-guide { font: 400 1.35rem/1.25 var(--serif); text-align: center; margin: 6px 0 12px; min-height: 1.6em; }
+.compass-targets { display: grid; gap: 6px; }
+.cp-target { display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: center; width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: none; color: var(--text); font: 400 .9rem var(--sans); text-align: left; cursor: pointer; }
+.cp-target.on { border-color: var(--caramel); }
+.cp-target i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.cp-target b { font: 600 .85rem var(--sans); font-variant-numeric: tabular-nums; color: var(--muted); }
+.band { -webkit-user-select: none; user-select: none; }

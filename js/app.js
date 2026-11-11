@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.2';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.2';
-import { driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.2';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.2';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp } from './hunts.js?v=4.2';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.2';
-import { gearFor } from './gear.js?v=4.2';
-import { VAPID_PUBLIC_KEY } from './config.js?v=4.2';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.2';
-import { haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.2';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.3';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.3';
+import { baseScore, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.3';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.3';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt } from './hunts.js?v=4.3';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.3';
+import { gearFor } from './gear.js?v=4.3';
+import { VAPID_PUBLIC_KEY } from './config.js?v=4.3';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.3';
+import { haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.3';
 
-export const APP_VERSION = '4.2';
+export const APP_VERSION = '4.3';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -410,7 +410,7 @@ function huntPhrase(e) {
   return 'Probably not worth it';
 }
 
-function sessionDetail(e, isBest = false) {
+function sessionDetail(e, isBest = false, nav = null) {
   const H = e.hunts?.[e.topHunt] || {};
   const parts = [...(H.parts || [])];
   if (e.topHunt === 'colour' && e.confidence) parts.push({ label: 'Models agree', value: Math.max(0, 100 - e.confidence.spread * 2), note: `${cap(e.confidence.level)} confidence: within ${e.confidence.spread} points`, alt: true });
@@ -418,7 +418,7 @@ function sessionDetail(e, isBest = false) {
   const planned = S().plans.some(p => p.key === e.key);
   const going = crewGoing(e);
   const photo = coverUrl(e.spot);
-  return `<article class="detail" aria-live="polite">
+  return `<article class="detail ${slideFrom ? `slide-${slideFrom}` : ''}" aria-live="polite">
     ${photo ? `<img class="detail-photo" src="${photo}" alt="${esc(e.spot.name)}">` : ''}
     <div class="detail-head">
       <div>
@@ -436,9 +436,109 @@ function sessionDetail(e, isBest = false) {
     <div class="row">
       <button class="btn primary" data-plan="${esc(e.key)}" ${planned ? 'disabled' : ''}>${planned ? 'Planned' : 'Plan this shoot'}</button>
       <button class="btn" data-ev="${esc(e.key)}">Full briefing</button>
+      <button class="btn" data-compass="${esc(e.key)}">Compass</button>
     </div>
+    ${nav && nav.total > 1 ? `<nav class="detail-nav" aria-label="Sessions this day">
+      <button class="icon-btn" data-step="-1" aria-label="Previous session" ${nav.index === 0 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <span>Session ${nav.index + 1} of ${nav.total}. Swipe to move between them.</span>
+      <button class="icon-btn" data-step="1" aria-label="Next session" ${nav.index === nav.total - 1 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+    </nav>` : ''}
   </article>`;
 }
+
+/* ---------- scrubbing the light band ---------- */
+function phaseAt(marks, t) {
+  if (t < marks.nightEnd) return 'dark';
+  if (t < marks.dawn) return 'twilight';
+  if (t < marks.sunrise) return 'blue hour';
+  if (t < marks.gEnd) return 'golden hour';
+  if (t < marks.gStart) return 'daylight';
+  if (t < marks.sunset) return 'golden hour';
+  if (t < marks.dusk) return 'blue hour';
+  if (t < marks.night) return 'twilight';
+  return 'dark';
+}
+// The selected session's hunt, scored at another hour (where an hour-by-hour score makes sense).
+function scoreAtHour(e, data, i) {
+  const h = data.hours[i], sp = e.spot;
+  switch (e.topHunt) {
+    case 'forest': return forestAt(data, i).score;
+    case 'waterfall': return waterfallAt(data, i).score;
+    case 'storm': case 'lightning': return Math.round(stormAt(h) * 100);
+    case 'colour': return baseScore(h, sp.coastal ? tideInfo(data.hours, i) : null, sp).score;
+    default: return null;
+  }
+}
+function scrubText(e, t, marks) {
+  const data = forecasts[e.spot.id];
+  const phase = phaseAt(marks, t);
+  const head = `${fmtTime(t, e.offset)}, ${phase}`;
+  if (!data) return { head, lines: [] };
+  const i = nearestIndex(data.hours, t);
+  if (i < 0) return { head, lines: [] };
+  const h = data.hours[i];
+  const lines = [
+    `Low cloud ${Math.round(h.low ?? 0)}%, mid ${Math.round(h.mid ?? 0)}%, high ${Math.round(h.high ?? 0)}%`,
+    `Rain ${Math.round(h.pp ?? 0)}%, wind ${Math.round(h.wind ?? 0)} km/h${h.temp != null ? `, ${Math.round(h.temp)}°C` : ''}`,
+  ];
+  const sc = scoreAtHour(e, data, i);
+  if (sc != null) {
+    const note = e.topHunt === 'colour' && !/golden|blue/.test(phase) ? ' (sky only: colour needs a low sun)' : '';
+    lines.push(`${HUNT_LABEL[e.topHunt]} ${sc} at ${e.spot.name}${note}`);
+  }
+  return { head, lines };
+}
+function wireScrub(v, w0, marks, sel) {
+  const bandEl = $('.band', v), out = $('#scrub', v), line = $('#scrubLine', v);
+  if (!bandEl || !out || !sel) return;
+  let scrubbing = false, hideTimer = null, current = sel.t;
+  const show = t => {
+    current = Math.max(w0, Math.min(w0 + 86399, t));
+    const f = (current - w0) / 86400 * 100;
+    const { head, lines } = scrubText(sel, current, marks);
+    out.innerHTML = `<strong>${esc(head)}</strong>${lines.map(l => `<span>${esc(l)}</span>`).join('')}`;
+    out.hidden = false; line.hidden = false;
+    line.style.left = `${f}%`;
+    out.style.left = `${f}%`;
+    out.dataset.edge = f < 22 ? 'left' : f > 78 ? 'right' : '';
+    bandEl.setAttribute('aria-valuenow', String(Math.round((current - w0) / 60)));
+    bandEl.setAttribute('aria-valuetext', `${head}. ${lines.join('. ')}`);
+    clearTimeout(hideTimer);
+  };
+  const hideSoon = () => { clearTimeout(hideTimer); hideTimer = setTimeout(() => { out.hidden = true; line.hidden = true; }, 3500); };
+  const tAt = x => { const r = bandEl.getBoundingClientRect(); return w0 + Math.max(0, Math.min(1, (x - r.left) / r.width)) * 86400; };
+  bandEl.addEventListener('pointerdown', ev => {
+    if (ev.target.closest('.band-mark')) return;
+    scrubbing = true;
+    try { bandEl.setPointerCapture(ev.pointerId); } catch {}
+    show(tAt(ev.clientX));
+  });
+  bandEl.addEventListener('pointermove', ev => { if (scrubbing) show(tAt(ev.clientX)); });
+  const end = () => { if (scrubbing) { scrubbing = false; hideSoon(); } };
+  bandEl.addEventListener('pointerup', end);
+  bandEl.addEventListener('pointercancel', () => { scrubbing = false; out.hidden = true; line.hidden = true; });
+  bandEl.addEventListener('keydown', ev => {
+    const step = { ArrowRight: 1800, ArrowLeft: -1800, PageUp: 3 * 3600, PageDown: -3 * 3600 }[ev.key];
+    if (step) { ev.preventDefault(); show(current + step); hideSoon(); }
+    else if (ev.key === 'Home') { ev.preventDefault(); show(w0); hideSoon(); }
+    else if (ev.key === 'End') { ev.preventDefault(); show(w0 + 86399); hideSoon(); }
+    else if (ev.key === 'Escape') { out.hidden = true; line.hidden = true; }
+  });
+}
+
+/* ---------- swipe gestures ---------- */
+function onSwipe(el, left, right) {
+  if (!el) return;
+  let x0 = null, y0 = 0, t0 = 0;
+  el.addEventListener('touchstart', e => { const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); }, { passive: true });
+  el.addEventListener('touchend', e => {
+    if (x0 == null) return;
+    const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    x0 = null;
+    if (Math.abs(dx) > 50 && Math.abs(dy) < Math.abs(dx) * 0.6 && Date.now() - t0 < 700) (dx < 0 ? left : right)();
+  }, { passive: true });
+}
+let slideFrom = '';   // 'left' | 'right': which way the detail panel should slide in after a change
 
 // Spread markers that would overlap so each stays easy to tap. A pin on the band keeps each session's
 // exact time; a marker only moves sideways as far as it needs to.
@@ -503,6 +603,7 @@ async function renderForecast(v) {
   const nowLine = now > w0 && now < w0 + 86400 ? `<span class="band-now" style="left:${band.pos(now)}%" aria-hidden="true"></span>` : '';
 
   const others = dayEvs.filter(e => e.key !== homeSel).sort((a, b) => a.t - b.t);
+  const order = [...dayEvs].sort((a, b) => a.t - b.t || b.score - a.score);   // swipe order: through the day
 
   v.innerHTML = `
     ${dayPills(offset)}
@@ -512,15 +613,18 @@ async function renderForecast(v) {
       <p class="day-lede">${best ? `${esc(huntPhrase(best))} at ${esc(best.spot.name)}, ${TYPE_NAME[best.type].toLowerCase()} ${sessionWhen(best)}.` : 'No sessions left for this day. Try another day.'}</p>
     </header>
     <figure class="band-wrap">
-      <div class="band ${bandRevealed ? '' : 'reveal'}" style="background:${band.gradient}" role="group" aria-label="The day's light, 3am to 3am, with each session marked">
+      <div class="band ${bandRevealed ? '' : 'reveal'}" style="background:${band.gradient}" tabindex="0" role="slider"
+        aria-label="The day's light, 3am to 3am. Drag, or use the arrow keys, to see conditions at any time." aria-valuemin="0" aria-valuemax="1440" aria-valuenow="0">
         ${nowLine}${markers}
+        <span class="scrub-line" id="scrubLine" hidden></span>
+        <div class="scrub" id="scrub" hidden></div>
       </div>
       <div class="band-ticks" aria-hidden="true">${ticks}</div>
       <figcaption class="band-key">
         <span><i style="background:${BAND.blue}"></i>Blue hour</span><span><i style="background:${BAND.golden}"></i>Golden hour</span><span><i style="background:${BAND.day}"></i>Daylight</span><span><i style="background:${BAND.night}; outline:1px solid var(--line)"></i>Dark</span>
       </figcaption>
     </figure>
-    ${sel ? sessionDetail(sel, sel.key === best?.key) : ''}
+    ${sel ? sessionDetail(sel, sel.key === best?.key, { index: order.findIndex(e => e.key === sel.key), total: order.length }) : ''}
     ${others.length ? `<section class="others">
       <h3 class="others-title">Other sessions ${homeDay === 0 ? 'today' : homeDay === 1 ? 'tomorrow' : `on ${esc(weekday)}`}</h3>
       ${others.map(e => `<button class="other-row" data-sel="${esc(e.key)}">
@@ -532,8 +636,25 @@ async function renderForecast(v) {
     <p class="small muted foot-note">Scores are estimates from forecast data. Check official warnings before heading out.</p>`;
 
   bandRevealed = true;
+  slideFrom = '';
   layoutBandMarks();
   wirePills(v);
+  wireScrub(v, w0, band.marks, sel);
+  const step = d => {
+    const i = order.findIndex(e => e.key === homeSel) + d;
+    if (i < 0 || i >= order.length) return;
+    homeSel = order[i].key; slideFrom = d > 0 ? 'right' : 'left';
+    renderForecast(v);
+  };
+  const goDay = d => {
+    const next = Math.max(0, Math.min(2, homeDay + d));
+    if (next === homeDay) return;
+    homeDay = next; homeSel = null; slideFrom = d > 0 ? 'right' : 'left';
+    renderForecast(v);
+  };
+  onSwipe($('.detail', v), () => step(1), () => step(-1));
+  onSwipe($('.day-head-v2', v), () => goDay(1), () => goDay(-1));
+  $$('[data-step]', v).forEach(b => b.onclick = () => step(Number(b.dataset.step)));
   $$('[data-sel]', v).forEach(b => b.onclick = () => {
     homeSel = b.dataset.sel;
     renderForecast(v).then(() => { const d = $('.detail'); if (d && b.classList.contains('other-row')) d.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); });
@@ -675,6 +796,7 @@ function openEvent(key) {
       <button class="btn primary" id="planBtn" ${planned ? 'disabled' : ''}>${planned ? 'Planned' : 'Plan this shoot'}</button>
       ${currentUser() && crewState.crews.length ? '<button class="btn" id="shareBtn">Share with crew</button>' : ''}
       <button class="btn" id="icsBtn">Add to calendar</button>
+      <button class="btn" data-compass="${esc(e.key)}">Compass</button>
     </div>
   `);
   const sb = $('#shareBtn');
@@ -1693,6 +1815,139 @@ async function openNow(start) {
   }
 }
 
+/* ================= field compass ================= */
+
+const WIND_WORDS = { N: 'north', NNE: 'north-northeast', NE: 'northeast', ENE: 'east-northeast', E: 'east', ESE: 'east-southeast', SE: 'southeast', SSE: 'south-southeast', S: 'south', SSW: 'south-southwest', SW: 'southwest', WSW: 'west-southwest', W: 'west', WNW: 'west-northwest', NW: 'northwest', NNW: 'north-northwest' };
+
+// Phone compasses point to magnetic north; sun and star bearings are true north. Approximate magnetic
+// declination (degrees east, around 2025) for Australia and New Zealand, blended by distance.
+const DECLINATION = [
+  [-37.81, 144.96, 11.8], [-33.87, 151.21, 12.9], [-27.47, 153.03, 11.2], [-34.93, 138.6, 8.6], [-42.88, 147.33, 15.2],
+  [-35.28, 149.13, 12.5], [-31.95, 115.86, -0.5], [-12.46, 130.84, 3.6], [-16.92, 145.77, 7.8], [-23.7, 133.88, 5.0],
+  [-34.19, 142.16, 9.8], [-38.15, 144.36, 11.4], [-37.56, 143.85, 11.0], [-36.76, 144.28, 11.2], [-38.34, 141.6, 10.5],
+  [-37.0, 147.5, 12.6], [-36.85, 174.76, 20.0], [-43.53, 172.64, 24.0], [-41.29, 174.78, 22.5], [-19.26, 146.82, 8.3],
+];
+function declinationAt(lat, lon) {
+  let wsum = 0, dsum = 0, nearest = Infinity;
+  for (const [la, lo, d] of DECLINATION) {
+    const km = haversineKm({ lat, lon }, { lat: la, lon: lo });
+    nearest = Math.min(nearest, km);
+    const w = 1 / Math.max(1, km) ** 2;
+    wsum += w; dsum += w * d;
+  }
+  return nearest > 2500 ? null : dsum / wsum;   // too far from the table: no correction
+}
+
+function compassTargets(e) {
+  const sp = e.spot, out = [];
+  if (window.SunCalc && e.type !== 'night') {
+    const pos = window.SunCalc.getPosition(new Date(e.t * 1000), sp.lat, sp.lon);
+    out.push({ id: 'sun', label: e.type === 'sunrise' ? 'Sunrise' : e.type === 'sunset' ? 'Sunset' : `Sun at ${fmtTime(e.t, e.offset)}`, az: (pos.azimuth * 180 / Math.PI + 180 + 360) % 360, color: '#D9A066' });
+  }
+  if (e.hunts?.astro?.core && e.hunts.astro.score > 0) out.push({ id: 'core', label: `Milky Way core at ${fmtTime(e.hunts.astro.peak, e.offset)}`, az: e.hunts.astro.core.az, color: '#9DADB1' });
+  if (e.hunts?.aurora && e.hunts.aurora.score > 0) out.push({ id: 'aurora', label: 'Aurora, low on the horizon', az: sp.lat < 0 ? 180 : 0, color: '#9CCB8E' });
+  if (e.hunts?.rainbow?.look != null && e.hunts.rainbow.score > 0) out.push({ id: 'rainbow', label: 'Rainbow, sun at your back', az: e.hunts.rainbow.look, color: '#C7A6D9' });
+  if (sp.facing !== '' && sp.facing != null && !isNaN(Number(sp.facing))) out.push({ id: 'facing', label: 'Your composition', az: Number(sp.facing), color: '#ECE8E1' });
+  return out;
+}
+
+function openCompass(key) {
+  const e = eventIndex.get(key);
+  if (!e) return;
+  const targets = compassTargets(e);
+  if (!targets.length) { toast('Nothing to point at for this session. Add a facing direction to the spot to see your composition here.', 6000); return; }
+  let primary = targets[0].id;
+  const pt = (deg, r) => [r * Math.sin(deg * Math.PI / 180), -r * Math.cos(deg * Math.PI / 180)];
+  const ticks = Array.from({ length: 24 }, (_, i) => {
+    const d = i * 15, major = d % 90 === 0;
+    const [x1, y1] = pt(d, major ? 104 : 110), [x2, y2] = pt(d, 118);
+    return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${major ? '#ECE8E1' : '#4A5050'}" stroke-width="${major ? 2 : 1}"/>`;
+  }).join('');
+  const letters = [['N', 0], ['E', 90], ['S', 180], ['W', 270]].map(([l, d]) => { const [x, y] = pt(d, 88); return `<text x="${x.toFixed(1)}" y="${(y + 6).toFixed(1)}" data-cx="${x.toFixed(1)}" data-cy="${y.toFixed(1)}" text-anchor="middle" class="cp-letter ${l === 'N' ? 'n' : ''}">${l}</text>`; }).join('');
+  const decl = declinationAt(e.spot.lat, e.spot.lon);
+  const dots = () => targets.map(t => {
+    const [x, y] = pt(t.az, 118), [lx, ly] = pt(t.az, 72);
+    return `${t.id === primary ? `<line x1="0" y1="0" x2="${lx.toFixed(1)}" y2="${ly.toFixed(1)}" stroke="${t.color}" stroke-width="3" stroke-linecap="round"/>` : ''}
+      <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${t.id === primary ? 11 : 8}" fill="${t.color}" stroke="#0F1111" stroke-width="2"/>`;
+  }).join('');
+  openSheet(`
+    <h2>Compass</h2>
+    <p class="small muted">${esc(e.spot.name)}, ${esc(sessionName(e))}. Bearings are from true north${decl != null ? `; your phone's magnetic reading is corrected by about ${Math.round(Math.abs(decl))}° ${decl >= 0 ? 'east' : 'west'}` : ''}.</p>
+    <div class="compass">
+      <svg viewBox="-150 -150 300 300" role="img" aria-label="${esc(targets.map(t => `${t.label} at ${Math.round(t.az)} degrees`).join('. '))}">
+        <circle r="122" fill="#151818" stroke="#2A2F2F"/>
+        <g id="cpDial">${ticks}${letters}<g id="cpDots">${dots()}</g></g>
+        <polygon points="0,-146 -9,-128 9,-128" fill="#ECE8E1"/>
+        <circle r="4" fill="#ECE8E1"/>
+      </svg>
+    </div>
+    <p class="compass-guide" id="cpGuide" aria-live="polite"></p>
+    <div class="compass-targets">${targets.map(t => `<button class="cp-target ${t.id === primary ? 'on' : ''}" data-target="${t.id}"><i style="background:${t.color}"></i><span>${esc(t.label)}</span><b class="num">${Math.round(t.az)}° ${compass(t.az)}</b></button>`).join('')}</div>
+    <div class="row"><button class="btn primary block" id="cpStart">Point with my phone</button></div>
+    <p class="small muted">Hold the phone flat and away from cars, tripods and other metal. If the reading drifts, move the phone in a figure of eight to recalibrate.</p>`);
+
+  let heading = null, smooth = null, raf = 0, listening = false;
+  const guide = () => {
+    const t = targets.find(x => x.id === primary);
+    const g = $('#cpGuide');
+    if (!g || !t) return;
+    if (heading == null) { g.textContent = `${t.label}: ${Math.round(t.az)}°, ${WIND_WORDS[compass(t.az)]}.`; return; }
+    const diff = ((t.az - heading + 540) % 360) - 180;
+    g.textContent = Math.abs(diff) <= 8 ? `You're facing it: ${t.label.toLowerCase()}.` : `Turn ${diff > 0 ? 'right' : 'left'} ${Math.round(Math.abs(diff))}° for ${t.label.toLowerCase()}.`;
+  };
+  const draw = () => {
+    raf = 0;
+    if (heading == null) return;
+    if (smooth == null) smooth = heading;
+    smooth = (smooth + ((((heading - smooth) % 360) + 540) % 360 - 180) * 0.25 + 360) % 360;   // ease towards the reading
+    const dial = $('#cpDial');
+    if (dial) dial.setAttribute('transform', `rotate(${(-smooth).toFixed(1)})`);
+    $$('.cp-letter').forEach(l => l.setAttribute('transform', `rotate(${smooth.toFixed(1)} ${l.dataset.cx} ${l.dataset.cy})`));   // keep N/E/S/W upright
+    guide();
+  };
+  const onOrient = ev => {
+    let h = null;
+    if (typeof ev.webkitCompassHeading === 'number') h = ev.webkitCompassHeading;            // iPhone
+    else if (ev.absolute && typeof ev.alpha === 'number') h = (360 - ev.alpha) % 360;         // Android
+    if (h == null) return;
+    const angle = (screen.orientation && screen.orientation.angle) || 0;
+    heading = (h + angle + (decl || 0) + 720) % 360;   // magnetic → true north
+    if (!raf) raf = requestAnimationFrame(draw);
+  };
+  const stop = () => {
+    if (!listening) return;
+    window.removeEventListener('deviceorientation', onOrient, true);
+    window.removeEventListener('deviceorientationabsolute', onOrient, true);
+    if (raf) cancelAnimationFrame(raf);
+    listening = false;
+  };
+  onSheetClose = stop;
+  guide();
+
+  $$('.cp-target').forEach(b => b.onclick = () => {
+    primary = b.dataset.target;
+    $$('.cp-target').forEach(x => x.classList.toggle('on', x === b));
+    $('#cpDots').innerHTML = dots();
+    guide();
+  });
+  $('#cpStart').onclick = async () => {
+    const btn = $('#cpStart');
+    try {
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const res = await DeviceOrientationEvent.requestPermission();
+        if (res !== 'granted') throw new Error("Compass access wasn't allowed. To try again, close and reopen Tidelight.");
+      }
+      if (typeof DeviceOrientationEvent === 'undefined') throw new Error("This device doesn't have a compass the app can read.");
+      window.addEventListener('deviceorientationabsolute', onOrient, true);
+      window.addEventListener('deviceorientation', onOrient, true);
+      listening = true;
+      btn.textContent = 'Following your phone';
+      btn.disabled = true;
+      setTimeout(() => { if (heading == null && listening) { btn.disabled = false; btn.textContent = 'Point with my phone'; toast("No compass reading came through. On a computer that's expected; on a phone, try again away from metal.", 6000); } }, 3000);
+    } catch (err) { toast(err.message, 6000); }
+  };
+}
+
 /* ================= lightning distance timer ================= */
 
 function openLightningTimer() {
@@ -2209,6 +2464,8 @@ function renderSettings(v) {
 
 document.addEventListener('click', ev => {
   if (ev.target.closest('[data-lightning]')) { openLightningTimer(); return; }
+  const cpBtn = ev.target.closest('[data-compass]');
+  if (cpBtn) { openCompass(cpBtn.dataset.compass); return; }
   if (ev.target.closest('[data-add-here]') && found) { openSpotForm({ lat: found.lat, lon: found.lon, name: found.name }); return; }
   const evBtn = ev.target.closest('[data-ev]');
   if (evBtn) { openEvent(evBtn.dataset.ev); return; }
