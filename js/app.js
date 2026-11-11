@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.7';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.7';
-import { baseScore, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.7';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.7';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=4.7';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.7';
-import { gearFor } from './gear.js?v=4.7';
-import { VAPID_PUBLIC_KEY } from './config.js?v=4.7';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.7';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.7';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.8';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.8';
+import { baseScore, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.8';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.8';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=4.8';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.8';
+import { gearFor } from './gear.js?v=4.8';
+import { VAPID_PUBLIC_KEY } from './config.js?v=4.8';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.8';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.8';
 
-export const APP_VERSION = '4.7';
+export const APP_VERSION = '4.8';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -2558,7 +2558,9 @@ function renderYou(v, logLines = []) {
       ${row('ai', 'AI coach', hasAI(s) ? 'On, using your Claude key.' : 'Off. Optional.')}
       ${row('data', 'Your data', 'Back up, restore or delete.')}
     </div>
-    <p class="small muted you-foot">Tidelight version ${APP_VERSION}. Weather, tide and sea data from Open-Meteo (CC BY 4.0). Aurora forecast from NOAA. Maps from OpenStreetMap. Tide heights are modelled and can differ from official tide tables; check local warnings before heading out.</p>`;
+    <p class="small muted you-foot">Tidelight version ${APP_VERSION}. Weather, tide and sea data from Open-Meteo (CC BY 4.0). Aurora forecast from NOAA. Maps from OpenStreetMap. Tide heights are modelled and can differ from official tide tables; check local warnings before heading out.</p>
+    <button class="link-btn" id="replayWelcome">Show the welcome again</button>`;
+  $('#replayWelcome').onclick = () => openWelcome();
   $$('[data-you]', v).forEach(b => b.onclick = () => { youPage = b.dataset.you; renderYou(v); window.scrollTo(0, 0); });
 }
 
@@ -3013,6 +3015,225 @@ function pageData(v) {
   };
 }
 
+/* ================= first-run welcome ================= */
+const WELCOMED = 'tidelight:welcomed';
+let welcome = null;   // { steps, i, picked, signedIn, returning }
+
+const isIosBrowser = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !navigator.standalone && !matchMedia('(display-mode: standalone)').matches;
+
+function maybeWelcome() {
+  if (localStorage.getItem(WELCOMED) || S().spots.length) return;
+  openWelcome();
+}
+function openWelcome() {
+  closeWelcome(false);
+  const steps = [...(isIosBrowser() ? ['install'] : []), 'intro', 'home', 'spot', ...(isConfigured() ? ['account'] : []), 'done'];
+  welcome = { steps, i: 0, picked: null, returning: false };
+  const el = document.createElement('div');
+  el.id = 'welcome';
+  el.className = 'welcome';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', 'Welcome to Tidelight');
+  document.body.appendChild(el);
+  document.body.classList.add('noscroll');
+  drawWelcome();
+}
+function closeWelcome(done = true) {
+  if (done) localStorage.setItem(WELCOMED, '1');
+  welcome = null;
+  const el = $('#welcome');
+  if (el) el.remove();
+  if ($('#sheet').classList.contains('hidden') && !$('#field')) document.body.classList.remove('noscroll');
+}
+function welcomeGo(step) {
+  if (!welcome) return;
+  welcome.i = typeof step === 'number' ? Math.max(0, Math.min(welcome.steps.length - 1, welcome.i + step)) : welcome.steps.indexOf(step);
+  welcome.picked = null;
+  drawWelcome();
+  $('#welcome').scrollTop = 0;
+}
+
+function drawWelcome() {
+  const el = $('#welcome');
+  if (!el || !welcome) return;
+  const step = welcome.steps[welcome.i];
+  const numbered = welcome.steps.filter(x => !['install', 'intro', 'done'].includes(x));
+  const n = numbered.indexOf(step);
+  const top = `<div class="wl-top">
+      <span class="wl-progress">${n >= 0 ? `Step ${n + 1} of ${numbered.length}` : ''}</span>
+      ${step !== 'done' ? '<button class="link-btn" id="wlSkipAll">Skip setup</button>' : ''}
+    </div>`;
+  const results = id => `<div class="wl-results" id="${id}" hidden></div>`;
+  const st = S();
+
+  if (step === 'install') {
+    el.innerHTML = `${top}
+      <h1 class="page-title">Put Tidelight on your Home Screen first</h1>
+      <p class="page-lede">It opens full screen, works without reception and can send alerts. Anything you set up here in Safari stays in Safari, so install it first and set up once.</p>
+      <ol class="wl-steps">
+        <li>Tap the Share button at the bottom of Safari.</li>
+        <li>Choose <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</li>
+        <li>Open Tidelight from your Home Screen and set up there.</li>
+      </ol>
+      <div class="wl-actions"><button class="btn" id="wlNext">Set up here in Safari anyway</button></div>`;
+  } else if (step === 'intro') {
+    const offset = -new Date().getTimezoneOffset() * 60;
+    const b = lightBand(day3am(Date.now() / 1000, offset), st.settings.home);
+    el.innerHTML = `${top}
+      <h1 class="page-title wl-hero">Know before the alarm</h1>
+      <p class="page-lede">Tidelight scores sunrise, sunset, daytime and night sessions at your own spots, tells you when to leave, and explains why.</p>
+      <figure class="band-wrap wl-band">
+        <div class="band reveal" style="background:${b.gradient}" role="img" aria-label="A day's light from dark through blue hour, golden hour and daylight"></div>
+        <div class="band-ticks" aria-hidden="true">${[['6am', 12.5], ['Noon', 37.5], ['6pm', 62.5], ['Midnight', 87.5]].map(([l, x]) => `<span class="band-tick" style="left:${x}%">${l}</span>`).join('')}</div>
+      </figure>
+      <p class="you-copy">Every day is drawn as its light, with your sessions marked on it. Setting up takes about a minute.</p>
+      <div class="wl-actions">
+        <button class="btn primary" id="wlNext">Set up Tidelight</button>
+        ${isConfigured() ? '<button class="btn" id="wlHave">I already have an account</button>' : ''}
+      </div>`;
+  } else if (step === 'home') {
+    el.innerHTML = `${top}
+      <h1 class="page-title">Where do you set out from?</h1>
+      <p class="page-lede">Used to work out drive times and when to leave for each session.</p>
+      <div class="wl-actions"><button class="btn primary" id="wlHere">Use where I am now</button></div>
+      <form class="search" id="wlHomeSearch" role="search">
+        <input type="search" id="wlHomeQ" placeholder="Or search for your town or suburb" autocomplete="off" enterkeyhint="search" aria-label="Search for your town or suburb">
+        <button class="btn" type="submit">Search</button>
+      </form>
+      ${results('wlHomeRes')}
+      ${st.settings.home ? `<p class="small muted">Home is already set. <button class="link-btn" id="wlNext">Keep it and continue</button></p>` : ''}
+      <button class="link-btn wl-skip" id="wlSkip">Skip for now</button>`;
+  } else if (step === 'spot') {
+    const pk = welcome.picked;
+    el.innerHTML = `${top}
+      <h1 class="page-title">Add your first spot</h1>
+      <p class="page-lede">A beach, lookout, waterfall or forest you already shoot. You can add the rest later.</p>
+      ${pk ? `<form class="form" id="wlSpotForm">
+          <label>Name<input name="name" required value="${esc(pk.name || '')}" placeholder="e.g. North jetty"></label>
+          <fieldset><legend>What do you shoot here?</legend>
+            <div class="checks">${HUNT_ORDER.map(k => `<label class="check"><input type="checkbox" name="hunt_${k}" ${k === 'colour' ? 'checked' : ''}> ${HUNT_LABEL[k]}</label>`).join('')}</div>
+            <span class="hint">Colour is sunrise and sunset colour. Pick any others that suit the place.</span>
+          </fieldset>
+          <label class="check"><input type="checkbox" name="coastal"> It's on the coast (use tide and wave data)</label>
+          <div class="wl-actions">
+            <button class="btn primary" type="submit">Add this spot</button>
+            <button class="btn" type="button" id="wlRepick">Choose a different place</button>
+          </div>
+        </form>` : `<form class="search" id="wlSpotSearch" role="search">
+          <input type="search" id="wlSpotQ" placeholder="Search for a place, e.g. Cape Schanck" autocomplete="off" enterkeyhint="search" aria-label="Search for a place you shoot">
+          <button class="btn primary" type="submit">Search</button>
+        </form>
+        ${results('wlSpotRes')}
+        <div class="wl-actions"><button class="btn" id="wlSpotHere">I'm standing at it: use where I am</button></div>`}
+      <button class="link-btn wl-skip" id="wlSkip">Skip for now</button>`;
+  } else if (step === 'account') {
+    const user = currentUser();
+    el.innerHTML = `${top}
+      <h1 class="page-title">${welcome.returning ? 'Sign in' : 'Keep it safe, and bring your crew'}</h1>
+      <p class="page-lede">${welcome.returning ? 'Your spots, plans and settings will follow you onto this device.' : 'An account syncs your spots and plans between devices, turns on alerts, and lets you share plans with the people you shoot with. Optional.'}</p>
+      ${user ? `<p class="you-copy">Signed in as <strong>${esc(user.email)}</strong>.</p>
+        <form class="form" id="wlCrew">
+          <div class="two"><label>Crew invite code, if you have one<input name="code" maxlength="6" autocapitalize="characters" placeholder="ABC123"></label><label>Your name in the crew<input name="me" maxlength="40" value="${esc((user.email || '').split('@')[0])}"></label></div>
+          <div class="wl-actions"><button class="btn primary" type="submit">Continue</button></div>
+        </form>` : `<form class="form" id="wlAuth">
+          <label>Email<input type="email" name="email" autocomplete="email" required></label>
+          <label>Password<span class="hint">At least 8 characters</span><input type="password" name="password" autocomplete="${welcome.returning ? 'current-password' : 'new-password'}" minlength="8" required></label>
+          <div class="wl-actions">
+            ${welcome.returning ? '<button class="btn primary" type="submit" value="signin">Sign in</button>' : '<button class="btn primary" type="submit" value="create">Create account</button><button class="btn" type="submit" value="signin">Sign in instead</button>'}
+          </div>
+        </form>
+        <button class="link-btn wl-skip" id="wlSkip">${welcome.returning ? 'Back to setup' : 'Skip for now'}</button>`}`;
+  } else {
+    const spot = st.spots[0];
+    el.innerHTML = `${top}
+      <h1 class="page-title">${welcome.returning && spot ? 'Welcome back' : "You're set"}</h1>
+      <p class="page-lede">${spot ? (welcome.returning ? `Your ${st.spots.length} spot${st.spots.length === 1 ? ' is' : 's are'} here.` : `${esc(spot.name)} is being scored now.`) : 'Add a spot from the Spots tab whenever you\'re ready.'}</p>
+      <ul class="wl-tips">
+        <li><strong>Forecast</strong> draws each day as its light, with your sessions marked on it. Tap one to see why it scored that way.</li>
+        <li><strong>Plan this shoot</strong> gives you a leave time, a gear list to pack and field mode for when you arrive.</li>
+        <li><strong>Rate sessions afterwards.</strong> Three keepers switch on a score that's personal to you.</li>
+        ${currentUser() ? '<li><strong>Alerts</strong> tell you when a session is worth the alarm. Turn them on under You, in Alerts.</li>' : ''}
+      </ul>
+      <div class="wl-actions"><button class="btn primary" id="wlFinish">${spot ? 'Show me the forecast' : 'Go to Spots'}</button></div>`;
+  }
+
+  // ----- wiring -----
+  const on = (id, fn) => { const b = $(`#${id}`, el); if (b) b.onclick = fn; };
+  on('wlSkipAll', () => { closeWelcome(); render(); });
+  on('wlNext', () => welcomeGo(1));
+  on('wlSkip', () => { if (step === 'account' && welcome.returning) { welcome.returning = false; welcomeGo('home'); } else welcomeGo(1); });
+  on('wlHave', () => { welcome.returning = true; welcomeGo('account'); });
+  on('wlFinish', () => { const has = S().spots.length; closeWelcome(); for (const k in forecasts) delete forecasts[k]; setTab(has ? 'forecast' : 'spots'); });
+  on('wlRepick', () => { welcome.picked = null; drawWelcome(); });
+
+  const runSearch = async (inputId, resId, pick) => {
+    const q = $(`#${inputId}`, el).value.trim(), box = $(`#${resId}`, el);
+    if (q.length < 2) return;
+    box.hidden = false; box.innerHTML = '<p class="small muted">Searching…</p>';
+    try {
+      const found2 = await searchPlaces(q, S().settings.home);
+      if (!$(`#${resId}`)) return;
+      box.innerHTML = found2.length ? found2.slice(0, 6).map((r, i) => `<button class="wl-result" data-i="${i}"><span>${esc(r.name)}</span><small>${esc(r.detail || '')}</small></button>`).join('')
+        : '<p class="small muted">Nothing found. Try a nearby town or a simpler name.</p>';
+      $$('[data-i]', box).forEach(b => b.onclick = () => pick(found2[Number(b.dataset.i)]));
+    } catch { box.innerHTML = '<p class="small muted">The search didn\'t respond. Check your connection and try again.</p>'; }
+  };
+  const setHome = p => { update(s2 => { s2.settings.home = { lat: p.lat, lon: p.lon }; }); toast('Home set.'); welcomeGo(1); };
+  on('wlHere', async () => { try { setHome(await getPosition()); } catch (e) { toast(e.message, 5000); } });
+  const hs = $('#wlHomeSearch', el);
+  if (hs) hs.onsubmit = ev => { ev.preventDefault(); runSearch('wlHomeQ', 'wlHomeRes', setHome); };
+  const ss = $('#wlSpotSearch', el);
+  if (ss) ss.onsubmit = ev => { ev.preventDefault(); runSearch('wlSpotQ', 'wlSpotRes', r => { welcome.picked = r; drawWelcome(); }); };
+  on('wlSpotHere', async () => {
+    try {
+      const p = await getPosition();
+      welcome.picked = { name: '', lat: p.lat, lon: p.lon };
+      drawWelcome();
+      placeName(p.lat, p.lon).then(nm => { const f = $('#wlSpotForm'); if (nm && f && !f.name.value) f.name.value = `Near ${nm}`; }).catch(() => {});
+    } catch (e) { toast(e.message, 5000); }
+  });
+  const sf = $('#wlSpotForm', el);
+  if (sf) sf.onsubmit = ev => {
+    ev.preventDefault();
+    const f = new FormData(sf), name = String(f.get('name') || '').trim();
+    if (!name) return toast('Give the spot a name');
+    const hunts = HUNT_ORDER.filter(k => f.get(`hunt_${k}`));
+    const pk = welcome.picked;
+    update(s2 => s2.spots.push({
+      id: uid(), name, lat: pk.lat, lon: pk.lon, events: ['sunrise', 'sunset'], coastal: !!f.get('coastal'), tide: 'any',
+      driveMin: '', facing: '', notes: '', photos: [], hunts: hunts.length ? hunts : ['colour'], fogMode: 'in',
+    }));
+    toast(`${name} added.`);
+    welcomeGo(1);
+  };
+  const af = $('#wlAuth', el);
+  if (af) af.onsubmit = async ev => {
+    ev.preventDefault();
+    const f = new FormData(af), mode = ev.submitter?.value || (welcome.returning ? 'signin' : 'create');
+    const btns = $$('button[type=submit]', af); btns.forEach(b => { b.disabled = true; });
+    try {
+      const email = String(f.get('email')).trim(), pw = String(f.get('password'));
+      if (mode === 'create') await createAccount(email, pw); else await signInWithPassword(email, pw);
+      await syncNow().catch(() => {});
+      await loadCrew();
+      if (!welcome) return;
+      if (S().spots.length && welcome.returning) return welcomeGo('done');   // their data arrived: nothing more to set up
+      if (welcome.returning) { welcome.returning = false; toast('Signed in. Nothing saved in this account yet, so let\'s set up.', 5000); return welcomeGo('home'); }
+      drawWelcome();
+    } catch (e) { toast(e.message, 6000); btns.forEach(b => { b.disabled = false; }); }
+  };
+  const cf = $('#wlCrew', el);
+  if (cf) cf.onsubmit = async ev => {
+    ev.preventDefault();
+    const f = new FormData(cf), code = String(f.get('code') || '').trim();
+    if (code) {
+      try { const c = await joinCrew(code, String(f.get('me') || '').trim() || 'Me'); await loadCrew(); toast(`You've joined ${c.name}.`); }
+      catch (e) { return toast(e.message, 6000); }
+    }
+    welcomeGo(1);
+  };
+}
+
 /* ================= boot ================= */
 
 document.addEventListener('click', ev => {
@@ -3074,8 +3295,15 @@ function backfillRatings() {
 loadAllPhotos().finally(() => {
   backfillRatings();
   render();
+  maybeWelcome();
   onPasswordRecovery(openRecoverySheet);
-  initSync(() => { for (const k in forecasts) delete forecasts[k]; if (!$('#sheet').classList.contains('hidden')) return; render(); })
+  initSync(() => {
+    for (const k in forecasts) delete forecasts[k];
+    // Signed in already and the data has arrived: no need for the welcome.
+    if (welcome && S().spots.length && currentUser() && ['install', 'intro'].includes(welcome.steps[welcome.i])) closeWelcome();
+    if (!$('#sheet').classList.contains('hidden')) return;
+    render();
+  })
     .then(() => loadCrew()).then(() => { if (['forecast', 'plans', 'spots'].includes(tab) && $('#sheet').classList.contains('hidden')) render(); })
     .catch(() => {});
   let wasSignedIn = !!currentUser();
