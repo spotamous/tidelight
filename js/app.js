@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.3';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.3';
-import { baseScore, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.3';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.3';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt } from './hunts.js?v=4.3';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.3';
-import { gearFor } from './gear.js?v=4.3';
-import { VAPID_PUBLIC_KEY } from './config.js?v=4.3';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.3';
-import { haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.3';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.4';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.4';
+import { baseScore, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.4';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.4';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt } from './hunts.js?v=4.4';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.4';
+import { gearFor } from './gear.js?v=4.4';
+import { VAPID_PUBLIC_KEY } from './config.js?v=4.4';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.4';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.4';
 
-export const APP_VERSION = '4.3';
+export const APP_VERSION = '4.4';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -237,7 +237,7 @@ function openSheet(html) {
 function closeSheet() {
   runSheetClose();
   $('#sheet').classList.add('hidden');
-  document.body.classList.remove('noscroll');
+  if (!$('#field')) document.body.classList.remove('noscroll');
 }
 
 /* ================= router ================= */
@@ -437,6 +437,7 @@ function sessionDetail(e, isBest = false, nav = null) {
       <button class="btn primary" data-plan="${esc(e.key)}" ${planned ? 'disabled' : ''}>${planned ? 'Planned' : 'Plan this shoot'}</button>
       <button class="btn" data-ev="${esc(e.key)}">Full briefing</button>
       <button class="btn" data-compass="${esc(e.key)}">Compass</button>
+      <button class="btn" data-field="${esc(e.key)}">Field mode</button>
     </div>
     ${nav && nav.total > 1 ? `<nav class="detail-nav" aria-label="Sessions this day">
       <button class="icon-btn" data-step="-1" aria-label="Previous session" ${nav.index === 0 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
@@ -797,6 +798,7 @@ function openEvent(key) {
       ${currentUser() && crewState.crews.length ? '<button class="btn" id="shareBtn">Share with crew</button>' : ''}
       <button class="btn" id="icsBtn">Add to calendar</button>
       <button class="btn" data-compass="${esc(e.key)}">Compass</button>
+      <button class="btn" data-field="${esc(e.key)}">Field mode</button>
     </div>
   `);
   const sb = $('#shareBtn');
@@ -1109,6 +1111,7 @@ async function renderPlans(v) {
     </details>` : ''}
     <div class="row">
       ${currentUser() ? `<button class="btn ${shared ? 'ghost' : ''}" data-share="${p.id}">${shared ? 'Shared with crew' : 'Share with crew'}</button>` : ''}
+      ${eventIndex.has(p.key) ? `<button class="btn" data-field="${esc(p.key)}">Field mode</button>` : ''}
       <button class="btn" data-ics="${p.id}">Add to calendar</button>
       <button class="btn danger" data-del="${p.id}">Remove</button>
     </div></div>`;
@@ -1259,7 +1262,7 @@ async function renderSpots(v) {
     <div id="placeResults" class="results" hidden></div>
     <div class="row spot-actions">
       <button class="btn" id="addSpot">Add spot</button>
-      <button class="btn" id="hereSpot">Add where I am</button>
+      <button class="btn" id="scoutBtn">Scout this spot</button>
       <button class="btn ${spotsShowMap ? 'primary' : 'ghost'}" id="mapToggle" aria-pressed="${spotsShowMap}">${spotsShowMap ? 'Hide map' : 'Map'}</button>
     </div>
     ${spotsShowMap ? `<div id="map" role="application" aria-label="Map of your spots. Tap to add a spot."></div>
@@ -1272,9 +1275,7 @@ async function renderSpots(v) {
   $('#addSpot').onclick = () => openSpotForm();
   found = null;
   $('#placeSearch').onsubmit = ev => { ev.preventDefault(); runPlaceSearch(); };
-  $('#hereSpot').onclick = async () => {
-    try { const p = await getPosition(); openSpotForm(p); } catch (e) { toast(e.message, 4000); }
-  };
+  $('#scoutBtn').onclick = () => openScout();
   $('#mapToggle').onclick = () => { spotsShowMap = !spotsShowMap; renderSpots(v); };
   $$('[data-filter]', v).forEach(b => b.onclick = () => { spotFilter = b.dataset.filter; renderSpots(v); });
   if (spotsShowMap) initSpotsMap(st);
@@ -1555,6 +1556,7 @@ async function openSpotDetail(id) {
     <h2>${esc(s.name)}</h2>
     <p class="muted small">${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}${s.coastal && !data.hasMarine ? '. No tide or wave data at this exact point; try moving the pin slightly offshore.' : ''}</p>
     ${hikeSummary(s) ? `<p class="hike-line">${esc(hikeSummary(s))}</p>` : ''}
+    ${alignmentText(s) ? `<p class="align-line">${esc(alignmentText(s))}</p>` : ''}
     ${s.notes ? `<p>${esc(s.notes)}</p>` : ''}
     <div class="row">
       <button class="btn" id="editSpot">Edit spot</button>
@@ -1945,6 +1947,312 @@ function openCompass(key) {
       btn.disabled = true;
       setTimeout(() => { if (heading == null && listening) { btn.disabled = false; btn.textContent = 'Point with my phone'; toast("No compass reading came through. On a computer that's expected; on a phone, try again away from metal.", 6000); } }, 3000);
     } catch (err) { toast(err.message, 6000); }
+  };
+}
+
+/* ================= phone heading (shared by the compass and scouting) ================= */
+// Calls onHeading(degrees from true north). Handles the iPhone permission prompt and magnetic declination.
+function phoneHeading(onHeading, lat, lon) {
+  const decl = declinationAt(lat, lon) || 0;
+  let on = false;
+  const handler = ev => {
+    let h = null;
+    if (typeof ev.webkitCompassHeading === 'number') h = ev.webkitCompassHeading;
+    else if (ev.absolute && typeof ev.alpha === 'number') h = (360 - ev.alpha) % 360;
+    if (h == null) return;
+    const angle = (screen.orientation && screen.orientation.angle) || 0;
+    onHeading((h + angle + decl + 720) % 360);
+  };
+  return {
+    async start() {
+      if (typeof DeviceOrientationEvent === 'undefined') throw new Error("This device doesn't have a compass the app can read.");
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const res = await DeviceOrientationEvent.requestPermission();
+        if (res !== 'granted') throw new Error("Compass access wasn't allowed. To try again, close and reopen Tidelight.");
+      }
+      window.addEventListener('deviceorientationabsolute', handler, true);
+      window.addEventListener('deviceorientation', handler, true);
+      on = true;
+    },
+    stop() {
+      if (!on) return;
+      window.removeEventListener('deviceorientationabsolute', handler, true);
+      window.removeEventListener('deviceorientation', handler, true);
+      on = false;
+    },
+  };
+}
+
+/* ================= when the sun lines up with a view ================= */
+// Dates in the next year when sunrise or sunset sits within ~1.5° of the spot's facing direction.
+function alignmentDates(lat, lon, facing) {
+  if (!window.SunCalc || facing === '' || facing == null || isNaN(Number(facing))) return null;
+  const f = Number(facing), runs = [];
+  const start = new Date(); start.setHours(12, 0, 0, 0);
+  for (let d = 0; d < 366; d++) {
+    const day = new Date(start.getTime() + d * 86400000);
+    const T = window.SunCalc.getTimes(day, lat, lon);
+    for (const kind of ['sunrise', 'sunset']) {
+      const at = T[kind];
+      if (!(at instanceof Date) || isNaN(at)) continue;
+      const az = (window.SunCalc.getPosition(at, lat, lon).azimuth * 180 / Math.PI + 180 + 360) % 360;
+      const diff = angleDiff(az, f);
+      if (diff > 1.5) continue;
+      const last = runs[runs.length - 1];
+      if (last && last.kind === kind && d - last.lastDay <= 2) { last.lastDay = d; if (diff < last.diff) Object.assign(last, { diff, at }); }
+      else runs.push({ kind, at, diff, lastDay: d });
+    }
+  }
+  return runs.sort((a, b) => a.at - b.at).slice(0, 4);
+}
+function alignmentText(sp) {
+  const runs = alignmentDates(sp.lat, sp.lon, sp.facing);
+  if (runs == null) return '';
+  if (!runs.length) return `The sun never rises or sets in this direction (${Math.round(Number(sp.facing))}° ${compass(Number(sp.facing))}), though it can still light the scene from the side.`;
+  const fmt = r => `${r.kind} around ${r.at.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`;
+  return `The sun lines up with this view: ${runs.map(fmt).join(', ')}.`;
+}
+
+/* ================= field mode ================= */
+let fieldState = null;   // { key, timer, wake, night }
+
+function fieldMoments(e) {
+  const out = [], sp = e.spot;
+  const ok = d => d instanceof Date && !isNaN(d);
+  const add = (d, label, cls = '') => { const t = d instanceof Date ? d.getTime() / 1000 : d; if (t && isFinite(t)) out.push({ t, label, cls }); };
+  if (window.SunCalc && (e.type === 'sunrise' || e.type === 'sunset')) {
+    const T = window.SunCalc.getTimes(new Date(e.t * 1000), sp.lat, sp.lon);
+    const g = k => (ok(T[k]) ? T[k] : null);
+    if (e.type === 'sunrise') {
+      if (g('nauticalDawn')) add(g('nauticalDawn'), 'First light');
+      if (g('dawn')) add(g('dawn'), 'Blue hour starts');
+      if (g('blueHourEndAM')) add(g('blueHourEndAM'), 'Blue hour ends');
+      add(e.t, 'Sunrise', 'key');
+      if (g('goldenHourEnd')) add(g('goldenHourEnd'), 'Golden hour ends');
+    } else {
+      if (g('goldenHour')) add(g('goldenHour'), 'Golden hour starts');
+      add(e.t, 'Sunset', 'key');
+      if (g('blueHourStartPM')) add(g('blueHourStartPM'), 'Blue hour starts');
+      if (g('dusk')) add(g('dusk'), 'Blue hour ends');
+      if (g('night')) add(g('night'), 'Full darkness');
+    }
+  } else if (e.type === 'day') {
+    const H = e.hunts?.[e.topHunt];
+    if (H?.from && H.from < e.t) add(H.from, 'Good light from');
+    add(e.t, `Best for ${HUNT_LABEL[e.topHunt].toLowerCase()}`, 'key');
+    if (H?.to && H.to > e.t) add(H.to, 'Good light until');
+  } else if (e.timeline) {
+    e.timeline.forEach(x => add(x.t, x.label, x.cls || ''));
+  } else {
+    add(e.t, TYPE_NAME[e.type] || 'Session', 'key');
+  }
+  if (e.access && !e.access.none) {
+    if (!e.access.openStart) add(e.access.start, 'Tide access opens');
+    add(e.access.backBy, 'Be back off the rocks', 'warn');
+  }
+  if (e.tide?.low && Math.abs(e.tide.low.t - e.t) < 4 * 3600) add(e.tide.low.t, 'Low tide');
+  if (e.tide?.high && Math.abs(e.tide.high.t - e.t) < 4 * 3600) add(e.tide.high.t, 'High tide');
+  return out.sort((a, b) => a.t - b.t);
+}
+
+const untilText = secs => {
+  if (secs < 60) return `${Math.max(0, Math.round(secs))} s`;
+  if (secs < 3600) { const m = Math.floor(secs / 60), s2 = Math.floor(secs % 60); return `${m}:${String(s2).padStart(2, '0')}`; }
+  const h = Math.floor(secs / 3600), m = Math.round((secs % 3600) / 60);
+  return `${h} h ${m} min`;
+};
+
+function fieldConditions(e) {
+  const data = forecasts[e.spot.id];
+  if (!data) return '<p class="small muted">No forecast saved for this spot yet. Open it once with reception.</p>';
+  const now = Date.now() / 1000;
+  const i = nearestIndex(data.hours, now);
+  if (i < 0) return '<p class="small muted">The saved forecast doesn\'t cover right now. Refresh when you have reception.</p>';
+  const rows = [0, 1, 2].map(k => data.hours[i + k]).filter(Boolean).map((h, k) => `<div class="fc-row">
+      <span class="fc-time num">${k === 0 ? 'Now' : fmtTime(h.t, data.offset).replace(':00', '')}</span>
+      <span>Cloud ${Math.round(h.low ?? 0)}/${Math.round(h.mid ?? 0)}/${Math.round(h.high ?? 0)}%</span>
+      <span>Rain ${Math.round(h.pp ?? 0)}%</span>
+      <span>${Math.round(h.wind ?? 0)} km/h</span>
+    </div>`).join('');
+  let tide = '';
+  if (e.spot.coastal) {
+    const td = tideInfo(data.hours, i);
+    if (td) tide = `<p class="fc-tide">Tide ${Math.round(td.pos * 100)}% of its range and ${td.rising ? 'rising' : 'falling'}.</p>`;
+  }
+  const saved = Number(localStorage.getItem('tidelight:lastFetch') || 0);
+  return `${rows}${tide}<p class="small muted">From the forecast saved ${saved ? syncAgo(saved) : 'earlier'}. Low, mid and high cloud shown.</p>`;
+}
+
+function drawField() {
+  const st = fieldState;
+  const el = $('#field');
+  if (!st || !el) return;
+  const e = eventIndex.get(st.key);
+  if (!e) { closeField(); return; }
+  const now = Date.now() / 1000;
+  const moments = fieldMoments(e);
+  const next = moments.find(m => m.t > now);
+  const nextHtml = next
+    ? `<p class="fm-next-label">${esc(next.label)} in</p><p class="fm-count num ${next.cls}">${untilText(next.t - now)}</p><p class="fm-at">at ${fmtTime(next.t, e.offset)}</p>`
+    : `<p class="fm-next-label">That's the session done.</p><p class="fm-at">Rate it later in Plans so the coach learns.</p>`;
+  el.querySelector('#fmNext').innerHTML = nextHtml;
+  el.querySelector('#fmList').innerHTML = moments.map(m => `<li class="${m.t <= now ? 'past' : ''} ${m.cls}">
+      <time class="num">${fmtTime(m.t, e.offset)}</time><span>${esc(m.label)}</span><em class="num">${m.t > now ? `in ${untilText(m.t - now)}` : 'done'}</em></li>`).join('');
+}
+
+async function openField(key) {
+  const e = eventIndex.get(key);
+  if (!e) return;
+  closeSheet();
+  closeField();
+  const el = document.createElement('div');
+  el.id = 'field';
+  el.className = 'field';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', `Field mode for ${e.spot.name}`);
+  el.innerHTML = `
+    <div class="fm-top">
+      <div><p class="fm-spot">${esc(e.spot.name)}</p><p class="fm-sub">${esc(cap(sessionName(e)))}, score ${e.score}${e.topHunt !== 'colour' ? ` for ${HUNT_LABEL[e.topHunt].toLowerCase()}` : ''}</p></div>
+      <button class="icon-btn" id="fmClose" aria-label="Close field mode"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <section class="fm-next" id="fmNext" aria-live="polite"></section>
+    <ol class="fm-list" id="fmList"></ol>
+    <h3 class="fm-h">The sky</h3>
+    <div class="fm-cond">${fieldConditions(e)}</div>
+    <div class="fm-actions">
+      <button class="btn" data-compass="${esc(e.key)}">Compass</button>
+      <button class="btn" id="fmRadar">Radar and hourly</button>
+      <button class="btn" id="fmNight" aria-pressed="false">Night vision</button>
+    </div>
+    <p class="small muted fm-wake" id="fmWake"></p>`;
+  document.body.appendChild(el);
+  document.body.classList.add('noscroll');
+  fieldState = { key, timer: setInterval(drawField, 1000), wake: null, night: false };
+  drawField();
+
+  // Keep the screen on while field mode is open (re-acquired if the app comes back to the front).
+  const wakeNote = $('#fmWake');
+  const lock = async () => {
+    if (!('wakeLock' in navigator)) { wakeNote.textContent = "This device can't keep the screen awake from a web app; it may dim as usual."; return; }
+    try { fieldState.wake = await navigator.wakeLock.request('screen'); wakeNote.textContent = 'The screen stays on while field mode is open.'; }
+    catch { wakeNote.textContent = 'The screen may dim as usual (low battery mode can block keeping it on).'; }
+  };
+  fieldState.relock = () => { if (document.visibilityState === 'visible' && fieldState) lock(); };
+  document.addEventListener('visibilitychange', fieldState.relock);
+  lock();
+
+  $('#fmClose').onclick = closeField;
+  $('#fmRadar').onclick = () => openNow({ kind: 'spot', id: e.spot.id, lat: e.spot.lat, lon: e.spot.lon, name: e.spot.name });
+  $('#fmNight').onclick = () => {
+    fieldState.night = !fieldState.night;
+    el.classList.toggle('nightvision', fieldState.night);
+    document.body.classList.toggle('nv-sheets', fieldState.night);   // pop-ups opened from field mode go red too
+    $('#fmNight').setAttribute('aria-pressed', String(fieldState.night));
+    $('#fmNight').textContent = fieldState.night ? 'Normal colours' : 'Night vision';
+  };
+}
+function closeField() {
+  const st = fieldState;
+  if (st) {
+    clearInterval(st.timer);
+    if (st.wake) st.wake.release().catch(() => {});
+    if (st.relock) document.removeEventListener('visibilitychange', st.relock);
+  }
+  fieldState = null;
+  document.body.classList.remove('nv-sheets');
+  const el = $('#field');
+  if (el) el.remove();
+  if ($('#sheet').classList.contains('hidden')) document.body.classList.remove('noscroll');
+}
+
+/* ================= scout a spot ================= */
+function openScout() {
+  let pos = null, facing = null, photoFile = null, live = null, heading = null;
+  openSheet(`
+    <h2>Scout this spot</h2>
+    <p class="small muted">Stand where you'd set up. Tidelight records the location and the direction of your composition, then scores the spot from here on.</p>
+    <div class="scout-step"><strong>1. Location</strong><p id="scLoc" class="small muted">Finding you…</p></div>
+    <div class="scout-step"><strong>2. Which way you're shooting</strong>
+      <p class="small muted">Point the top of the phone at your composition, then tap Capture.</p>
+      <p class="scout-heading num" id="scHeading" aria-live="polite">–</p>
+      <div class="row"><button class="btn" id="scPoint">Use the phone's compass</button><button class="btn primary" id="scCapture" disabled>Capture direction</button></div>
+      <label class="small">Or type a bearing (°)<input id="scManual" inputmode="numeric" placeholder="e.g. 270 for west"></label>
+      <p class="small" id="scAlign"></p>
+    </div>
+    <form class="form" id="scForm">
+      <div class="scout-step"><strong>3. A photo and details (optional)</strong>
+        <label class="btn ghost" id="scPhotoBtn">Take or choose a photo<input type="file" id="scPhoto" class="file-input" accept="image/*" capture="environment"></label>
+        <p class="small muted" id="scPhotoNote"></p>
+      </div>
+      <label>Name<input name="name" required placeholder="e.g. North ledge"></label>
+      <fieldset><legend>What to hunt for here</legend>
+        <div class="checks">${HUNT_ORDER.map(k => `<label class="check"><input type="checkbox" name="hunt_${k}" ${k === 'colour' ? 'checked' : ''}> ${HUNT_LABEL[k]}</label>`).join('')}</div>
+      </fieldset>
+      <label class="check"><input type="checkbox" name="coastal"> Coastal spot (use tide and wave data)</label>
+      <label>Notes<textarea name="notes" placeholder="Access, parking, hazards, compositions"></textarea></label>
+      <div class="row"><button class="btn primary" type="submit" id="scSave" disabled>Save spot</button><button class="btn ghost" type="button" data-close>Cancel</button></div>
+    </form>`);
+  const form = $('#scForm');
+  const showAlign = () => {
+    if (!pos || facing == null) { $('#scAlign').textContent = ''; return; }
+    $('#scAlign').textContent = alignmentText({ lat: pos.lat, lon: pos.lon, facing });
+  };
+  const setFacing = f => {
+    facing = Math.round(((f % 360) + 360) % 360);
+    $('#scHeading').textContent = `${facing}° ${compass(facing)}, captured`;
+    showAlign();
+  };
+  onSheetClose = () => { if (live) live.stop(); };
+
+  getPosition().then(async p => {
+    pos = p;
+    if (!$('#scLoc')) return;
+    $('#scLoc').textContent = `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`;
+    $('#scSave').disabled = false;
+    const name = await placeName(p.lat, p.lon).catch(() => null);
+    if (name && form && !form.name.value) form.name.value = `Near ${name}`;
+    showAlign();
+  }).catch(err => { if ($('#scLoc')) $('#scLoc').textContent = `${err.message} You can still add the spot from the map instead.`; });
+
+  $('#scPoint').onclick = async () => {
+    try {
+      live = phoneHeading(h => {
+        heading = h;
+        const el = $('#scHeading');
+        if (el && facing == null) el.textContent = `${Math.round(h)}° ${compass(h)}`;
+        $('#scCapture').disabled = false;
+      }, pos?.lat ?? -37.8, pos?.lon ?? 145);
+      await live.start();
+      $('#scPoint').textContent = 'Following your phone';
+      $('#scPoint').disabled = true;
+      setTimeout(() => { if (heading == null && $('#scPoint')) { $('#scPoint').disabled = false; $('#scPoint').textContent = 'Use the phone\'s compass'; toast('No compass reading came through. Type the bearing instead.', 5000); } }, 3000);
+    } catch (err) { toast(err.message, 6000); }
+  };
+  $('#scCapture').onclick = () => { if (heading != null) { setFacing(heading); live?.stop(); $('#scPoint').disabled = false; $('#scPoint').textContent = 'Recapture'; } };
+  $('#scManual').oninput = ev => { const v = parseFloat(ev.target.value); if (!isNaN(v)) setFacing(v); };
+  $('#scPhoto').onchange = ev => { photoFile = ev.target.files[0] || null; $('#scPhotoNote').textContent = photoFile ? 'Photo ready. It becomes the spot\'s cover.' : ''; };
+
+  form.onsubmit = async ev => {
+    ev.preventDefault();
+    if (!pos) return toast('Waiting for your location');
+    const f = new FormData(form);
+    const name = String(f.get('name') || '').trim();
+    if (!name) return toast('Give the spot a name');
+    const btn = $('#scSave'); btn.disabled = true; btn.textContent = 'Saving…';
+    let photos = [];
+    if (photoFile) { try { photos = [await addPhotoFile(photoFile)]; } catch (err) { toast(err.message, 5000); } }
+    const hunts = HUNT_ORDER.filter(k => f.get(`hunt_${k}`));
+    const id = uid();
+    update(st => st.spots.push({
+      id, name, lat: pos.lat, lon: pos.lon, events: ['sunrise', 'sunset'], coastal: !!f.get('coastal'), tide: 'any',
+      driveMin: '', facing: facing ?? '', notes: String(f.get('notes') || ''), photos,
+      hunts: hunts.length ? hunts : ['colour'], fogMode: 'in', scoutedAt: Date.now(),
+    }));
+    if (live) live.stop();
+    closeSheet();
+    toast('Spot saved. Scoring it now.');
+    tab = 'spots'; render();
+    openSpotDetail(id);
   };
 }
 
@@ -2464,6 +2772,8 @@ function renderSettings(v) {
 
 document.addEventListener('click', ev => {
   if (ev.target.closest('[data-lightning]')) { openLightningTimer(); return; }
+  const fmBtn = ev.target.closest('[data-field]');
+  if (fmBtn) { openField(fmBtn.dataset.field); return; }
   const cpBtn = ev.target.closest('[data-compass]');
   if (cpBtn) { openCompass(cpBtn.dataset.compass); return; }
   if (ev.target.closest('[data-add-here]') && found) { openSpotForm({ lat: found.lat, lon: found.lon, name: found.name }); return; }
@@ -2471,7 +2781,7 @@ document.addEventListener('click', ev => {
   if (evBtn) { openEvent(evBtn.dataset.ev); return; }
   if (ev.target.closest('[data-close]')) closeSheet();
 });
-document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeSheet(); });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { if (!$('#sheet').classList.contains('hidden')) closeSheet(); else closeField(); } });
 $$('.tabbar button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
 $('#nowBtn').onclick = () => openNow();
 window.addEventListener('online', () => { toast('Back online'); if (tab === 'forecast') loadForecasts(true).then(render); });

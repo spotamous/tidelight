@@ -722,3 +722,49 @@ code { font: 400 .85em var(--mono); background: var(--surface-2); padding: 1px 5
 .cp-target i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 .cp-target b { font: 600 .85rem var(--sans); font-variant-numeric: tabular-nums; color: var(--muted); }
 .band { -webkit-user-select: none; user-select: none; }
+
+/* =================== Field mode =================== */
+.field {
+  position: fixed; inset: 0; z-index: 45; overflow-y: auto; background: var(--ground); color: var(--text);
+  padding: calc(18px + env(safe-area-inset-top)) 20px calc(28px + env(safe-area-inset-bottom));
+}
+.field > * { max-width: 640px; margin-left: auto; margin-right: auto; }
+.fm-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.fm-spot { font: 400 1.8rem/1.05 var(--serif); margin: 0; }
+.fm-sub { font: 400 .9rem var(--sans); color: var(--muted); margin: 4px 0 0; }
+.fm-next { margin: 26px 0 8px; }
+.fm-next-label { font: 600 1rem var(--sans); margin: 0; }
+.fm-count { font: 400 5rem/1 var(--serif); color: var(--caramel); margin: 4px 0; letter-spacing: -0.02em; }
+.fm-count.warn { color: var(--danger); }
+.fm-at { font: 400 .95rem var(--sans); color: var(--muted); margin: 0; }
+.fm-list { list-style: none; padding: 0; margin: 14px 0 0; border-top: 1px solid var(--line); }
+.fm-list li { display: grid; grid-template-columns: 76px 1fr auto; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line); align-items: baseline; font: 400 .95rem var(--sans); }
+.fm-list time { font-weight: 600; }
+.fm-list em { font-style: normal; color: var(--muted); font-size: .82rem; }
+.fm-list li.key span, .fm-list li.key time { color: var(--caramel); }
+.fm-list li.warn span, .fm-list li.warn time { color: var(--danger); }
+.fm-list li.past { opacity: .4; }
+.fm-h { font: 700 1rem var(--sans); letter-spacing: 0; text-transform: none; color: var(--text); margin: 26px 0 6px; }
+.fc-row { display: grid; grid-template-columns: 56px 1.4fr 1fr 1fr; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); font: 400 .85rem var(--sans); }
+.fc-time { font-weight: 600; }
+.fc-tide { font: 600 .9rem var(--sans); color: var(--slate); margin: 10px 0 4px; }
+.fm-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.fm-actions .btn { flex: 1 1 auto; }
+.fm-wake { margin-top: 14px; }
+/* Night vision: everything red and dim, to keep your eyes dark-adapted */
+.field.nightvision { --text: #E0453A; --muted: #8E2A22; --caramel: #FF5A4A; --line: #3A1512; --slate: #C23A2F; --danger: #FF5A4A; --surface-2: #1A0806; background: #000; }
+.field.nightvision .btn { border-color: #5A1A15; color: #E0453A; background: transparent; }
+.field.nightvision .icon-btn { border-color: #5A1A15; color: #E0453A; }
+
+/* =================== Scout a spot =================== */
+.scout-step { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.scout-step strong { font: 700 .95rem var(--sans); }
+.scout-step p { margin: 4px 0 0; }
+.scout-heading { font: 400 2.2rem/1.1 var(--serif); color: var(--caramel); margin: 8px 0 !important; }
+.scout-step label.small { display: grid; gap: 6px; margin-top: 8px; font-weight: 600; }
+.scout-step .btn { margin-top: 4px; }
+#scAlign, .align-line { color: var(--slate); font: 600 .88rem/1.45 var(--sans); }
+.align-line { margin: 0 0 8px; }
+body.nv-sheets .sheet-panel { --text: #E0453A; --muted: #8E2A22; --caramel: #FF5A4A; --line: #3A1512; --surface: #0A0202; --surface-2: #1A0806; background: #0A0202; color: #E0453A; }
+body.nv-sheets .sheet-panel .btn { border-color: #5A1A15; color: #E0453A; background: transparent; }
+body.nv-sheets .compass svg { filter: sepia(1) saturate(6) hue-rotate(-40deg) brightness(.7); }
