@@ -1,4 +1,4 @@
-// Data lives in this browser's localStorage. If you sign in (Settings → Account and sync),
+// Data lives in this browser's localStorage. If you sign in (You → Account and sync),
 // it is also kept in your private Supabase account so your devices stay in step.
 // Every change stamps the records it touched (updatedAt) and remembers deletions,
 // so two devices can be merged record by record.
@@ -11,7 +11,7 @@ const DEFAULTS = {
     arriveBeforeMin: 30,      // minutes on location before sunrise/sunset
     claudeKey: '',
     claudeModel: 'claude-sonnet-5-5',
-    gearAlways: [],           // Settings → My kit
+    gearAlways: [],           // You → My kit
     alerts: { go: true, threshold: 80, confident: true, calledOff: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 },
   },
   spots: [],                  // { id, name, lat, lon, events[], coastal, tide, driveMin, facing, notes }

@@ -14,6 +14,7 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 - **Field mode.** *Field mode* on any session opens a full-screen view for when you arrive: a big countdown to the next light moment, every moment of the session in order (first light, blue hour, sunrise or sunset, golden hour, full darkness, tide access closing, low or high tide), the sky now and for the next two hours from the saved forecast (works without reception), the tide right now, and shortcuts to the compass and radar. It keeps the screen awake where the device allows, and *Night vision* turns everything red to protect your dark adaptation.
 - **Scout a spot.** *Scout this spot* (Spots tab) creates a spot where you stand: GPS location with a suggested name, the direction of your composition from the phone's compass (or typed), an optional photo, hunts and notes. It shows when the sun lines up with that view, as does every spot with a facing direction.
 - **Field compass.** *Compass* on any session shows a dial with where the sun rises or sets, the Milky Way core, aurora, a rainbow, and your composition's facing direction. *Point with my phone* uses the phone's compass (corrected from magnetic to true north for Australia and New Zealand) and says which way to turn.
+- **Five tabs: Forecast, Spots, Plans, Tools, You.** *Tools* gathers what you use in the field: field mode for your next plan, Right now, a compass that works anywhere (today's sunrise and sunset, plus the sun, moon and Milky Way now), the lightning distance timer and Scout this spot. *You* replaces Coach and Settings with one grouped list: Light profile and keepers, Recreate a shot, Account and sync, Alerts, Home and travel, My kit, AI coach and Your data. Each row shows its current status and opens its own page. The app version is at the bottom of You.
 - **Spot detail: the week at a glance.** Opening a spot shows its best session this week in a sentence, then a grid of the next 7 days against sunrise, daytime, sunset and night, shaded by score (a red dot marks sessions the tide blocks). Tap any score for its briefing. Sun alignment, notes, hourly forecast and directions sit below.
 - **Spot form in sections.** Name, photos, sessions and hunts up front; *Getting there*, *Coast and tide*, *Composition and notes* and *Location* fold away, each showing its current value. Fog and tide-access options appear only when they apply.
 - **Spots tab: a card per spot.** Each card shows the spot's best session in the next 3 days, why, and tags (hunt, hike, tide window, models agree or disagree, crewmates going). Filter by session type; the map and search are still there for adding spots.
@@ -75,7 +76,7 @@ Sync keeps spots, photos, plans, keepers and settings in step across devices. Th
 2. **Create the table and photo bucket.** In Supabase, open SQL Editor → New query, paste all of `supabase/schema.sql`, and click Run.
 3. **Point sign-in at your site.** Authentication → URL Configuration: set **Site URL** to your GitHub Pages address (for example `https://YOUR-USERNAME.github.io/tidelight/`) and add the same address under **Redirect URLs**.
 4. **Turn off email confirmation (personal use).** Authentication → Sign In / Providers → Email → switch off **Confirm email** and save. This lets you sign in straight away without Supabase sending an email (new free projects can't edit email templates without custom SMTP). Turn it back on, with custom SMTP, before launch.
-5. **Create your account and sign in.** In the app, Settings → Account and sync → enter your email and a password (at least 8 characters) → **Create account**. Your existing data uploads straight away. On your other devices, use the same details and tap **Sign in**.
+5. **Create your account and sign in.** In the app, You → Account and sync → enter your email and a password (at least 8 characters) → **Create account**. Your existing data uploads straight away. On your other devices, use the same details and tap **Sign in**.
 
 Password reset needs email, so keep your password in your password manager until custom SMTP is set up. The emailed-code sign-in is still in `js/sync.js`, ready to switch back to once custom SMTP unlocks the email templates.
 
@@ -94,7 +95,7 @@ Supabase's built-in sender only allows a couple of emails an hour, and new free 
 5. **Brand the emails:** Authentication → Emails → Templates. Paste `supabase/email-templates/reset-password.html` into *Reset Password* (subject: "Reset your Tidelight password") and `confirm-signup.html` into *Confirm signup* (subject: "Welcome to Tidelight").
 6. **Optional:** switch *Confirm email* back on (Authentication → Sign In / Providers → Email) so new testers verify their address.
 
-Password resets in the app: Settings → Account and sync → type your email → *Forgot your password?* The email link opens Tidelight in the browser, where you choose a new password; then sign in with it everywhere, including the home-screen app. Make sure your GitHub Pages address is listed under Authentication → URL Configuration → Redirect URLs.
+Password resets in the app: You → Account and sync → type your email → *Forgot your password?* The email link opens Tidelight in the browser, where you choose a new password; then sign in with it everywhere, including the home-screen app. Make sure your GitHub Pages address is listed under Authentication → URL Configuration → Redirect URLs.
 
 ## Crews
 
@@ -102,7 +103,7 @@ Crews let photographers who shoot together share plans. Plans → Crew → *Crea
 
 ## Gear checklists
 
-Every session lists what to bring, with a reason for each item: kit for the hunts in play (ND and polariser for waterfalls, red headtorch for astro, rain cover for forests), plus items the conditions call for (headtorch for walks in the dark, water and first aid for long or hard hikes, warm layers when it's cold, gumboots for low-tide rock shelves) and your own *always bring* list (Settings → My kit). Planned sessions keep the list so you can tick items off as you pack.
+Every session lists what to bring, with a reason for each item: kit for the hunts in play (ND and polariser for waterfalls, red headtorch for astro, rain cover for forests), plus items the conditions call for (headtorch for walks in the dark, water and first aid for long or hard hikes, warm layers when it's cold, gumboots for low-tide rock shelves) and your own *always bring* list (You → My kit). Planned sessions keep the list so you can tick items off as you pack.
 
 ## Alerts (push notifications)
 
@@ -119,7 +120,7 @@ Set up once:
 4. **Add secrets.** Supabase → Edge Functions → Secrets: add `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `CRON_SECRET` (from step 1) and `VAPID_SUBJECT` (your email as `mailto:you@example.com`).
 5. **Deploy the function.** Supabase → Edge Functions → Deploy a new function → Via editor. Name it exactly `check-alerts`, replace the sample code with all of `supabase/functions/check-alerts/index.ts`, and deploy. Then open the function's settings and switch off **Verify JWT** (the function checks the cron secret and your sign-in itself).
 6. **Schedule it.** Supabase → SQL Editor → New query: paste `supabase/alerts.sql`, replace `PASTE_YOUR_PUBLISHABLE_KEY` with your Publishable key (Project Settings → API Keys, starts `sb_publishable_`) and `PASTE_YOUR_CRON_SECRET` with your `CRON_SECRET`, and run it. It creates the device and alert-log tables and runs the check at 5 past every hour.
-7. **Turn alerts on.** On iPhone, open Tidelight **from the home screen** (alerts only work in the home-screen app), then Settings → Alerts → **Turn on alerts on this device** → allow notifications → **Send a test**.
+7. **Turn alerts on.** On iPhone, open Tidelight **from the home screen** (alerts only work in the home-screen app), then You → Alerts → **Turn on alerts on this device** → allow notifications → **Send a test**.
 
 Checking it works: visiting the function's address in a browser shows a `MISSING_CREDENTIALS` message; that's expected and means it's live. Supabase → Edge Functions → check-alerts → Logs shows each hourly run, and the query at the end of `alerts.sql` shows the last scheduled calls. Alert settings sync with your account; each device turns notifications on separately.
 
@@ -127,7 +128,7 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=4.6`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=4.7`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:

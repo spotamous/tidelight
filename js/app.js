@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.6';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.6';
-import { baseScore, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.6';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.6';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt } from './hunts.js?v=4.6';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.6';
-import { gearFor } from './gear.js?v=4.6';
-import { VAPID_PUBLIC_KEY } from './config.js?v=4.6';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.6';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.6';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.7';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.7';
+import { baseScore, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.7';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.7';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=4.7';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.7';
+import { gearFor } from './gear.js?v=4.7';
+import { VAPID_PUBLIC_KEY } from './config.js?v=4.7';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.7';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.7';
 
-export const APP_VERSION = '4.6';
+export const APP_VERSION = '4.7';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -119,9 +119,9 @@ function briefing(e) {
   if (e.drive != null) {
     lines.push(`Leave ${fmtTime(e.leave, o)} (${travelText(e)}${e.hike ? `, start walking ${fmtTime(e.walkStart, o)}` : ''}, on location ${S().settings.arriveBeforeMin} min early).`);
   } else if (e.hike) {
-    lines.push(`Start walking by ${fmtTime(e.walkStart, o)} (${e.hike} min hike, on location ${S().settings.arriveBeforeMin} min early). Set your home location in Settings to include the drive.`);
+    lines.push(`Start walking by ${fmtTime(e.walkStart, o)} (${e.hike} min hike, on location ${S().settings.arriveBeforeMin} min early). Set your home under You, in Home and travel, to include the drive.`);
   } else {
-    lines.push(`Be on location by ${fmtTime(e.leave, o)}. Set your home location in Settings to get a leave time.`);
+    lines.push(`Be on location by ${fmtTime(e.leave, o)}. Set your home under You, in Home and travel, to get a leave time.`);
   }
   if (e.hike >= 10) {
     const dawn = e.light?.blueStart, dusk = e.light?.blueEnd;
@@ -243,14 +243,14 @@ function closeSheet() {
 
 /* ================= router ================= */
 
-function setTab(t) { if (t === 'forecast' && tab !== 'forecast') { homeDay = 0; homeSel = null; } tab = t; closeSheet(); render(); window.scrollTo(0, 0); }
+function setTab(t) { if (t === 'forecast' && tab !== 'forecast') { homeDay = 0; homeSel = null; } if (t === 'you') youPage = null; tab = t; closeSheet(); render(); window.scrollTo(0, 0); }
 
 function render() {
   if (map) { map.remove(); map = null; }
   clearInterval(plansTimer);
   $$('.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   const v = $('#view');
-  ({ forecast: renderForecast, spots: renderSpots, plans: renderPlans, coach: renderCoach, settings: renderSettings })[tab](v);
+  ({ forecast: renderForecast, spots: renderSpots, plans: renderPlans, tools: renderTools, you: renderYou })[tab](v);
 }
 
 /* ================= forecast ================= */
@@ -301,7 +301,7 @@ function heroTitle(e) {
 function forecastAlerts(st, failed) {
   return `${!navigator.onLine ? `<div class="alert info">You're offline. Showing the forecast saved ${savedAgo()}.</div>` : ''}
     ${failed.length && navigator.onLine ? `<div class="alert danger">Couldn't load: ${esc(failed.join(', '))}. Check your connection and tap refresh.</div>` : ''}
-    ${!st.settings.home ? `<div class="alert info">Set your home location in Settings to get drive-aware leave times.</div>` : ''}`;
+    ${!st.settings.home ? `<div class="alert info">Set your home under You, in Home and travel, to get leave times that include the drive.</div>` : ''}`;
 }
 
 let homeDay = 0;          // 0 today, 1 tomorrow, 2 the day after, or 'all' for the spot matrix
@@ -677,7 +677,7 @@ async function renderForecast(v) {
     if (!e) return;
     addPlan(e);
     b.textContent = 'Planned'; b.disabled = true;
-    toast(crewState.crews.length ? 'Planned. Share it with your crew from Plans.' : 'Planned. Rate it afterwards so the coach learns.');
+    toast(crewState.crews.length ? 'Planned. Share it with your crew from Plans.' : 'Planned. Rate it afterwards so your personal score learns.');
   });
 }
 
@@ -818,14 +818,14 @@ function openEvent(key) {
     ${otherHunts.map(h => `<details class="bf-hunt more"><summary><span>${HUNT_LABEL[h[0]]}</span><b class="num">${h[1].score}</b></summary>${huntBlock(h)}</details>`).join('')}
     <p class="small muted bf-personal">${e.personal
       ? `The ${e.score} blends ${e.base} from conditions with ${e.personal.score} from your ${e.personal.n} keepers (${Math.round(e.personal.weight * 100)}% weight).`
-      : `Add ${MIN_KEEPERS} or more keeper photos in Coach and this score will start reflecting your taste.`}</p>
+      : `Add ${MIN_KEEPERS} or more keeper photos under You, in Light profile, and this score will start reflecting your taste.`}</p>
 
     <h3 class="sec">Conditions at ${e.type === 'night' || e.type === 'day' ? fmtTime(e.t, o) : e.type}</h3>
     <dl class="bf-cond">${cond.filter(([, val]) => val !== '–').map(([k, val]) => `<div><dt>${k}</dt><dd class="num">${val}</dd></div>`).join('')}</dl>
 
     <h3 class="sec">What to bring</h3>
     <ul class="gear-preview">${gear.map(g => `<li><strong>${esc(g.label)}</strong><span>${esc(g.why)}</span></li>`).join('')}</ul>
-    <p class="small muted">Plan the shoot to tick these off as you pack. Your always-bring items live in Settings, under My kit.</p>
+    <p class="small muted">Plan the shoot to tick these off as you pack. Your always-bring items live under You, in My kit.</p>
 
     <div class="sheet-actions">
       <button class="btn primary" id="planBtn" ${planned ? 'disabled' : ''}>${planned ? 'Planned' : 'Plan this shoot'}</button>
@@ -842,12 +842,12 @@ function openEvent(key) {
     addPlan(e);
     $('#planBtn').textContent = 'Planned';
     $('#planBtn').disabled = true;
-    toast('Planned. Rate it afterwards so the coach learns.');
+    toast('Planned. Rate it afterwards so your personal score learns.');
   };
   $('#icsBtn').onclick = () => downloadIcs(e);
   $('#aiBriefBtn').onclick = async () => {
     const st = S();
-    if (!hasAI(st.settings)) { toast('Add your Claude API key in Settings to use the AI coach'); return; }
+    if (!hasAI(st.settings)) { toast('Add your Claude key under You, in AI coach, to use this.', 5000); return; }
     const btn = $('#aiBriefBtn'), box = $('#briefText');
     btn.disabled = true; btn.textContent = 'Thinking…';
     try {
@@ -958,7 +958,7 @@ async function joinCrewPlan(cpId) {
 }
 
 function crewPanel() {
-  if (!currentUser()) return `<section class="panel"><h2>Crew</h2><p class="small muted">Sign in under Settings → Account and sync to make or join a crew and share plans with the people you shoot with.</p></section>`;
+  if (!currentUser()) return `<section class="panel"><h2>Crew</h2><p class="small muted">Sign in under You, in Account and sync, to make or join a crew and share plans with the people you shoot with.</p></section>`;
   if (!crewState.loaded) return `<section class="panel" id="crewPanel"><h2>Crew</h2><p class="loading">Loading your crew…</p></section>`;
   if (crewState.error) return `<section class="panel"><h2>Crew</h2><p class="small sync-err">${esc(crewState.error)}</p></section>`;
   const me = currentUser().id;
@@ -1310,7 +1310,7 @@ async function ratePlan(id, rating, btn) {
       date: p.t * 1000, lat: p.lat, lon: p.lon, spotName: p.spotName, features, thumb: null,
     });
   });
-  toast('Saved. Your coach just learned from that.');
+  toast('Saved. Your personal score just learned from that.');
   render();
 }
 
@@ -2009,10 +2009,13 @@ function compassTargets(e) {
   return out;
 }
 
-function openCompass(key) {
-  const e = eventIndex.get(key);
-  if (!e) return;
-  const targets = compassTargets(e);
+// Open with a session key, or with { name, lat, lon, targets } for a compass that isn't tied to a session.
+function openCompass(key, custom = null) {
+  const ev0 = custom ? null : eventIndex.get(key);
+  if (!custom && !ev0) return;
+  const e = custom ? { spot: { name: custom.name, lat: custom.lat, lon: custom.lon } } : ev0;
+  const cpTitle = custom ? custom.name : `${ev0.spot.name}, ${sessionName(ev0)}`;
+  const targets = custom ? custom.targets : compassTargets(ev0);
   if (!targets.length) { toast('Nothing to point at for this session. Add a facing direction to the spot to see your composition here.', 6000); return; }
   let primary = targets[0].id;
   const pt = (deg, r) => [r * Math.sin(deg * Math.PI / 180), -r * Math.cos(deg * Math.PI / 180)];
@@ -2030,7 +2033,7 @@ function openCompass(key) {
   }).join('');
   openSheet(`
     <h2>Compass</h2>
-    <p class="small muted">${esc(e.spot.name)}, ${esc(sessionName(e))}. Bearings are from true north${decl != null ? `; your phone's magnetic reading is corrected by about ${Math.round(Math.abs(decl))}° ${decl >= 0 ? 'east' : 'west'}` : ''}.</p>
+    <p class="small muted">${esc(cpTitle)}. Bearings are from true north${decl != null ? `; your phone's magnetic reading is corrected by about ${Math.round(Math.abs(decl))}° ${decl >= 0 ? 'east' : 'west'}` : ''}.</p>
     <div class="compass">
       <svg viewBox="-150 -150 300 300" role="img" aria-label="${esc(targets.map(t => `${t.label} at ${Math.round(t.az)} degrees`).join('. '))}">
         <circle r="122" fill="#151818" stroke="#2A2F2F"/>
@@ -2250,7 +2253,7 @@ function drawField() {
   const next = moments.find(m => m.t > now);
   const nextHtml = next
     ? `<p class="fm-next-label">${esc(next.label)} in</p><p class="fm-count num ${next.cls}">${untilText(next.t - now)}</p><p class="fm-at">at ${fmtTime(next.t, e.offset)}</p>`
-    : `<p class="fm-next-label">That's the session done.</p><p class="fm-at">Rate it later in Plans so the coach learns.</p>`;
+    : `<p class="fm-next-label">That's the session done.</p><p class="fm-at">Rate it later in Plans so your personal score learns.</p>`;
   el.querySelector('#fmNext').innerHTML = nextHtml;
   el.querySelector('#fmList').innerHTML = moments.map(m => `<li class="${m.t <= now ? 'past' : ''} ${m.cls}">
       <time class="num">${fmtTime(m.t, e.offset)}</time><span>${esc(m.label)}</span><em class="num">${m.t > now ? `in ${untilText(m.t - now)}` : 'done'}</em></li>`).join('');
@@ -2412,6 +2415,55 @@ function openScout() {
   };
 }
 
+async function openCompassHere() {
+  let pos;
+  try { pos = await getPosition(); } catch (err) { toast(err.message, 5000); return; }
+  if (!window.SunCalc) { toast("The sun data didn't load. Check your connection and try again."); return; }
+  const az = p => (p.azimuth * 180 / Math.PI + 180 + 360) % 360;
+  const now = new Date();
+  const T = window.SunCalc.getTimes(now, pos.lat, pos.lon);
+  const ok = d => d instanceof Date && !isNaN(d);
+  const hhmm = d => d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }).replace(' ', '');
+  const targets = [];
+  if (ok(T.sunrise)) targets.push({ id: 'rise', label: `Sunrise today, ${hhmm(T.sunrise)}`, az: az(window.SunCalc.getPosition(T.sunrise, pos.lat, pos.lon)), color: '#D9A066' });
+  if (ok(T.sunset)) targets.push({ id: 'set', label: `Sunset today, ${hhmm(T.sunset)}`, az: az(window.SunCalc.getPosition(T.sunset, pos.lat, pos.lon)), color: '#B9824E' });
+  const sunNow = window.SunCalc.getPosition(now, pos.lat, pos.lon);
+  if (sunNow.altitude > 0) targets.push({ id: 'sun', label: 'The sun right now', az: az(sunNow), color: '#ECE8E1' });
+  const moon = window.SunCalc.getMoonPosition(now, pos.lat, pos.lon);
+  if (moon.altitude > 0) targets.push({ id: 'moon', label: 'The moon right now', az: (moon.azimuth * 180 / Math.PI + 180 + 360) % 360, color: '#9DADB1' });
+  const core = coreAltAz(Date.now() / 1000, pos.lat, pos.lon);
+  if (core.alt > 5 && sunNow.altitude < -0.2) targets.push({ id: 'core', label: 'Milky Way core right now', az: core.az, color: '#7F93A8' });
+  openCompass(null, { name: 'Where you are now', lat: pos.lat, lon: pos.lon, targets });
+}
+
+/* ================= tools tab ================= */
+function renderTools(v) {
+  const now = Date.now() / 1000;
+  const nextPlan = S().plans.filter(p => p.t >= now - 3600 && eventIndex.has(p.key)).sort((a, b) => a.t - b.t)[0];
+  const tool = (attr, title, text) => `<button class="tool-row" ${attr}>
+      <span class="tool-text"><span class="tool-title">${title}</span><span class="tool-desc">${text}</span></span>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </button>`;
+  v.innerHTML = `
+    <h1 class="page-title">Tools</h1>
+    <p class="page-lede">For when you're out there. Most of these work without reception.</p>
+    <div class="tool-list">
+      ${nextPlan ? tool(`data-field="${esc(nextPlan.key)}"`, 'Field mode', `Countdowns and the sky for ${esc(nextPlan.spotName)}, your next plan.`) : ''}
+      ${tool('id="toolNow"', 'Right now', 'The next 48 hours where you are, conditions at your spots, and rain radar.')}
+      ${tool('id="toolCompass"', 'Compass', "Where the sun rises and sets today, and where the sun, moon and Milky Way are now.")}
+      ${tool('data-lightning', 'Lightning distance', 'Time the gap between flash and thunder to see how far away a storm is.')}
+      ${tool('id="toolScout"', 'Scout this spot', 'Save where you stand as a new spot, with the direction of your composition.')}
+    </div>
+    ${!nextPlan ? '<p class="small muted tool-note">Field mode opens from any session. Plan a shoot and it appears here for the next one.</p>' : ''}`;
+  $('#toolNow').onclick = () => openNow();
+  $('#toolCompass').onclick = () => openCompassHere();
+  $('#toolScout').onclick = () => openScout();
+  // Field mode needs the live forecast for the next plan: load it, then redraw once.
+  if (!nextPlan && S().plans.some(p => p.t >= now - 3600) && S().spots.length) {
+    ensureForecasts().then(() => { allEvents({ includePast: true }); if (tab === 'tools' && S().plans.some(p => p.t >= now - 3600 && eventIndex.has(p.key))) renderTools(v); });
+  }
+}
+
 /* ================= lightning distance timer ================= */
 
 function openLightningTimer() {
@@ -2462,7 +2514,55 @@ function openLightningTimer() {
 
 /* ================= coach ================= */
 
-function renderCoach(v, logLines = []) {
+/* ================= you tab: your light profile, account, alerts and setup ================= */
+let youPage = null;   // null shows the list; otherwise profile | recreate | account | alerts | home | kit | ai | data
+
+const youHead = (title, lede = '') => `<button class="link-btn back" id="youBack">‹ You</button>
+    <h1 class="page-title">${title}</h1>${lede ? `<p class="page-lede">${lede}</p>` : ''}`;
+
+function renderYou(v, logLines = []) {
+  const st = S(), s = st.settings;
+  if (youPage) {
+    ({ profile: pageProfile, recreate: pageRecreate, account: pageAccount, alerts: pageAlerts, home: pageHome, kit: pageKit, ai: pageAI, data: pageData })[youPage](v, logLines);
+    const back = $('#youBack', v);
+    if (back) back.onclick = () => { youPage = null; renderYou(v); window.scrollTo(0, 0); };
+    return;
+  }
+  const good = st.keepers.filter(k => k.label === 'keeper').length;
+  const sync = syncStatus();
+  const kit = (s.gearAlways || []).length;
+  const row = (id, title, status) => `<button class="you-row" data-you="${id}">
+      <span class="you-text"><span class="you-title">${title}</span><span class="you-status">${esc(status)}</span></span>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </button>`;
+  v.innerHTML = `
+    <h1 class="page-title">You</h1>
+    <p class="page-lede">${sync.email ? `Signed in as ${esc(sync.email)}.` : 'Your light profile, account and setup.'}</p>
+
+    <h3 class="sec">Your light</h3>
+    <div class="you-list">
+      ${row('profile', 'Light profile and keepers', good >= MIN_KEEPERS ? `${good} keepers. Your personal score is on.` : `${good} keeper${good === 1 ? '' : 's'}. Add ${MIN_KEEPERS - good} more to switch on your personal score.`)}
+      ${row('recreate', 'Recreate a shot', 'Find upcoming sessions that match a photo.')}
+    </div>
+
+    <h3 class="sec">Account</h3>
+    <div class="you-list">
+      ${row('account', 'Account and sync', !sync.configured ? 'Not set up yet.' : sync.email ? (sync.state === 'error' ? 'Sync needs attention.' : `Synced ${syncAgo(sync.lastSync)}.`) : 'Not signed in. Sign in to sync across devices.')}
+      ${row('alerts', 'Alerts', !sync.email ? 'Sign in to turn on alerts.' : s.alerts.go ? `Sessions scoring ${s.alerts.threshold}+${s.alerts.digest ? `, plus a ${DAYS[s.alerts.digestDay]} digest` : ''}.` : 'Go alerts are off.')}
+    </div>
+
+    <h3 class="sec">Setup</h3>
+    <div class="you-list">
+      ${row('home', 'Home and travel', s.home ? `Home set. Arrive ${s.arriveBeforeMin} min before each session.` : 'Home not set. Needed for leave times.')}
+      ${row('kit', 'My kit', kit ? `${kit} item${kit === 1 ? '' : 's'} you always bring.` : 'Nothing added yet.')}
+      ${row('ai', 'AI coach', hasAI(s) ? 'On, using your Claude key.' : 'Off. Optional.')}
+      ${row('data', 'Your data', 'Back up, restore or delete.')}
+    </div>
+    <p class="small muted you-foot">Tidelight version ${APP_VERSION}. Weather, tide and sea data from Open-Meteo (CC BY 4.0). Aurora forecast from NOAA. Maps from OpenStreetMap. Tide heights are modelled and can differ from official tide tables; check local warnings before heading out.</p>`;
+  $$('[data-you]', v).forEach(b => b.onclick = () => { youPage = b.dataset.you; renderYou(v); window.scrollTo(0, 0); });
+}
+
+function pageProfile(v, logLines = []) {
   const st = S();
   const good = st.keepers.filter(k => k.label === 'keeper').length;
   const duds = st.keepers.filter(k => k.label === 'dud').length;
@@ -2470,60 +2570,48 @@ function renderCoach(v, logLines = []) {
   const summary = personalModelSummary(st.keepers);
   const active = good >= MIN_KEEPERS;
   const sorted = [...st.keepers].sort((a, b) => b.date - a.date);
-
   v.innerHTML = `
-    <p class="eyebrow">Coach</p><h1>Learn your <em>light.</em></h1>
-    <section class="panel">
-      <h2>Field tools</h2>
-      <p class="small muted">Count the gap between a lightning flash and its thunder to see how far away the storm is, and whether it's coming closer.</p>
-      <button class="btn primary block" data-lightning>Lightning distance timer</button>
-    </section>
+    ${youHead('Light profile', summary ? `Your best shots tend to have ${esc(summary.text)}.` : 'Once you add keepers, this is where you\'ll see the conditions you shoot best in.')}
+    <div class="meter" role="img" aria-label="${good} of 10 keepers"><i style="width:${Math.min(100, good / 10 * 100)}%"></i></div>
+    <p class="small muted">${good} keeper${good === 1 ? '' : 's'}, ${mehs} so-so, ${duds} dud${duds === 1 ? '' : 's'}. ${active ? 'Your personal score is on.' : `Add ${MIN_KEEPERS - good} more keeper${MIN_KEEPERS - good === 1 ? '' : 's'} to switch on your personal score.`} It gets more confident up to 10.</p>
 
-    <section class="panel">
-      <h2>Your light profile</h2>
-      <div class="meter"><i style="width:${Math.min(100, good / 10 * 100)}%"></i></div>
-      <p class="small muted">${good} keeper${good === 1 ? '' : 's'}, ${mehs} so-so, ${duds} dud${duds === 1 ? '' : 's'}. ${active ? 'Your personal score is on.' : `Add ${MIN_KEEPERS - good} more keeper${MIN_KEEPERS - good === 1 ? '' : 's'} to switch on your personal score.`} It gets more confident up to 10.</p>
-      ${summary ? `<p>Your best shots tend to have <strong>${esc(summary.text)}</strong>.</p>` : '<p class="muted">Once you add keepers, this is where you\'ll see the conditions you shoot best in.</p>'}
-    </section>
-
-    <section class="panel">
-      <h2>Teach it your keepers</h2>
-      <p>Import your favourite shots. Tidelight reads the time and location saved in each photo, looks up the sky, tide and sea at that moment, and learns what your best mornings look like. Photos stay on this device.</p>
-      <label class="form" style="margin-bottom:12px">
-        <span class="small"><strong>If a photo has no location, use this spot</strong></span>
-        <select id="fallbackSpot">
-          <option value="">Skip photos without location</option>
-          ${st.spots.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}
-        </select>
-      </label>
-      <label class="btn primary block">Import photos<input type="file" id="keeperFiles" class="file-input" accept="image/*" multiple></label>
-      <div class="log" id="importLog">${logLines.map(l => `<div>${esc(l)}</div>`).join('')}</div>
-      <div class="thumbs">${sorted.map(k => `
-        <div class="thumb">
-          ${k.thumb ? `<img src="${k.thumb}" alt="">` : `<div class="ph">${k.source === 'session' ? 'Session' : 'Photo'}<br>${esc(k.spotName || '')}<br>${fmtDate(k.date)}</div>`}
-          <button class="tag ${k.label}" data-flip="${k.id}" title="Tap to change: keeper, so-so, dud">${k.label === 'keeper' ? 'Keeper' : k.label === 'meh' ? 'So-so' : 'Dud'}</button>
-          <button class="x" data-rm="${k.id}" aria-label="Remove">×</button>
-        </div>`).join('')}</div>
-    </section>
-
-    <section class="panel">
-      <h2>Recreate a shot</h2>
-      <p>Pick any photo you'd love to recreate, yours or an inspiration shot. Tidelight works out the conditions it needed and finds the upcoming sessions across your spots that match best.</p>
-      ${!hasAI(st.settings) ? '<p class="small muted">Photos without location data need the AI coach. Add your Claude API key in Settings.</p>' : ''}
-      <label class="btn block">Choose a photo<input type="file" id="refFile" class="file-input" accept="image/*"></label>
-      <div id="refResult"></div>
-    </section>`;
-
+    <h3 class="sec">Teach it your keepers</h3>
+    <p class="you-copy">Import your favourite shots. Tidelight reads the time and location saved in each photo, looks up the sky, tide and sea at that moment, and learns what your best sessions look like. Photos stay on this device.</p>
+    <label class="form" style="margin-bottom:12px">
+      <span class="small"><strong>If a photo has no location, use this spot</strong></span>
+      <select id="fallbackSpot">
+        <option value="">Skip photos without location</option>
+        ${st.spots.map(sp => `<option value="${sp.id}">${esc(sp.name)}</option>`).join('')}
+      </select>
+    </label>
+    <label class="btn primary block">Import photos<input type="file" id="keeperFiles" class="file-input" accept="image/*" multiple></label>
+    <div class="log" id="importLog">${logLines.map(l => `<div>${esc(l)}</div>`).join('')}</div>
+    ${sorted.length ? `<h3 class="sec">Your keepers and rated sessions</h3>
+      <p class="small muted">Tap a label to change it between keeper, so-so and dud.</p>` : ''}
+    <div class="thumbs">${sorted.map(k => `
+      <div class="thumb">
+        ${k.thumb ? `<img src="${k.thumb}" alt="">` : `<div class="ph">${k.source === 'session' ? 'Session' : 'Photo'}<br>${esc(k.spotName || '')}<br>${fmtDate(k.date)}</div>`}
+        <button class="tag ${k.label}" data-flip="${k.id}" title="Tap to change: keeper, so-so, dud">${k.label === 'keeper' ? 'Keeper' : k.label === 'meh' ? 'So-so' : 'Dud'}</button>
+        <button class="x" data-rm="${k.id}" aria-label="Remove">×</button>
+      </div>`).join('')}</div>`;
   $('#keeperFiles').onchange = ev => importKeepers([...ev.target.files]);
-  $('#refFile').onchange = ev => ev.target.files[0] && recreateShot(ev.target.files[0]);
   $$('[data-flip]', v).forEach(b => b.onclick = () => {
-    update(s => { const k = s.keepers.find(x => x.id === b.dataset.flip); k.label = { keeper: 'meh', meh: 'dud', dud: 'keeper' }[k.label] || 'keeper'; });
-    renderCoach(v);
+    update(s2 => { const k = s2.keepers.find(x => x.id === b.dataset.flip); k.label = { keeper: 'meh', meh: 'dud', dud: 'keeper' }[k.label] || 'keeper'; });
+    renderYou(v);
   });
   $$('[data-rm]', v).forEach(b => b.onclick = () => {
-    update(s => { s.keepers = s.keepers.filter(x => x.id !== b.dataset.rm); });
-    renderCoach(v);
+    update(s2 => { s2.keepers = s2.keepers.filter(x => x.id !== b.dataset.rm); });
+    renderYou(v);
   });
+}
+
+function pageRecreate(v) {
+  v.innerHTML = `
+    ${youHead('Recreate a shot', "Pick any photo you'd love to recreate, yours or an inspiration shot. Tidelight works out the conditions it needed and finds the upcoming sessions across your spots that match best.")}
+    ${!hasAI(S().settings) ? '<p class="small muted">Photos without location data need the AI coach. Add your Claude key under You, in AI coach.</p>' : ''}
+    <label class="btn primary block">Choose a photo<input type="file" id="refFile" class="file-input" accept="image/*"></label>
+    <div id="refResult"></div>`;
+  $('#refFile').onchange = ev => ev.target.files[0] && recreateShot(ev.target.files[0]);
 }
 
 async function importKeepers(files) {
@@ -2558,7 +2646,7 @@ async function importKeepers(files) {
     }
   }
   toast(`Added ${added} keeper${added === 1 ? '' : 's'}`);
-  if (tab === 'coach') renderCoach($('#view'), log);
+  if (tab === 'you' && youPage === 'profile') renderYou($('#view'), log);
 }
 
 async function recreateShot(file) {
@@ -2591,7 +2679,7 @@ async function recreateShot(file) {
     }
   }
   if (!target) {
-    out.innerHTML = `<div class="alert info">This photo has no saved location and time, so there's nothing to look up. Add your Claude API key in Settings and the AI coach will read the sky from the image itself.</div>`;
+    out.innerHTML = `<div class="alert info">This photo has no saved location and time, so there's nothing to look up. Add your Claude key under You, in AI coach, and the AI coach will read the sky from the image itself.</div>`;
     return;
   }
 
@@ -2792,79 +2880,38 @@ async function renderAlerts() {
   };
 }
 
-function renderSettings(v) {
-  const st = S(), s = st.settings;
-  v.innerHTML = `
-    <p class="eyebrow">Settings</p><h1>Settings</h1>
-    <section class="panel" id="accountPanel"></section>
-    <section class="panel" id="alertsPanel"></section>
-    <section class="panel">
-      <h2>My kit</h2>
-      <p class="small muted">Things you always bring. They're added to every session's gear checklist, alongside what the conditions call for. One item per line.</p>
-      <form class="form" id="kitForm">
-        <textarea name="kit" rows="5" placeholder="Camera and spare battery&#10;Tripod&#10;Memory cards&#10;Phone charger">${esc((S().settings.gearAlways || []).join('\n'))}</textarea>
-        <div class="row"><button class="btn primary" type="submit">Save my kit</button></div>
-      </form>
-    </section>
-    <section class="panel">
-      <h2>Home</h2>
-      <p class="small muted">Used to estimate drive times and leave times. Stays on this device.</p>
-      <form class="form" id="homeForm">
-        <div class="two">
-          <label>Latitude<input name="lat" inputmode="decimal" value="${s.home ? s.home.lat.toFixed(5) : ''}"></label>
-          <label>Longitude<input name="lon" inputmode="decimal" value="${s.home ? s.home.lon.toFixed(5) : ''}"></label>
-        </div>
-        <div class="two">
-          <label>Average drive speed (km/h)<input name="speed" inputmode="numeric" value="${s.driveSpeedKmh}"></label>
-          <label>Arrive before sun event (min)<input name="arrive" inputmode="numeric" value="${s.arriveBeforeMin}"></label>
-        </div>
-        <div class="row">
-          <button type="button" class="btn" id="homeHere">Use my location</button>
-          <button type="submit" class="btn primary">Save</button>
-        </div>
-      </form>
-    </section>
-
-    <section class="panel">
-      <h2>AI coach</h2>
-      <p class="small muted">Optional. Adds written briefings and reads the sky from reference photos. Get a key at console.anthropic.com. The key is stored only in this browser and is never included in backups or your GitHub repo. Each briefing costs a fraction of a cent.</p>
-      <form class="form" id="aiForm">
-        <label>Claude API key<input name="key" type="password" autocomplete="off" value="${esc(s.claudeKey)}" placeholder="sk-ant-…"></label>
-        <label>Model<input name="model" value="${esc(s.claudeModel)}"></label>
-        <div class="row">
-          <button type="button" class="btn" id="testKey">Test key</button>
-          <button type="submit" class="btn primary">Save</button>
-        </div>
-      </form>
-    </section>
-
-    <section class="panel">
-      <h2>Your data</h2>
-      <p class="small muted">Everything is saved in this browser. Export a backup to move to another device.</p>
-      <div class="row">
-        <button class="btn" id="exportBtn">Export backup</button>
-        <label class="btn">Import backup<input type="file" id="importFile" class="file-input" accept="application/json,.json"></label>
-      </div>
-      <div class="row"><button class="btn danger" id="resetBtn">Delete all data</button></div>
-    </section>
-
-    <p class="small muted">Tidelight version ${APP_VERSION}. Weather, tide and sea data: Open-Meteo (CC BY 4.0). Maps: OpenStreetMap. Tide heights are modelled and can differ from official tide tables; check local warnings before heading out.</p>`;
-
+function pageAccount(v) {
+  v.innerHTML = `${youHead('Account and sync')}<section class="you-page" id="accountPanel"></section>`;
   renderAccount();
-  renderAlerts();
-  $('#kitForm').onsubmit = ev => {
-    ev.preventDefault();
-    const items = String(new FormData(ev.target).get('kit') || '').split('\n').map(x => x.trim()).filter(Boolean).slice(0, 40);
-    update(s => { s.settings.gearAlways = items; });
-    toast('Kit saved. It syncs to your account.');
-  };
+}
 
+function pageAlerts(v) {
+  v.innerHTML = `${youHead('Alerts')}<section class="you-page" id="alertsPanel"></section>`;
+  renderAlerts();
+}
+
+function pageHome(v) {
+  const s = S().settings;
+  v.innerHTML = `
+    ${youHead('Home and travel', 'Used to work out drive times and when to leave. Your home location syncs with your account.')}
+    <form class="form" id="homeForm">
+      <div class="two">
+        <label>Latitude<input name="lat" inputmode="decimal" value="${s.home ? s.home.lat.toFixed(5) : ''}"></label>
+        <label>Longitude<input name="lon" inputmode="decimal" value="${s.home ? s.home.lon.toFixed(5) : ''}"></label>
+      </div>
+      <button type="button" class="btn" id="homeHere">Use where I am now</button>
+      <div class="two">
+        <label>Average drive speed (km/h)<input name="speed" inputmode="numeric" value="${s.driveSpeedKmh}"></label>
+        <label>Arrive before each session (min)<input name="arrive" inputmode="numeric" value="${s.arriveBeforeMin}"></label>
+      </div>
+      <button type="submit" class="btn primary">Save home and travel</button>
+    </form>`;
   $('#homeHere').onclick = async () => {
     try {
       const p = await getPosition();
       $('#homeForm').lat.value = p.lat.toFixed(5);
       $('#homeForm').lon.value = p.lon.toFixed(5);
-      toast('Location filled in. Tap Save.');
+      toast('Location filled in. Tap Save home and travel.');
     } catch (e) { toast(e.message, 4000); }
   };
   $('#homeForm').onsubmit = ev => {
@@ -2878,22 +2925,64 @@ function renderSettings(v) {
       st2.settings.driveSpeedKmh = parseFloat(f.get('speed')) || 60;
       st2.settings.arriveBeforeMin = parseInt(f.get('arrive'), 10) || 0;
     });
-    toast('Saved');
+    toast('Home and travel saved.');
   };
+}
+
+function pageKit(v) {
+  v.innerHTML = `
+    ${youHead('My kit', "Things you always bring. They're added to every session's gear checklist, alongside what the conditions call for.")}
+    <form class="form" id="kitForm">
+      <label>One item per line<textarea name="kit" rows="8" placeholder="Camera and spare battery&#10;Tripod&#10;Memory cards&#10;Phone charger">${esc((S().settings.gearAlways || []).join('\n'))}</textarea></label>
+      <button class="btn primary" type="submit">Save my kit</button>
+    </form>`;
+  $('#kitForm').onsubmit = ev => {
+    ev.preventDefault();
+    const items = String(new FormData(ev.target).get('kit') || '').split('\n').map(x => x.trim()).filter(Boolean).slice(0, 40);
+    update(s2 => { s2.settings.gearAlways = items; });
+    toast('My kit saved.');
+  };
+}
+
+function pageAI(v) {
+  const s = S().settings;
+  v.innerHTML = `
+    ${youHead('AI coach', 'Optional. Rewrites briefings in plain English and reads the sky from reference photos.')}
+    <p class="you-copy">Get a key at console.anthropic.com. It's stored only in this browser, and is never included in backups, sync or your GitHub repo. Each briefing costs a fraction of a cent.</p>
+    <form class="form" id="aiForm">
+      <label>Claude API key<input name="key" type="password" autocomplete="off" value="${esc(s.claudeKey)}" placeholder="sk-ant-…"></label>
+      <label>Model<input name="model" value="${esc(s.claudeModel)}"></label>
+      <div class="row">
+        <button type="submit" class="btn primary">Save AI coach</button>
+        <button type="button" class="btn" id="testKey">Test key</button>
+      </div>
+    </form>`;
   $('#aiForm').onsubmit = ev => {
     ev.preventDefault();
     const f = new FormData(ev.target);
     update(st2 => { st2.settings.claudeKey = String(f.get('key')).trim(); st2.settings.claudeModel = String(f.get('model')).trim() || 'claude-sonnet-5-5'; });
-    toast('Saved');
+    toast('AI coach saved.');
   };
   $('#testKey').onclick = async () => {
     const f = new FormData($('#aiForm'));
     const tmp = { claudeKey: String(f.get('key')), claudeModel: String(f.get('model')) };
     if (!hasAI(tmp)) return toast('Paste a key first');
     const b = $('#testKey'); b.disabled = true; b.textContent = 'Testing…';
-    try { await testKey(tmp); toast('Key works'); } catch (e) { toast(e.message, 6000); }
+    try { await testKey(tmp); toast('Key works.'); } catch (e) { toast(e.message, 6000); }
     b.disabled = false; b.textContent = 'Test key';
   };
+}
+
+function pageData(v) {
+  v.innerHTML = `
+    ${youHead('Your data', 'Everything is saved in this browser, and in your account when you\'re signed in. A backup file is another way to move it between devices.')}
+    <div class="you-actions">
+      <button class="btn" id="exportBtn">Export a backup</button>
+      <label class="btn">Restore from a backup<input type="file" id="importFile" class="file-input" accept="application/json,.json"></label>
+    </div>
+    <h3 class="sec">Start again</h3>
+    <p class="you-copy">Deletes all spots, photos, plans, keepers and settings from this browser. If you're signed in, you'll be signed out and your synced copy stays safe in your account.</p>
+    <button class="btn danger" id="resetBtn">Delete everything on this device</button>`;
   $('#exportBtn').onclick = async () => {
     const b = $('#exportBtn'); b.disabled = true; b.textContent = 'Preparing…';
     try {
@@ -2901,7 +2990,7 @@ function renderSettings(v) {
       backup.photos = await exportPhotos(S().spots.flatMap(sp => sp.photos || []));
       downloadFile(`tidelight-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(backup), 'application/json');
     } catch (e) { toast(e.message, 5000); }
-    b.disabled = false; b.textContent = 'Export backup';
+    b.disabled = false; b.textContent = 'Export a backup';
   };
   $('#importFile').onchange = async ev => {
     const file = ev.target.files[0];
@@ -2912,15 +3001,15 @@ function renderSettings(v) {
       const parsed = JSON.parse(text);
       if (parsed.photos) await importPhotos(parsed.photos);
       for (const k in forecasts) delete forecasts[k];
-      toast('Backup restored'); render();
+      toast('Backup restored.'); youPage = null; render();
     }
     catch (e) { toast(e.message, 5000); }
   };
   $('#resetBtn').onclick = async () => {
-    if (!confirm('Delete all spots, photos, plans, keepers and settings from this browser? If you are signed in, you will be signed out and your synced copy stays safe in your account.')) return;
+    if (!confirm('Delete all spots, photos, plans, keepers and settings from this browser?')) return;
     await signOut().catch(() => {});
     resetAll(); clearPhotos(); for (const k in forecasts) delete forecasts[k];
-    toast('All data deleted'); render();
+    toast('Everything on this device was deleted.'); youPage = null; setTab('forecast');
   };
 }
 
@@ -2991,7 +3080,7 @@ loadAllPhotos().finally(() => {
     .catch(() => {});
   let wasSignedIn = !!currentUser();
   onSyncStatus(st => {
-    if (tab === 'settings') { renderAccount(); renderAlerts(); }
+    if (tab === 'you') { if (youPage === 'account') renderAccount(); else if (youPage === 'alerts') renderAlerts(); else if (!youPage) render(); }
     const signedIn = !!st.email;
     if (signedIn !== wasSignedIn) { wasSignedIn = signedIn; crewState.loaded = false; loadCrew().then(() => { if (tab === 'plans') render(); }); }
   });

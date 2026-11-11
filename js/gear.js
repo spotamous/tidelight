@@ -1,5 +1,5 @@
 // What to bring for a session: built from the hunts it's about, the conditions, the walk in,
-// and your own "always bring" list (Settings → My kit). Each item says why it's on the list.
+// and your own "always bring" list (You → My kit). Each item says why it's on the list.
 
 const BY_HUNT = {
   colour: [
