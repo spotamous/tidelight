@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.5';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.5';
-import { baseScore, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.5';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.5';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt } from './hunts.js?v=4.5';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.5';
-import { gearFor } from './gear.js?v=4.5';
-import { VAPID_PUBLIC_KEY } from './config.js?v=4.5';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.5';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.5';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.6';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.6';
+import { baseScore, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.6';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.6';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt } from './hunts.js?v=4.6';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.6';
+import { gearFor } from './gear.js?v=4.6';
+import { VAPID_PUBLIC_KEY } from './config.js?v=4.6';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.6';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.6';
 
-export const APP_VERSION = '4.5';
+export const APP_VERSION = '4.6';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -97,7 +97,8 @@ function verdict(e) {
 const huntList = e => HUNT_ORDER.filter(k => e.hunts && e.hunts[k]).map(k => [k, e.hunts[k]]);
 // "tonight", "tomorrow sunrise", "fri 23 oct sunset"
 function sessionName(e) {
-  const day = fmtDay(e.dayT ?? e.t, e.offset).toLowerCase();
+  // Lower-case only the relative words; "Tue 17 Nov" keeps its capitals.
+  const day = fmtDay(e.dayT ?? e.t, e.offset).replace(/^(Today|Tomorrow|Yesterday)$/, d => d.toLowerCase());
   if (e.type === 'day') return `${day} daytime`;
   if (e.type !== 'night') return `${day} ${e.type}`;
   return day === 'today' ? 'tonight' : `${day} night`;
@@ -256,7 +257,7 @@ function render() {
 
 function emptySpots(v) {
   v.innerHTML = `<div class="empty">
-    <h1>Know before <em>the alarm.</em></h1>
+    <h1 class="page-title">Know before the alarm</h1>
     <p>Add the spots you shoot. Tidelight scores every sunrise and sunset for the next 7 days using sky, tide and sea, tells you when to leave, and learns which conditions you love.</p>
     <div class="row"><button class="btn primary" id="goAdd">Add your first spot</button></div>
   </div>`;
@@ -699,8 +700,8 @@ function renderMatrix(v, evs, st, failed) {
 
   v.innerHTML = `
     ${dayPills(offset)}
-    <p class="eyebrow" style="margin-top:14px">Every spot, next 3 days</p>
-    <h1>Where's the <em>light?</em></h1>
+    <h1 class="page-title">All spots</h1>
+    <p class="page-lede">Every spot against every session for the next 3 days. Tap a score for its summary.</p>
     ${forecastAlerts(st, failed)}
     <div class="mx-wrap">
       <div class="mx" style="grid-template-columns: 116px repeat(${cols.length}, 42px)">
@@ -723,7 +724,7 @@ function renderMatrix(v, evs, st, failed) {
     ${sel ? `<section class="mx-detail">
       ${coverUrl(sel.spot) ? `<img src="${coverUrl(sel.spot)}" alt="">` : `<span class="mx-detail-ph" aria-hidden="true"></span>`}
       <div>
-        <p class="eyebrow">${esc(fmtDayDate(sel.dayT ?? sel.t, sel.offset))} — ${typeName[sel.type]} ${fmtTime(sel.t, sel.offset)}</p>
+        <p class="mx-detail-when">${esc(fmtDayDate(sel.dayT ?? sel.t, sel.offset))}, ${typeName[sel.type].toLowerCase()} ${sessionWhen(sel)}</p>
         <div class="mx-detail-name">${esc(sel.spot.name)}</div>
         <div class="small"><strong class="caramel">${esc(verdict(sel))}, ${sel.score}.</strong> <span class="muted">Leave ${fmtTime(sel.leave, sel.offset)}.${sel.access && !sel.access.inside ? ' Tide blocks access.' : ''}</span></div>
       </div>
@@ -1338,7 +1339,7 @@ function spotCard(sp, e) {
     ${coverUrl(sp) ? `<img class="spot-card-img" src="${coverUrl(sp)}" alt="">` : `<span class="spot-card-img empty" aria-hidden="true">${esc(sp.name.charAt(0))}</span>`}
     <span class="spot-card-body">
       <span class="spot-card-head"><span class="spot-card-name">${esc(sp.name)}</span>${e ? `<span class="spot-card-score num">${e.score}</span>` : ''}</span>
-      ${e ? `<span class="spot-card-when">${esc(cap(sessionName(e)))} — ${sessionWhen(e)}</span>
+      ${e ? `<span class="spot-card-when">${esc(cap(sessionName(e)))}, ${sessionWhen(e)}</span>
              <span class="spot-card-why">${esc(whyLine(e))}</span>`
           : `<span class="spot-card-why">${spotFilter === 'all' ? 'No sessions in the next 3 days. Check its sessions and hunts.' : `No ${TYPE_NAME[spotFilter].toLowerCase()} sessions here.`}</span>`}
       <span class="spot-card-chips">${spotChips(sp, e)}</span>
@@ -1350,7 +1351,8 @@ async function renderSpots(v) {
   if (map) { map.remove(); map = null; }
   const st = S();
   v.innerHTML = `
-    <p class="eyebrow">Your spots, next 3 days</p><h1>Where you <em>shoot.</em></h1>
+    <h1 class="page-title">Spots</h1>
+    <p class="page-lede">Ranked by each spot's best session in the next 3 days.</p>
     <form class="search" id="placeSearch" role="search">
       <input type="search" id="placeQ" placeholder="Search to add a beach, falls or lookout" autocomplete="off" enterkeyhint="search" aria-label="Search for a place to add">
       <button class="btn primary" type="submit">Search</button>
@@ -1472,9 +1474,14 @@ function openSpotForm(prefill = {}, existing = null) {
     coastal: true, tide: 'any', driveMin: '', facing: '', notes: '',
   };
   const num = x => (x === '' || x == null ? '' : Number(x).toFixed(5));
+  const hasTravel = !!(s.driveMin || s.hikeMin || s.hikeKm || s.difficulty);
+  const hasComposition = (s.facing !== '' && s.facing != null) || !!s.notes;
+  const travelNote = hikeSummary(s) ? hikeSummary(s).replace('Hike: ', '') : (s.driveMin ? `${s.driveMin} min drive` : 'Estimated from home');
+  const coastNote = s.coastal ? `Coastal${s.tide && s.tide !== 'any' ? `, ${s.tide} tide` : ''}${s.tideAccess ? ', tide access' : ''}` : 'Inland';
+  const fold = (title, note, open, body) => `<details class="fold" ${open ? 'open' : ''}><summary><span>${title}</span><small>${esc(note)}</small></summary><div class="fold-body">${body}</div></details>`;
   openSheet(`
-    <h2>${existing ? 'Edit spot' : 'New spot'}</h2>
-    <form id="spotForm" class="form" novalidate>
+    <h2 class="bf-name">${existing ? 'Edit spot' : 'New spot'}</h2>
+    <form id="spotForm" class="form spot-form" novalidate>
       <label>Name<input name="name" required value="${esc(s.name)}" placeholder="e.g. North jetty"></label>
       <fieldset>
         <legend>Photos</legend>
@@ -1482,58 +1489,77 @@ function openSpotForm(prefill = {}, existing = null) {
         <div class="photo-grid" id="photoGrid"></div>
         <label class="btn ghost" id="addPhotosBtn">Add photos<input type="file" id="spotPhotos" class="file-input" accept="image/*" multiple></label>
       </fieldset>
-      <div class="two">
-        <label>Latitude<input name="lat" inputmode="decimal" required value="${num(s.lat)}"></label>
-        <label>Longitude<input name="lon" inputmode="decimal" required value="${num(s.lon)}"></label>
-      </div>
-      <fieldset><legend>Shoot at</legend>
+
+      <h3 class="sec">What you shoot here</h3>
+      <fieldset><legend>Sessions</legend>
         <div class="checks">
           <label class="check"><input type="checkbox" name="ev_sunrise" ${s.events.includes('sunrise') ? 'checked' : ''}> Sunrise</label>
           <label class="check"><input type="checkbox" name="ev_sunset" ${s.events.includes('sunset') ? 'checked' : ''}> Sunset</label>
         </div>
+        <span class="hint">Daytime and night sessions appear when you pick a forest, waterfall, aurora or Milky Way hunt.</span>
       </fieldset>
-      <fieldset><legend>What to hunt for here</legend>
-        <span class="hint">Each one gets its own score. The session shows the best of them.</span>
+      <fieldset><legend>Hunts</legend>
+        <span class="hint">Each one gets its own score. A session shows the best of them.</span>
         <div class="checks">
           ${HUNT_ORDER.map(k => `<label class="check"><input type="checkbox" name="hunt_${k}" ${huntsOf(s).includes(k) ? 'checked' : ''}> ${HUNT_LABEL[k]}</label>`).join('')}
         </div>
       </fieldset>
-      <label>For fog, this spot is<select name="fogMode">
+      <label id="fogModeWrap">For fog, this spot is<select name="fogMode">
         <option value="in" ${s.fogMode !== 'above' ? 'selected' : ''}>In the fog (forest, jetty, paddock)</option>
         <option value="above" ${s.fogMode === 'above' ? 'selected' : ''}>Above the fog (lookout over a valley)</option>
       </select></label>
-      <label class="check"><input type="checkbox" name="coastal" ${s.coastal ? 'checked' : ''}> Coastal spot (use tide and wave data)</label>
-      <label class="check"><input type="checkbox" name="tideAccess" ${s.tideAccess ? 'checked' : ''}> Access depends on the tide (rock shelf, cave, sandbar)</label>
-      <div class="two">
-        <label>Open below (% of tide range)<span class="hint">0 = low tide, 100 = high</span><input name="accessPct" inputmode="numeric" value="${s.accessPct ?? 40}"></label>
-        <label>Safety buffer (min)<span class="hint">Be back this long before it closes</span><input name="accessBuffer" inputmode="numeric" value="${s.accessBuffer ?? 30}"></label>
-      </div>
-      <label>Best tide<select name="tide">
-        ${['any', 'low', 'mid', 'high'].map(t => `<option value="${t}" ${s.tide === t ? 'selected' : ''}>${cap(t)}</option>`).join('')}
-      </select></label>
-      <div class="two">
-        <label>Drive time (min)<span class="hint">Blank = estimate from home</span><input name="driveMin" inputmode="numeric" value="${s.driveMin ?? ''}"></label>
-        <label>Facing (°)<span class="hint">Your composition's compass bearing, optional</span><input name="facing" inputmode="numeric" value="${s.facing ?? ''}"></label>
-      </div>
-      <fieldset><legend>Hike from the car</legend>
-        <span class="hint">Leave blank if you can shoot from the car park. Leave times include the walk.</span>
-        <div class="three">
-          <label>Time (min)<input name="hikeMin" inputmode="numeric" value="${s.hikeMin ?? ''}" placeholder="Auto"></label>
-          <label>Distance (km)<input name="hikeKm" inputmode="decimal" value="${s.hikeKm ?? ''}" placeholder="0"></label>
-          <label>Difficulty<select name="difficulty">
-            <option value="" ${!s.difficulty ? 'selected' : ''}>–</option>
-            ${DIFFICULTIES.map(d => `<option value="${d}" ${s.difficulty === d ? 'selected' : ''}>${cap(d)}</option>`).join('')}
-          </select></label>
+
+      ${fold('Getting there', travelNote, hasTravel, `
+        <label>Drive time (min)<span class="hint">Leave blank to estimate it from your home location</span><input name="driveMin" inputmode="numeric" value="${s.driveMin ?? ''}"></label>
+        <fieldset><legend>Hike from the car</legend>
+          <span class="hint">Leave blank if you can shoot from the car park. Leave times include the walk.</span>
+          <div class="three">
+            <label>Time (min)<input name="hikeMin" inputmode="numeric" value="${s.hikeMin ?? ''}" placeholder="Auto"></label>
+            <label>Distance (km)<input name="hikeKm" inputmode="decimal" value="${s.hikeKm ?? ''}" placeholder="0"></label>
+            <label>Difficulty<select name="difficulty">
+              <option value="" ${!s.difficulty ? 'selected' : ''}>–</option>
+              ${DIFFICULTIES.map(d => `<option value="${d}" ${s.difficulty === d ? 'selected' : ''}>${cap(d)}</option>`).join('')}
+            </select></label>
+          </div>
+          <span class="hint">No time entered? It's estimated one way from distance and difficulty.</span>
+        </fieldset>`)}
+
+      ${fold('Coast and tide', coastNote, !!s.coastal && !!existing, `
+        <label class="check"><input type="checkbox" name="coastal" ${s.coastal ? 'checked' : ''}> Coastal spot (use tide and wave data)</label>
+        <label>Best tide<select name="tide">
+          ${['any', 'low', 'mid', 'high'].map(t => `<option value="${t}" ${s.tide === t ? 'selected' : ''}>${cap(t)}</option>`).join('')}
+        </select></label>
+        <label class="check"><input type="checkbox" name="tideAccess" ${s.tideAccess ? 'checked' : ''}> Access depends on the tide (rock shelf, cave, sandbar)</label>
+        <div class="two" id="accessWrap">
+          <label>Open below (% of tide range)<span class="hint">0 is low tide, 100 is high</span><input name="accessPct" inputmode="numeric" value="${s.accessPct ?? 40}"></label>
+          <label>Safety buffer (min)<span class="hint">Be back this long before it closes</span><input name="accessBuffer" inputmode="numeric" value="${s.accessBuffer ?? 30}"></label>
+        </div>`)}
+
+      ${fold('Composition and notes', hasComposition ? [s.facing !== '' && s.facing != null ? `Facing ${Math.round(Number(s.facing))}°` : '', s.notes ? 'Notes added' : ''].filter(Boolean).join(', ') : 'Optional', hasComposition, `
+        <label>Facing (°)<span class="hint">The compass bearing of your composition. Used for sun and Milky Way alignment.</span><input name="facing" inputmode="numeric" value="${s.facing ?? ''}"></label>
+        <label>Notes<textarea name="notes" placeholder="Access, parking, hazards, compositions">${esc(s.notes || '')}</textarea></label>`)}
+
+      ${fold('Location', s.lat !== '' && s.lat != null ? `${Number(s.lat).toFixed(4)}, ${Number(s.lon).toFixed(4)}` : 'Needed', s.lat === '' || s.lat == null, `
+        <div class="two">
+          <label>Latitude<input name="lat" inputmode="decimal" required value="${num(s.lat)}"></label>
+          <label>Longitude<input name="lon" inputmode="decimal" required value="${num(s.lon)}"></label>
         </div>
-        <span class="hint">No time entered? It's estimated from distance and difficulty, one way.</span>
-      </fieldset>
-      <label>Notes<textarea name="notes" placeholder="Access, parking, hazards, compositions">${esc(s.notes || '')}</textarea></label>
-      <div class="row">
+        <span class="hint">Set from the map, search or scouting. Edit here to fine-tune.</span>`)}
+
+      ${existing ? '<div class="bf-quiet"><button type="button" class="link-btn danger" id="delSpot">Delete this spot</button></div>' : ''}
+      <div class="sheet-actions">
         <button type="submit" class="btn primary">${existing ? 'Save spot' : 'Add spot'}</button>
-        <button type="button" class="btn ghost" data-close>Cancel</button>
+        <button type="button" class="btn" data-close>Cancel</button>
       </div>
-      ${existing ? '<div class="row"><button type="button" class="btn danger" id="delSpot">Delete spot</button></div>' : ''}
     </form>`);
+  // Show the fog and tide-access options only when they apply.
+  const sf = $('#spotForm');
+  const syncOptional = () => {
+    $('#fogModeWrap').hidden = !sf.querySelector('[name=hunt_fog]').checked;
+    $('#accessWrap').hidden = !sf.querySelector('[name=tideAccess]').checked;
+  };
+  sf.addEventListener('change', syncOptional);
+  syncOptional();
 
   // Photos: work on a copy; only commit on save, discard new uploads if the sheet is closed.
   const original = [...(existing?.photos || [])];
@@ -1634,11 +1660,11 @@ function openSpotForm(prefill = {}, existing = null) {
 async function openSpotDetail(id) {
   const s = S().spots.find(x => x.id === id);
   if (!s) return;
-  openSheet(`<h2>${esc(s.name)}</h2><p class="loading">Loading the week…</p>`);
+  openSheet(`<h2 class="bf-name">${esc(s.name)}</h2><p class="loading-plain">Loading the week…</p>`);
   try {
     if (!forecasts[id]) forecasts[id] = await fetchSpotForecast(s);
   } catch (e) {
-    $('#sheetBody').innerHTML = `<h2>${esc(s.name)}</h2><div class="alert danger">${esc(e.message)}</div>`;
+    $('#sheetBody').innerHTML = `<h2 class="bf-name">${esc(s.name)}</h2><div class="alert danger">${esc(e.message)}</div>`;
     return;
   }
   const st = S();
@@ -1646,20 +1672,54 @@ async function openSpotDetail(id) {
   indexEvents(evs);
   const data = forecasts[id];
   const pics = (s.photos || []).filter(id => photoUrl(id));
+
+  // The week at a glance: days across, session types down, shaded by score.
+  const now = Date.now() / 1000;
+  const dayOf = e => dayKey(e.dayT ?? e.t, e.offset);
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const t = now + i * 86400, k = dayKey(t, data.offset);
+    if (evs.some(e => dayOf(e) === k)) days.push({ k, label: i === 0 ? 'Today' : fmtWeekday(t, data.offset).slice(0, 3), date: fmtDayDate(t, data.offset).split(' ')[1] });
+  }
+  const types = SESSION_TYPES.filter(type => evs.some(e => e.type === type));
+  const cellFor = (k, type) => evs.find(e => dayOf(e) === k && e.type === type);
+  const best = [...evs].sort((a, b) => b.score - a.score)[0];
+  const week = days.length && types.length ? `
+    <div class="wk-wrap"><div class="wk" style="grid-template-columns: 74px repeat(${days.length}, 44px)">
+      <span></span>${days.map(d => `<span class="wk-day">${d.label}<small>${d.date}</small></span>`).join('')}
+      ${types.map(type => `<span class="wk-type">${TYPE_NAME[type]}</span>${days.map(d => {
+        const e = cellFor(d.k, type);
+        return e ? `<button class="mx-cell ${band(e.score)} ${unsure(e) ? 'unsure' : ''}" data-ev="${esc(e.key)}" aria-label="${TYPE_NAME[type]} ${d.label} ${d.date}, score ${e.score}">${e.score}${e.access && !e.access.inside ? '<i class="mx-tide" aria-hidden="true"></i>' : ''}</button>` : '<span class="mx-none" aria-hidden="true">–</span>';
+      }).join('')}`).join('')}
+    </div></div>
+    <p class="small muted">Tap a score for its briefing.${evs.some(e => e.access && !e.access.inside) ? ' A red dot means the tide blocks access.' : ''}</p>` : '<p class="muted">No sessions in the next 7 days. Check this spot\'s sessions and hunts under Edit spot.</p>';
+
   $('#sheetBody').innerHTML = `
     ${pics.length ? `<img class="banner" id="spotBanner" src="${photoUrl(pics[0])}" alt="${esc(s.name)}">` : ''}
     ${pics.length > 1 ? `<div class="gallery-strip">${pics.map((id, i) => `<button class="${i === 0 ? 'on' : ''}" data-show="${id}" aria-label="Show photo ${i + 1}"><img src="${photoUrl(id)}" alt=""></button>`).join('')}</div>` : ''}
-    <h2>${esc(s.name)}</h2>
-    <p class="muted small">${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}${s.coastal && !data.hasMarine ? '. No tide or wave data at this exact point; try moving the pin slightly offshore.' : ''}</p>
-    ${hikeSummary(s) ? `<p class="hike-line">${esc(hikeSummary(s))}</p>` : ''}
-    ${alignmentText(s) ? `<p class="align-line">${esc(alignmentText(s))}</p>` : ''}
-    ${s.notes ? `<p>${esc(s.notes)}</p>` : ''}
-    <div class="row">
-      <button class="btn" id="editSpot">Edit spot</button>
-      <button class="btn" id="spotHourly">Hourly forecast</button>
-      <a class="btn" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}">Directions</a>
+    <header class="bf-head">
+      <div>
+        <h2 class="bf-name">${esc(s.name)}</h2>
+        <p class="bf-when">${esc(huntsOf(s).map(k => HUNT_LABEL[k]).join(', '))}${hikeSummary(s) ? `. ${esc(hikeSummary(s))}` : ''}</p>
+      </div>
+    </header>
+    ${best ? `<p class="bf-verdict">Best this week: ${esc(sessionName(best))}, ${sessionWhen(best)}. ${esc(huntPhrase(best))}, ${best.score}.</p>` : ''}
+
+    <h3 class="sec">The week here</h3>
+    ${week}
+
+    ${alignmentText(s) || s.notes ? `<h3 class="sec">About this spot</h3>
+      ${alignmentText(s) ? `<p class="align-line">${esc(alignmentText(s))}</p>` : ''}
+      ${s.notes ? `<p class="bf-brief">${esc(s.notes)}</p>` : ''}` : ''}
+    <p class="small muted">${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}${s.coastal && !data.hasMarine ? '. No tide or wave data at this exact point; try moving the pin slightly offshore.' : ''}</p>
+    <div class="bf-quiet">
+      <button class="link-btn" id="spotHourly">Hourly forecast</button>
+      <a class="link-btn" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}">Directions</a>
     </div>
-    <div>${evs.map(e => eventRow(e, `<span>${fmtDay(e.dayT ?? e.t, e.offset)}</span>`)).join('') || '<p class="muted">No upcoming events.</p>'}</div>`;
+    <div class="sheet-actions">
+      ${best ? `<button class="btn primary" data-ev="${esc(best.key)}">Best session</button>` : ''}
+      <button class="btn" id="editSpot">Edit spot</button>
+    </div>`;
   $('#editSpot').onclick = () => openSpotForm({}, s);
   $('#spotHourly').onclick = () => openNow({ kind: 'spot', id: s.id, lat: s.lat, lon: s.lon, name: s.name });
   $$('[data-show]').forEach(b => b.onclick = () => {
@@ -1792,8 +1852,8 @@ async function openNow(start) {
   if (start) nowPlace = start;
   const sel = nowPlace.kind === 'spot' ? nowPlace.id : nowPlace.kind;
   openSheet(`
-    <p class="eyebrow">Right now</p>
-    <h2>What's <em>coming.</em></h2>
+    <h2 class="bf-name">Right now</h2>
+    <p class="bf-when">What's happening, and what's coming over the next 48 hours.</p>
     <div class="place-pick">
       <select id="hourlyPlace" aria-label="Forecast location">
         <option value="here" ${sel === 'here' ? 'selected' : ''}>My location</option>
@@ -1809,9 +1869,9 @@ async function openNow(start) {
     <div id="hourlyResults" class="results" hidden></div>
     <div id="hourly"></div>
 
-    <h3>At your spots now</h3>
+    <h3 class="sec">At your spots now</h3>
     <div id="nowSpots">${st.spots.length ? '<p class="loading">Checking your spots…</p>' : '<p class="muted">Add spots to see conditions at each one.</p>'}</div>
-    <h3>Rain radar</h3>
+    <h3 class="sec">Rain radar</h3>
     <div id="radar" class="radar"></div>
     <div class="radar-bar"><span id="radarTime" class="num"></span><button class="btn ghost small-btn" id="radarPlay" hidden>Pause</button></div>
     <div class="row">
