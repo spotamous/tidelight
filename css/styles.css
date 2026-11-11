@@ -768,3 +768,108 @@ code { font: 400 .85em var(--mono); background: var(--surface-2); padding: 1px 5
 body.nv-sheets .sheet-panel { --text: #E0453A; --muted: #8E2A22; --caramel: #FF5A4A; --line: #3A1512; --surface: #0A0202; --surface-2: #1A0806; background: #0A0202; color: #E0453A; }
 body.nv-sheets .sheet-panel .btn { border-color: #5A1A15; color: #E0453A; background: transparent; }
 body.nv-sheets .compass svg { filter: sepia(1) saturate(6) hue-rotate(-40deg) brightness(.7); }
+
+/* =================== v4.5: full briefing and Plans, in the home page's language =================== */
+h3.sec { font: 700 1rem/1.3 var(--sans); letter-spacing: 0; text-transform: none; color: var(--text); margin: 28px 0 8px; }
+.page-title { font: 400 2.5rem/1.05 var(--serif); margin: 6px 0 0; letter-spacing: -0.01em; }
+.page-lede { font: 400 1.02rem/1.5 var(--sans); margin: 8px 0 16px; max-width: 34em; }
+.link-btn.danger { color: var(--danger); }
+
+/* ---- Full briefing ---- */
+.bf-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding-right: 52px; }
+.banner + .bf-head { padding-right: 0; }
+.bf-name { font: 400 2rem/1.05 var(--serif); margin: 0; }
+.bf-when { font: 400 .92rem/1.45 var(--sans); color: var(--muted); margin: 4px 0 0; }
+.bf-score { font: 400 3rem/0.9 var(--serif); color: var(--caramel); margin: 0; }
+.bf-verdict { font: 400 1.25rem/1.38 var(--serif); margin: 14px 0 0; max-width: 32em; }
+.bf-note { font: 600 .86rem/1.4 var(--sans); margin: 8px 0 0; }
+.bf-note.conf-high { color: var(--ok); }
+.bf-note.conf-medium { color: var(--muted); }
+.bf-note.conf-low { color: var(--danger); }
+.bf-note.crew { color: var(--slate); }
+.bf-quiet { display: flex; flex-wrap: wrap; gap: 2px 20px; margin-top: 10px; }
+
+/* The plan as a strip of light: the strip takes the sky's colour at each step */
+.tline { list-style: none; margin: 0; padding: 0 0 0 22px; position: relative; }
+.tline::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 8px; border-radius: 4px; background: var(--strip, var(--line)); }
+.tline li { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 12px; align-items: baseline; padding: 9px 0; font: 400 .95rem/1.35 var(--sans); border-bottom: 1px solid var(--line); }
+.tline li:last-child { border-bottom: 0; }
+.tline time { font-weight: 600; }
+.tline li.key { padding: 12px 0; }
+.tline li.key time, .tline li.key span { font: 400 1.45rem/1.1 var(--serif); color: var(--caramel); }
+.tline li.leave span { font-weight: 600; }
+.tline li.warn time, .tline li.warn span { color: var(--danger); font-weight: 600; }
+
+.bf-brief { font: 400 1.02rem/1.65 var(--sans); margin: 0 0 4px; max-width: 36em; white-space: pre-wrap; }
+.bf-hunt { padding: 4px 0 12px; }
+.bf-hunt-head, .bf-hunt.more summary { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.bf-hunt-head span, .bf-hunt.more summary span { font: 400 1.4rem var(--serif); }
+.bf-hunt-head b { font: 400 1.6rem var(--serif); color: var(--caramel); }
+.bf-hunt.more { border-top: 1px solid var(--line); padding: 0; }
+.bf-hunt.more summary { cursor: pointer; padding: 12px 0; list-style: none; }
+.bf-hunt.more summary::-webkit-details-marker { display: none; }
+.bf-hunt.more summary b { font: 400 1.3rem var(--serif); color: var(--muted); }
+.bf-hunt.more summary span::after { content: '  Show'; font: 600 .78rem var(--sans); color: var(--caramel); }
+.bf-hunt.more[open] summary span::after { content: '  Hide'; }
+.bf-hunt.more[open] { padding-bottom: 12px; }
+.bf-hunt .part-list { margin: 4px 0 10px; }
+.bf-hunt .part-val { font: 600 .82rem var(--sans); font-variant-numeric: tabular-nums; }
+.bf-personal { margin-top: 10px; }
+.bf-cond { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; }
+.bf-cond div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.bf-cond dt { font: 400 .88rem var(--sans); color: var(--muted); }
+.bf-cond dd { margin: 0; font: 600 .95rem var(--sans); }
+
+/* Pinned actions at the bottom of the briefing */
+.sheet-actions {
+  position: sticky; bottom: calc(-28px - env(safe-area-inset-bottom)); z-index: 4;
+  display: flex; gap: 10px; margin: 24px -20px calc(-28px - env(safe-area-inset-bottom));
+  padding: 12px 20px calc(14px + env(safe-area-inset-bottom));
+  background: var(--surface); border-top: 1px solid var(--line);
+}
+.sheet-actions .btn { flex: 1 1 0; }
+
+/* ---- Plans ---- */
+.plans-view { margin-top: 4px; }
+.next-up { background: var(--surface); border-radius: 16px; padding: 18px; }
+.nu-name { font: 400 1.9rem/1.05 var(--serif); margin: 0; }
+.nu-when { font: 400 .9rem/1.45 var(--sans); color: var(--muted); margin: 4px 0 0; }
+.nu-leave { font: 400 2.7rem/1 var(--serif); color: var(--caramel); margin: 18px 0 0; letter-spacing: -0.01em; }
+.nu-in { font: 600 .98rem var(--sans); margin: 6px 0 0; }
+.next-up .gear-list { margin-top: 16px; }
+.plan-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.plan-actions .btn { flex: 1 1 auto; }
+.empty-plans { padding: 8px 0; }
+.empty-plans p { font: 400 1.02rem/1.55 var(--sans); max-width: 34em; margin: 0 0 14px; }
+
+.plan-item { border-bottom: 1px solid var(--line); }
+.plan-item summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; padding: 13px 0; cursor: pointer; list-style: none; }
+.plan-item summary::-webkit-details-marker { display: none; }
+.pi-name { font: 400 1.3rem/1.15 var(--serif); }
+.pi-leave { grid-row: 1 / span 2; grid-column: 2; align-self: center; font: 600 .86rem var(--sans); }
+.pi-when { font: 400 .8rem var(--sans); color: var(--muted); }
+.plan-item[open] { padding-bottom: 14px; }
+
+.rate-block { margin-bottom: 22px; }
+.rate-block h3.sec { margin-top: 0; }
+.rate-row { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.rate-name { font: 400 1.25rem/1.15 var(--serif); margin: 0 0 8px; display: grid; }
+.rate-name small { font: 400 .8rem var(--sans); color: var(--muted); margin-top: 2px; }
+.rate-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.rate-btns .btn { flex: 1 1 auto; min-height: 40px; padding: 0 14px; font-size: .86rem; }
+
+.hit h3.sec { margin-top: 4px; }
+.hist-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.hist-name { display: grid; font: 400 1.2rem/1.15 var(--serif); }
+.hist-name small { font: 400 .78rem var(--sans); color: var(--muted); margin-top: 2px; }
+.hist-score { font: 600 .9rem var(--sans); color: var(--muted); }
+.hist-rating { font: 600 .82rem var(--sans); }
+.hist-rating.keeper { color: var(--ok); }
+.hist-rating.dud { color: var(--danger); }
+.hist-rating.meh { color: var(--muted); }
+.hist-row .btn { min-height: 38px; padding: 0 14px; font-size: .86rem; }
+
+/* The crew view borrows the older panel markup: flatten it to match */
+.plans-view > .panel { background: none; border: 0; border-radius: 0; padding: 0; margin: 0; }
+.plans-view > .panel > h2 { display: none; }
+.plans-view h3:not(.sec) { font: 700 1rem/1.3 var(--sans); letter-spacing: 0; text-transform: none; color: var(--text); margin: 26px 0 8px; }

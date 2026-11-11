@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.4';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.4';
-import { baseScore, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.4';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.4';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt } from './hunts.js?v=4.4';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.4';
-import { gearFor } from './gear.js?v=4.4';
-import { VAPID_PUBLIC_KEY } from './config.js?v=4.4';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.4';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.4';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.5';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.5';
+import { baseScore, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.5';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.5';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt } from './hunts.js?v=4.5';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.5';
+import { gearFor } from './gear.js?v=4.5';
+import { VAPID_PUBLIC_KEY } from './config.js?v=4.5';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.5';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.5';
 
-export const APP_VERSION = '4.4';
+export const APP_VERSION = '4.5';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -113,8 +113,8 @@ function briefing(e) {
   const o = e.offset, h = e.hour, s = e.spot;
   const lines = [];
   lines.push(e.type === 'night' || e.type === 'day'
-    ? `${verdict(e)}. ${s.name} ${sessionName(e)}, best around ${fmtTime(e.t, o)}.`
-    : `${verdict(e)}. ${s.name} ${e.type} at ${fmtTime(e.t, o)}.`);
+    ? `${huntPhrase(e)}. ${s.name} ${sessionName(e)}, best around ${fmtTime(e.t, o)}.`
+    : `${huntPhrase(e)}. ${s.name} ${e.type} at ${fmtTime(e.t, o)}.`);
   if (e.drive != null) {
     lines.push(`Leave ${fmtTime(e.leave, o)} (${travelText(e)}${e.hike ? `, start walking ${fmtTime(e.walkStart, o)}` : ''}, on location ${S().settings.arriveBeforeMin} min early).`);
   } else if (e.hike) {
@@ -180,7 +180,7 @@ function briefing(e) {
     lines.push('Stay safe: if thunder follows a flash within 30 seconds, you are within striking distance. Shoot from a hard-topped car or a building, and wait 30 minutes after the last thunder.');
   }
   if (e.alignment) lines.push(e.alignment.text + '.');
-  return lines.join(' ');
+  return lines.join('\n');
 }
 
 /* ================= shared fragments ================= */
@@ -246,6 +246,7 @@ function setTab(t) { if (t === 'forecast' && tab !== 'forecast') { homeDay = 0; 
 
 function render() {
   if (map) { map.remove(); map = null; }
+  clearInterval(plansTimer);
   $$('.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   const v = $('#view');
   ({ forecast: renderForecast, spots: renderSpots, plans: renderPlans, coach: renderCoach, settings: renderSettings })[tab](v);
@@ -398,6 +399,16 @@ function lightBand(w0, place) {
     [BAND.night, marks.night], [BAND.night, w1],
   ];
   return { gradient: `linear-gradient(to right, ${stops.map(([c, t]) => `${c} ${pos(t).toFixed(2)}%`).join(', ')})`, pos, marks };
+}
+
+// The light phase colour at any moment (used by the briefing's plan strip).
+function day3am(t, offset) {
+  const d = new Date((t - 3 * 3600 + offset) * 1000);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) / 1000 - offset + 3 * 3600;
+}
+const PHASE_COLOR = { dark: BAND.night, twilight: BAND.twilight, 'blue hour': BAND.blue, 'golden hour': BAND.golden, daylight: BAND.day };
+function phaseColor(place, t, offset) {
+  return PHASE_COLOR[phaseAt(lightBand(day3am(t, offset), place).marks, t)] || BAND.night;
 }
 
 const bandFill = s => (s >= 80 ? '#D9A066' : s >= 65 ? '#8F6B44' : s >= 50 ? '#3A342B' : '#1E2222');
@@ -743,7 +754,7 @@ function openEvent(key) {
   if (e.timeline) tl.push(...e.timeline); else tl.push({ t: e.t, label: cap(e.type), cls: 'key' });
   if (e.access && !e.access.none) {
     if (!e.access.openStart) tl.push({ t: e.access.start, label: 'Tide access opens' });
-    tl.push({ t: e.access.backBy, label: 'Be back off the rocks', cls: 'leave' });
+    tl.push({ t: e.access.backBy, label: 'Be back off the rocks', cls: 'warn' });
   }
   if (L.goldenEnd && e.type === 'sunrise') tl.push({ t: L.goldenEnd, label: 'Golden hour ends' });
   if (e.tide?.low && Math.abs(e.tide.low.t - e.t) < 4 * 3600) tl.push({ t: e.tide.low.t, label: 'Low tide' });
@@ -761,44 +772,63 @@ function openEvent(key) {
     ['Storm energy', h.cape != null ? `${Math.round(h.cape)} J/kg` : '–'],
   ];
 
+  // The plan as a strip of light: each step takes the colour of the sky at that moment.
+  const stripStops = tl.map((x, i) => `${phaseColor(e.spot, x.t, o)} ${(((i + 0.5) / tl.length) * 100).toFixed(1)}%`).join(', ');
+  const huntBlock = ([k, v]) => `
+      <div class="part-list">${(v.parts || []).map(p => partBar(p)).join('')}</div>
+      <ul class="factors">${v.factors.map(f => `<li class="${f.k}">${esc(f.t)}</li>`).join('') || '<li>Nothing stands out either way.</li>'}</ul>
+      ${k === 'lightning' ? '<button class="link-btn" data-lightning>Open the lightning distance timer</button>' : ''}`;
+  const hunts = huntList(e);
+  const topHunt = hunts.find(([k]) => k === e.topHunt) || hunts[0];
+  const otherHunts = hunts.filter(h => h !== topHunt);
+  const going = crewGoing(e);
+  const gear = gearFor(e, S().settings);
+
   openSheet(`
     ${coverUrl(e.spot) ? `<img class="banner" src="${coverUrl(e.spot)}" alt="${esc(e.spot.name)}">` : ''}
-    <div class="sheet-head">
-      ${horizon(e, true)}
-      <div><h2>${esc(e.spot.name)}</h2><div class="muted">${e.type === 'night' || e.type === 'day' ? `${cap(sessionName(e))}, best around ${fmtTime(e.t, o)}` : `${fmtDay(e.t, o)}, ${e.type} at ${fmtTime(e.t, o)}`}</div><div class="verdict">${verdict(e)}</div>${confLine(e)}${crewGoing(e).length ? `<div class="crew-going">${esc(goingText(crewGoing(e)))}</div>` : ''}</div>
+    <header class="bf-head">
+      <div>
+        <h2 class="bf-name">${esc(e.spot.name)}</h2>
+        <p class="bf-when">${esc(cap(sessionName(e)))}, ${sessionWhen(e)}</p>
+      </div>
+      <p class="bf-score num" aria-label="Score ${e.score} out of 100">${e.score}</p>
+    </header>
+    <p class="bf-verdict">${esc(huntPhrase(e))}. ${esc(whySentence(e))}</p>
+    ${e.topHunt === 'colour' && e.confidence ? `<p class="bf-note conf-${e.confidence.level}">${{ high: 'The weather models agree.', medium: 'The weather models roughly agree.', low: 'The weather models disagree, so treat this as a maybe.' }[e.confidence.level]}</p>` : ''}
+    ${e.access && !e.access.inside ? `<p class="bf-note conf-low">${e.access.none ? 'The tide stays above your access level around this session.' : `Tide access runs ${fmtTime(e.access.start, o)} to ${fmtTime(e.access.backBy, o)}, which doesn't cover this session.`}</p>` : ''}
+    ${going.length ? `<p class="bf-note crew">${esc(goingText(going))}.</p>` : ''}
+    <div class="bf-quiet">
+      ${currentUser() && crewState.crews.length ? '<button class="link-btn" id="shareBtn">Share with crew</button>' : ''}
+      <button class="link-btn" id="icsBtn">Add to calendar</button>
+      <button class="link-btn" data-compass="${esc(e.key)}">Open compass</button>
     </div>
-    <ul class="timeline">${tl.map(x => `<li class="${x.cls || ''}"><time>${fmtTime(x.t, o)}</time><span>${x.label}</span></li>`).join('')}</ul>
 
-    <h3>Briefing</h3>
-    <div class="brief" id="briefText">${esc(briefing(e))}</div>
-    <div class="row"><button class="btn ghost" id="aiBriefBtn">Ask the AI coach</button></div>
+    <h3 class="sec">The plan</h3>
+    <ol class="tline" style="--strip: linear-gradient(to bottom, ${stripStops})">
+      ${tl.map(x => `<li class="${x.cls || ''}"><time class="num">${fmtTime(x.t, o)}</time><span>${esc(x.label)}</span></li>`).join('')}
+    </ol>
 
-    <h3>Why this score</h3>
-    ${huntList(e).map(([k, v]) => `
-      <div class="hunt ${k === e.topHunt ? 'top' : ''}">
-        <div class="hunt-head"><span>${HUNT_LABEL[k]}</span><b>${v.score}</b></div>
-        <div class="hunt-bar"><i style="width:${v.score}%"></i></div>
-        <ul class="factors">${v.factors.map(f => `<li class="${f.k}">${esc(f.t)}</li>`).join('') || '<li>Nothing stands out either way.</li>'}</ul>
-        ${k === 'lightning' ? '<button class="btn ghost small-btn" data-lightning>Open the lightning distance timer</button>' : ''}
-      </div>`).join('')}
-    <p class="small muted" style="margin-top:10px">${e.personal
-      ? `Blended score: ${e.base} from conditions, ${e.personal.score} from your ${e.personal.n} keepers (${Math.round(e.personal.weight * 100)}% weight).`
-      : `Add ${MIN_KEEPERS}+ keeper photos in Coach and this score will start reflecting your taste.`}</p>
+    <h3 class="sec">Briefing</h3>
+    <p class="bf-brief" id="briefText">${esc(briefing(e))}</p>
+    <button class="link-btn" id="aiBriefBtn">Rewrite with the AI coach</button>
 
-    <h3>Conditions at ${e.type === 'night' || e.type === 'day' ? fmtTime(e.t, o) : e.type}</h3>
-    ${e.access && !e.access.inside ? `<div class="alert danger">${e.access.none ? 'The tide stays above your access level around this session.' : `Tide access window is ${fmtTime(e.access.start, o)} to ${fmtTime(e.access.backBy, o)}, which doesn't cover this session.`}</div>` : ''}
-    <div class="cond-grid">${cond.map(([k, val]) => `<div><b>${val}</b><span>${k}</span></div>`).join('')}</div>
+    <h3 class="sec">Why this score</h3>
+    ${topHunt ? `<div class="bf-hunt"><div class="bf-hunt-head"><span>${HUNT_LABEL[topHunt[0]]}</span><b class="num">${topHunt[1].score}</b></div>${huntBlock(topHunt)}</div>` : ''}
+    ${otherHunts.map(h => `<details class="bf-hunt more"><summary><span>${HUNT_LABEL[h[0]]}</span><b class="num">${h[1].score}</b></summary>${huntBlock(h)}</details>`).join('')}
+    <p class="small muted bf-personal">${e.personal
+      ? `The ${e.score} blends ${e.base} from conditions with ${e.personal.score} from your ${e.personal.n} keepers (${Math.round(e.personal.weight * 100)}% weight).`
+      : `Add ${MIN_KEEPERS} or more keeper photos in Coach and this score will start reflecting your taste.`}</p>
 
-    <h3>What to bring</h3>
-    <ul class="gear-preview">${gearFor(e, S().settings).map(g => `<li><strong>${esc(g.label)}</strong><span>${esc(g.why)}</span></li>`).join('')}</ul>
-    <p class="small muted">Plan the shoot to tick these off as you pack. Add your own always-bring items in Settings → My kit.</p>
+    <h3 class="sec">Conditions at ${e.type === 'night' || e.type === 'day' ? fmtTime(e.t, o) : e.type}</h3>
+    <dl class="bf-cond">${cond.filter(([, val]) => val !== '–').map(([k, val]) => `<div><dt>${k}</dt><dd class="num">${val}</dd></div>`).join('')}</dl>
 
-    <div class="row" style="margin-top:20px">
+    <h3 class="sec">What to bring</h3>
+    <ul class="gear-preview">${gear.map(g => `<li><strong>${esc(g.label)}</strong><span>${esc(g.why)}</span></li>`).join('')}</ul>
+    <p class="small muted">Plan the shoot to tick these off as you pack. Your always-bring items live in Settings, under My kit.</p>
+
+    <div class="sheet-actions">
       <button class="btn primary" id="planBtn" ${planned ? 'disabled' : ''}>${planned ? 'Planned' : 'Plan this shoot'}</button>
-      ${currentUser() && crewState.crews.length ? '<button class="btn" id="shareBtn">Share with crew</button>' : ''}
-      <button class="btn" id="icsBtn">Add to calendar</button>
-      <button class="btn" data-compass="${esc(e.key)}">Compass</button>
-      <button class="btn" data-field="${esc(e.key)}">Field mode</button>
+      <button class="btn" data-field="${esc(e.key)}">Open field mode</button>
     </div>
   `);
   const sb = $('#shareBtn');
@@ -822,10 +852,10 @@ function openEvent(key) {
     try {
       const text = await aiBriefing(st.settings, briefingContext(e, personalModelSummary(st.keepers)));
       box.textContent = text;
-      btn.textContent = 'AI briefing';
+      btn.textContent = 'Rewritten by the AI coach';
     } catch (err) {
       toast(err.message, 5000);
-      btn.disabled = false; btn.textContent = 'Ask the AI coach';
+      btn.disabled = false; btn.textContent = 'Rewrite with the AI coach';
     }
   };
 }
@@ -1077,8 +1107,8 @@ function hitStats(plans) {
 function hitPanel(st) {
   const h = hitStats(st.plans);
   const pct = h.total ? Math.round(h.hits / h.total * 100) : null;
-  return `<section class="panel">
-    <h2>How often it's right</h2>
+  return `<section class="hit">
+    <h3 class="sec">How often the score is right</h3>
     ${h.total < 3
       ? `<p class="muted">Rate ${3 - h.total} more session${3 - h.total === 1 ? '' : 's'} to see how accurate the app is for you. Every rating also trains your personal score.</p>`
       : `<div class="hit-big"><span class="num">${pct}%</span><span>${h.hits} of ${h.total} calls right</span></div>
@@ -1089,75 +1119,134 @@ function hitPanel(st) {
 }
 
 const openGear = new Set();   // which plans have their gear list open
+let plansView = 'upcoming';   // upcoming | crew | history
+let plansTimer = null;        // keeps the "leave in…" line current
 
-async function renderPlans(v) {
+// "tomorrow sunrise, 6:17am" (callers capitalise it when it starts a sentence)
+function planWhen(p) {
+  const day = fmtDay(p.dayT ?? p.t, p.offset).replace(/^(Today|Tomorrow|Yesterday)$/, d => d.toLowerCase());
+  return `${day} ${(TYPE_NAME[p.type] || p.type).toLowerCase()}, ${fmtTime(p.t, p.offset)}`;
+}
+function leaveText(p) {
+  const now = Date.now() / 1000;
+  if (p.leave > now) return `in ${untilText(p.leave - now)}`;
+  if (p.t > now) return `now: the session starts in ${untilText(p.t - now)}`;
+  return 'the session has started';
+}
+function gearChecklist(p, open) {
+  const gear = p.gear || [];
+  if (!gear.length) return '';
+  const packed = new Set(p.packed || []);
+  return `<details class="gear-list" ${open || openGear.has(p.id) ? 'open' : ''} data-gearbox="${p.id}">
+      <summary>Gear: ${gear.filter(g => packed.has(g.id)).length} of ${gear.length} packed</summary>
+      ${gear.map(g => `<label class="check gear-item"><input type="checkbox" data-pack="${p.id}" value="${esc(g.id)}" ${packed.has(g.id) ? 'checked' : ''}><span>${esc(g.label)}<small>${esc(g.why)}</small></span></label>`).join('')}
+    </details>`;
+}
+function planActions(p, lead) {
+  const shared = (p.sharedTo || []).length;
+  return `<div class="plan-actions">
+      ${eventIndex.has(p.key) ? `<button class="btn ${lead ? 'primary' : ''}" data-field="${esc(p.key)}">Open field mode</button>` : ''}
+      ${eventIndex.has(p.key) ? `<button class="btn" data-ev="${esc(p.key)}">Full briefing</button>` : ''}
+      ${currentUser() ? `<button class="btn" data-share="${p.id}">${shared ? 'Shared with crew' : 'Share with crew'}</button>` : ''}
+    </div>
+    <div class="bf-quiet">
+      <button class="link-btn" data-ics="${p.id}">Add to calendar</button>
+      <button class="link-btn danger" data-del="${p.id}">Remove plan</button>
+    </div>`;
+}
+
+async function renderPlans(v, refreshed = false) {
+  clearInterval(plansTimer);
   const st = S();
   const now = Date.now() / 1000;
   const upcoming = st.plans.filter(p => p.t >= now - 3600).sort((a, b) => a.t - b.t);
   const past = st.plans.filter(p => p.t < now - 3600).sort((a, b) => b.t - a.t);
   const toRate = past.filter(p => !p.rating);
   const rated = past.filter(p => p.rating);
+  const next = upcoming[0];
+  const later = upcoming.slice(1);
+  const label = { keeper: 'Delivered', meh: 'So-so', dud: 'Not worth it', skipped: "Didn't go" };
 
-  const planRow = p => {
-    const gear = p.gear || [];
-    const packed = new Set(p.packed || []);
-    const shared = (p.sharedTo || []).length;
-    return `<div class="plan">
-    <div class="ev-title">${esc(p.spotName)}</div>
-    <div class="ev-sub"><span><strong>${fmtDay(p.dayT ?? p.t, p.offset)}, ${esc(TYPE_NAME[p.type] || p.type)} ${fmtTime(p.t, p.offset)}</strong></span><span>Leave ${fmtTime(p.leave, p.offset)}</span>${p.score != null ? `<span>Score when planned: ${p.score}</span>` : ''}</div>
-    ${gear.length ? `<details class="gear-list" ${openGear.has(p.id) ? 'open' : ''} data-gearbox="${p.id}">
-      <summary>Gear: ${gear.filter(g => packed.has(g.id)).length} of ${gear.length} packed</summary>
-      ${gear.map(g => `<label class="check gear-item"><input type="checkbox" data-pack="${p.id}" value="${esc(g.id)}" ${packed.has(g.id) ? 'checked' : ''}><span>${esc(g.label)}<small>${esc(g.why)}</small></span></label>`).join('')}
-    </details>` : ''}
-    <div class="row">
-      ${currentUser() ? `<button class="btn ${shared ? 'ghost' : ''}" data-share="${p.id}">${shared ? 'Shared with crew' : 'Share with crew'}</button>` : ''}
-      ${eventIndex.has(p.key) ? `<button class="btn" data-field="${esc(p.key)}">Field mode</button>` : ''}
-      <button class="btn" data-ics="${p.id}">Add to calendar</button>
-      <button class="btn danger" data-del="${p.id}">Remove</button>
-    </div></div>`;
-  };
+  const lede = [
+    next ? `Next: ${next.spotName}, ${planWhen(next)}.` : 'Nothing planned yet.',
+    toRate.length ? `${toRate.length} session${toRate.length === 1 ? '' : 's'} to rate.` : '',
+  ].filter(Boolean).join(' ');
 
-  const rateRow = p => `<div class="plan">
-    <div class="ev-title">${esc(p.spotName)}</div>
-    <div class="ev-sub"><span><strong>${fmtDay(p.t, p.offset)}, ${p.type}</strong></span><span>Predicted ${p.score}</span></div>
-    <p class="small muted" style="margin:6px 0 0">Did it deliver?</p>
-    <div class="row">
-      <button class="btn" data-rate="keeper" data-id="${p.id}">It delivered</button>
-      <button class="btn" data-rate="meh" data-id="${p.id}">So-so</button>
-      <button class="btn" data-rate="dud" data-id="${p.id}">Not worth it</button>
-    </div></div>`;
+  const upcomingView = () => `
+    ${toRate.length ? `<section class="rate-block">
+      <h3 class="sec">How did ${toRate.length === 1 ? 'this one' : 'these'} go?</h3>
+      <p class="small muted">Each rating teaches your personal score, and counts towards the hit rate under History.</p>
+      ${toRate.map(p => `<div class="rate-row">
+        <p class="rate-name">${esc(p.spotName)}<small>${esc(cap(planWhen(p)))}${p.score != null ? `, predicted ${p.score}` : ''}</small></p>
+        <div class="rate-btns">
+          <button class="btn" data-rate="keeper" data-id="${p.id}">It delivered</button>
+          <button class="btn" data-rate="meh" data-id="${p.id}">So-so</button>
+          <button class="btn" data-rate="dud" data-id="${p.id}">Not worth it</button>
+        </div></div>`).join('')}
+    </section>` : ''}
+    ${next ? `<section class="next-up">
+      <h2 class="nu-name">${esc(next.spotName)}</h2>
+      <p class="nu-when">${esc(cap(planWhen(next)))}${next.score != null ? `. Scored ${next.score} when you planned it.` : '.'}</p>
+      <p class="nu-leave">Leave at ${fmtTime(next.leave, next.offset)}</p>
+      <p class="nu-in" id="leaveIn" aria-live="off">${esc(cap(leaveText(next)))}</p>
+      ${gearChecklist(next, true)}
+      ${planActions(next, true)}
+    </section>` : `<section class="empty-plans">
+      <p>Pick a session on the Forecast page and tap <strong>Plan this shoot</strong>. It shows up here with its leave time, a gear list to pack and field mode.</p>
+      <button class="btn primary" id="toForecast">Go to Forecast</button>
+    </section>`}
+    ${later.length ? `<section class="later">
+      <h3 class="sec">After that</h3>
+      ${later.map(p => `<details class="plan-item" ${openGear.has('item:' + p.id) ? 'open' : ''} data-item="${p.id}">
+        <summary><span class="pi-name">${esc(p.spotName)}</span><span class="pi-when">${esc(cap(planWhen(p)))}</span><span class="pi-leave num">Leave ${fmtTime(p.leave, p.offset)}</span></summary>
+        ${gearChecklist(p, false)}
+        ${planActions(p, false)}
+      </details>`).join('')}
+    </section>` : ''}`;
 
-  const label = { keeper: 'Delivered', meh: 'So-so', dud: 'Not worth it', skipped: 'Didn\'t go' };
+  const historyView = () => `
+    ${hitPanel(st)}
+    ${rated.length ? `<section><h3 class="sec">Rated sessions</h3>
+      ${rated.slice(0, 40).map(p => `<div class="hist-row">
+        <span class="hist-name">${esc(p.spotName)}<small>${esc(cap(planWhen(p)))}</small></span>
+        <span class="hist-score num">${p.score ?? '–'}</span>
+        <span class="hist-rating ${p.rating}">${label[p.rating] || ''}</span>
+      </div>`).join('')}</section>` : '<p class="muted">No rated sessions yet. After a planned session passes, it appears under Upcoming to rate.</p>'}
+    <div id="unplanned"></div>`;
 
   v.innerHTML = `
-    <p class="eyebrow">Plans</p><h1>Sessions <em>ahead.</em></h1>
-    ${crewPanel()}
-    ${hitPanel(st)}
-    ${toRate.length ? `<section class="panel"><h2>Rate your sessions</h2><p class="muted small">Each rating teaches your personal score what a good morning looks like for you.</p>${toRate.map(rateRow).join('')}</section>` : ''}
-    <section class="panel">
-      <h2>Upcoming</h2>
-      ${upcoming.length ? upcoming.map(planRow).join('') : '<p class="muted">Nothing planned. Open any forecast and tap "Plan this shoot".</p>'}
-    </section>
-    ${rated.length ? `<section class="panel"><h2>History</h2>${rated.slice(0, 30).map(p => `<div class="plan"><div class="ev-title">${esc(p.spotName)}</div><div class="ev-sub"><span>${fmtDay(p.t, p.offset)}, ${p.type}</span><span>Predicted ${p.score}</span><span><strong>${label[p.rating]}</strong></span></div></div>`).join('')}</section>` : ''}
-  `;
+    <h1 class="page-title">Plans</h1>
+    <p class="page-lede">${esc(lede)}</p>
+    <div class="day-pills" role="tablist" aria-label="Plans views">
+      ${[['upcoming', `Upcoming${upcoming.length ? ` (${upcoming.length})` : ''}`], ['crew', 'Crew'], ['history', 'History']]
+        .map(([k, t]) => `<button role="tab" aria-selected="${plansView === k}" class="${plansView === k ? 'on' : ''}" data-pview="${k}">${t}</button>`).join('')}
+    </div>
+    <div class="plans-view">${plansView === 'upcoming' ? upcomingView() : plansView === 'crew' ? crewPanel() : historyView()}</div>`;
+
+  $$('[data-pview]', v).forEach(b => b.onclick = () => { plansView = b.dataset.pview; renderPlans(v); });
+  const tf = $('#toForecast', v);
+  if (tf) tf.onclick = () => setTab('forecast');
+  if (next && $('#leaveIn', v)) plansTimer = setInterval(() => { const el = $('#leaveIn'); if (el && tab === 'plans') el.textContent = cap(leaveText(next)); else clearInterval(plansTimer); }, 20000);
 
   $$('[data-ics]', v).forEach(b => b.onclick = () => {
     const p = S().plans.find(x => x.id === b.dataset.ics);
     downloadFile(`tidelight-${p.type}.ics`, icsText({
-      id: p.id, title: `Leave for ${p.spotName} ${p.type} (${p.score})`, start: p.leave, end: p.t + 1800,
+      id: p.id, title: `Leave for ${p.spotName} ${p.type}${p.score != null ? ` (${p.score})` : ''}`, start: p.leave, end: p.t + 1800,
       desc: p.brief || '', lat: p.lat, lon: p.lon,
     }), 'text/calendar');
   });
   $$('[data-del]', v).forEach(b => b.onclick = async () => {
     const p = S().plans.find(x => x.id === b.dataset.del);
-    update(s => { s.plans = s.plans.filter(x => x.id !== b.dataset.del); });
-    if (p?.sharedTo?.length && p.sessionKey) { for (const c of p.sharedTo) await unshareFromCrew(c, p.sessionKey).catch(() => {}); await loadCrew(); }
+    if (!p || !confirm(`Remove your plan for ${p.spotName}?`)) return;
+    update(s2 => { s2.plans = s2.plans.filter(x => x.id !== b.dataset.del); });
+    if (p.sharedTo?.length && p.sessionKey) { for (const c of p.sharedTo) await unshareFromCrew(c, p.sessionKey).catch(() => {}); await loadCrew(); }
+    toast('Plan removed.');
     render();
   });
   $$('[data-share]', v).forEach(b => b.onclick = () => openShareSheet(b.dataset.share));
   $$('[data-pack]', v).forEach(cb => cb.onchange = () => {
-    update(s => {
-      const p = s.plans.find(x => x.id === cb.dataset.pack);
+    update(s2 => {
+      const p = s2.plans.find(x => x.id === cb.dataset.pack);
       const set = new Set(p.packed || []);
       if (cb.checked) set.add(cb.value); else set.delete(cb.value);
       p.packed = [...set];
@@ -1166,31 +1255,38 @@ async function renderPlans(v) {
     cb.closest('details').querySelector('summary').textContent = `Gear: ${(p.packed || []).length} of ${(p.gear || []).length} packed`;
   });
   $$('[data-gearbox]', v).forEach(d => d.ontoggle = () => { if (d.open) openGear.add(d.dataset.gearbox); else openGear.delete(d.dataset.gearbox); });
-  wireCrewPanel(v);
-  if (currentUser() && !crewState.loaded) loadCrew().then(() => { if (tab === 'plans') renderPlans(v); });
+  $$('[data-item]', v).forEach(d => d.ontoggle = () => { const k = 'item:' + d.dataset.item; if (d.open) openGear.add(k); else openGear.delete(k); });
   $$('[data-rate]', v).forEach(b => b.onclick = () => ratePlan(b.dataset.id, b.dataset.rate, b));
+  if (plansView === 'crew') {
+    wireCrewPanel(v);
+    if (currentUser() && !crewState.loaded) loadCrew().then(() => { if (tab === 'plans' && plansView === 'crew') renderPlans(v); });
+  }
 
-  // Log sessions you shot without planning them (last 2 days), so they can be rated too.
+  // Sessions need their live forecast loaded for field mode, the briefing, and logging unplanned shoots.
   if (!st.spots.length) return;
+  const missing = upcoming.some(p => p.spotId && !eventIndex.has(p.key));
   await ensureForecasts();
   if (tab !== 'plans') return;
+  const all = allEvents({ includePast: true });
+  if (missing && !refreshed && upcoming.some(p => eventIndex.has(p.key))) return renderPlans(v, true);
+
+  const box = $('#unplanned', v);
+  if (!box) return;
   const planned = new Set(S().plans.map(p => p.key));
-  const recent = allEvents({ includePast: true })
-    .filter(e => e.t < now - 3600 && e.t > now - 2 * 86400 && !planned.has(e.key))
-    .sort((a, b) => b.t - a.t).slice(0, 8);
+  const recent = all.filter(e => e.t < now - 3600 && e.t > now - 2 * 86400 && !planned.has(e.key)).sort((a, b) => b.t - a.t).slice(0, 8);
   if (!recent.length) return;
-  v.insertAdjacentHTML('beforeend', `<section class="panel">
-    <h2>Shot something unplanned?</h2>
-    <p class="small muted">Log it here, then rate it above. Unplanned sessions count towards your hit rate too.</p>
-    ${recent.map(e => `<div class="plan"><div class="ev-title">${esc(e.spot.name)}</div>
-      <div class="ev-sub"><span><strong>${cap(sessionName(e))}</strong></span><span>Predicted ${e.score}</span></div>
-      <div class="row"><button class="btn" data-log="${esc(e.key)}">I shot this</button></div></div>`).join('')}
-  </section>`);
-  $$('[data-log]', v).forEach(b => b.onclick = () => {
+  box.innerHTML = `<h3 class="sec">Shot something unplanned?</h3>
+    <p class="small muted">Log it here and it moves to Upcoming for you to rate. Unplanned sessions count towards your hit rate too.</p>
+    ${recent.map(e => `<div class="hist-row">
+      <span class="hist-name">${esc(e.spot.name)}<small>${esc(cap(sessionName(e)))}, predicted ${e.score}</small></span>
+      <button class="btn" data-log="${esc(e.key)}">I shot this</button>
+    </div>`).join('')}`;
+  $$('[data-log]', box).forEach(b => b.onclick = () => {
     const e = eventIndex.get(b.dataset.log);
     if (!e) return;
     addPlan(e);
-    toast('Logged. Now rate it.');
+    plansView = 'upcoming';
+    toast('Logged. Rate it at the top of Upcoming.');
     renderPlans(v);
   });
 }
