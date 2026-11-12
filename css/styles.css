@@ -1055,3 +1055,107 @@ html[data-text="larger"] { font-size: 125%; }
 html[data-text="larger"] .brand .app-name { display: none; }
 html[data-text="larger"] .day-title { font-size: 2.1rem; }
 html[data-text="larger"] .day-title span { font-size: 1.15rem; }
+
+/* =================== v5.0: motion =================== */
+/* ---- The living sky over the light band ---- */
+.band-sky { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.sky-clouds, .sky-rain { position: absolute; inset: 0; }
+.sky-clouds i {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 200%;
+  background-image:
+    radial-gradient(ellipse 46px 13px at 40px 18px, rgba(236, 232, 225, .55), transparent 70%),
+    radial-gradient(ellipse 62px 15px at 132px 46px, rgba(236, 232, 225, .45), transparent 70%),
+    radial-gradient(ellipse 38px 11px at 212px 26px, rgba(236, 232, 225, .5), transparent 70%),
+    radial-gradient(ellipse 54px 14px at 78px 60px, rgba(236, 232, 225, .38), transparent 70%);
+  background-size: 260px 76px; background-repeat: repeat-x;
+  animation: sky-drift 70s linear infinite; will-change: transform;
+}
+@keyframes sky-drift { from { transform: translateX(0); } to { transform: translateX(-260px); } }
+.sky-rain i {
+  position: absolute; left: 0; right: 0; top: -24px; bottom: 0;
+  background-image: repeating-linear-gradient(104deg, transparent 0 7px, rgba(190, 210, 235, .5) 7px 8px, transparent 8px 15px);
+  background-size: 100% 24px;
+  animation: sky-rain .7s linear infinite; will-change: transform;
+}
+@keyframes sky-rain { from { transform: translateY(0); } to { transform: translateY(24px); } }
+.star { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: #ECE8E1; animation: twinkle 3.6s ease-in-out infinite; }
+@keyframes twinkle { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+
+/* ---- Live time ---- */
+.band-now { box-shadow: 0 0 8px rgba(236, 232, 225, .55); transition: left 1s linear; }
+.band-now::before { content: ''; position: absolute; top: -4px; left: 50%; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--text); animation: now-pulse 2s ease-out infinite; }
+@keyframes now-pulse { 0% { box-shadow: 0 0 0 0 rgba(236, 232, 225, .6); } 100% { box-shadow: 0 0 0 9px rgba(236, 232, 225, 0); } }
+.detail-live { font: 600 .92rem var(--sans); font-variant-numeric: tabular-nums; color: var(--caramel); margin: 10px 18px 0; }
+.nu-in, .fm-count { font-variant-numeric: tabular-nums; }
+.live-dot { position: relative; width: 7px; height: 7px; border-radius: 50%; background: var(--caramel); margin-left: 1px; }
+.live-dot::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--caramel); animation: ping 2.2s ease-out infinite; }
+@keyframes ping { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(3.2); opacity: 0; } }
+
+/* ---- Opening sequence: markers drop into the band, lists cascade ---- */
+.home-grid.enter .band-mark { animation: mark-drop .55s cubic-bezier(.2, 1.5, .4, 1) backwards; animation-delay: calc(.45s + var(--i, 0) * .1s); }
+@keyframes mark-drop { from { transform: translate(-50%, -120%) scale(.5); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+.home-grid.enter .band-pin, .home-grid.enter .band-span { animation: fade-in .4s ease-out backwards; animation-delay: .9s; }
+.home-grid.enter .other-row { animation: rise .4s cubic-bezier(.2, .7, .2, 1) backwards; animation-delay: calc(.35s + var(--i, 0) * .06s); }
+.home-grid.enter .day-title, .home-grid.enter .day-lede { animation: rise .45s cubic-bezier(.2, .7, .2, 1) backwards; }
+.home-grid.enter .day-lede { animation-delay: .08s; }
+@keyframes rise { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* The selected marker breathes */
+.band-mark.on::before { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--text); animation: ring 2.6s ease-out infinite; pointer-events: none; }
+@keyframes ring { 0% { transform: scale(1); opacity: .7; } 70%, 100% { transform: scale(1.45); opacity: 0; } }
+
+/* ---- The detail panel answers a tap: bars grow in turn, the photo drifts ---- */
+.detail .part-track i, .bf-hunt .part-track i { transform-origin: left center; animation: bar-grow .7s cubic-bezier(.2, .7, .2, 1) backwards; }
+.detail .part:nth-child(1) .part-track i, .bf-hunt .part:nth-child(1) .part-track i { animation-delay: .10s; }
+.detail .part:nth-child(2) .part-track i, .bf-hunt .part:nth-child(2) .part-track i { animation-delay: .18s; }
+.detail .part:nth-child(3) .part-track i, .bf-hunt .part:nth-child(3) .part-track i { animation-delay: .26s; }
+.detail .part:nth-child(4) .part-track i, .bf-hunt .part:nth-child(4) .part-track i { animation-delay: .34s; }
+.detail .part:nth-child(5) .part-track i, .bf-hunt .part:nth-child(5) .part-track i { animation-delay: .42s; }
+.detail .part:nth-child(n+6) .part-track i, .bf-hunt .part:nth-child(n+6) .part-track i { animation-delay: .5s; }
+@keyframes bar-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.detail-photo-wrap { overflow: hidden; aspect-ratio: 16 / 9; }
+.detail-photo-wrap .detail-photo { width: 100%; height: 100%; aspect-ratio: auto; animation: photo-drift 26s ease-in-out infinite alternate; will-change: transform; }
+@keyframes photo-drift { from { transform: scale(1.02) translate(0, 0); } to { transform: scale(1.1) translate(-1.5%, -1.5%); } }
+
+/* ---- Pages and lists ease in after a tab change ---- */
+#view.view-in { animation: view-in .3s cubic-bezier(.2, .7, .2, 1); }
+@keyframes view-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+#view.view-in .spot-card, #view.view-in .tool-row, #view.view-in .you-row, #view.view-in .plan-item, #view.view-in .next-up, #view.view-in .rate-row { animation: rise .4s cubic-bezier(.2, .7, .2, 1) backwards; }
+#view.view-in :is(.spot-card, .tool-row, .you-row, .plan-item, .rate-row):nth-child(1) { animation-delay: .06s; }
+#view.view-in :is(.spot-card, .tool-row, .you-row, .plan-item, .rate-row):nth-child(2) { animation-delay: .11s; }
+#view.view-in :is(.spot-card, .tool-row, .you-row, .plan-item, .rate-row):nth-child(3) { animation-delay: .16s; }
+#view.view-in :is(.spot-card, .tool-row, .you-row, .plan-item, .rate-row):nth-child(4) { animation-delay: .21s; }
+#view.view-in :is(.spot-card, .tool-row, .you-row, .plan-item, .rate-row):nth-child(5) { animation-delay: .26s; }
+#view.view-in :is(.spot-card, .tool-row, .you-row, .plan-item, .rate-row):nth-child(n+6) { animation-delay: .31s; }
+.tabbar button.active svg { animation: pop .32s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes pop { from { transform: scale(.7); } to { transform: scale(1); } }
+.day-pills button { transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
+
+/* ---- Pop-ups rise; the week grid fills in; ticks pop ---- */
+.sheet:not(.hidden) .sheet-panel { animation: sheet-up .32s cubic-bezier(.2, .8, .2, 1); }
+.sheet:not(.hidden) .sheet-backdrop { animation: fade-in .25s ease-out; }
+@keyframes sheet-up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+.wk .mx-cell { animation: cell-in .3s cubic-bezier(.2, 1.3, .4, 1) backwards; animation-delay: calc(.1s + var(--n, 0) * .035s); }
+@keyframes cell-in { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+.check input:checked { animation: pop .25s cubic-bezier(.2, 1.6, .4, 1); }
+.field, .welcome { animation: fade-in .25s ease-out; }
+.size-options.two-up { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* ---- Reduced motion: your phone's setting, or You → Display ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .sky-clouds i, .sky-rain i, .star, .live-dot::after, .band-mark.on::before, .band-now::before, .detail-photo { animation: none !important; }
+}
+html[data-motion="reduced"] *, html[data-motion="reduced"] *::before, html[data-motion="reduced"] *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+html[data-motion="reduced"] :is(.sky-clouds i, .sky-rain i, .star, .detail-photo), html[data-motion="reduced"] :is(.live-dot, .band-mark.on, .band-now)::before, html[data-motion="reduced"] .live-dot::after { animation: none !important; }
+/* Stronger cloud so overcast hours read clearly against daylight */
+.sky-clouds i {
+  background-image:
+    radial-gradient(ellipse 50px 14px at 40px 18px, rgba(240, 238, 232, .85), transparent 72%),
+    radial-gradient(ellipse 66px 16px at 132px 46px, rgba(240, 238, 232, .75), transparent 72%),
+    radial-gradient(ellipse 42px 12px at 212px 26px, rgba(240, 238, 232, .8), transparent 72%),
+    radial-gradient(ellipse 58px 15px at 78px 62px, rgba(240, 238, 232, .65), transparent 72%),
+    radial-gradient(ellipse 40px 11px at 176px 12px, rgba(240, 238, 232, .6), transparent 72%);
+}
+.band-sky-note { font: 400 .74rem var(--sans); color: var(--muted); margin: 6px 0 0; }

@@ -12,7 +12,8 @@ const DEFAULTS = {
     claudeKey: '',
     claudeModel: 'claude-sonnet-5-5',
     gearAlways: [],           // You → My kit
-    textSize: 'standard',     // You → Text size (this device only, not synced)
+    textSize: 'standard',     // You → Display (this device only, not synced)
+    motion: 'full',           // You → Display: 'full' or 'reduced' (this device only)
     alerts: { go: true, threshold: 80, confident: true, calledOff: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 },
   },
   spots: [],                  // { id, name, lat, lon, events[], coastal, tide, driveMin, facing, notes }
