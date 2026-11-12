@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=5.1';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=5.1';
-import { baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=5.1';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=5.1';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=5.1';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=5.1';
-import { gearFor } from './gear.js?v=5.1';
-import { VAPID_PUBLIC_KEY } from './config.js?v=5.1';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=5.1';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=5.1';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=5.2';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=5.2';
+import { baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=5.2';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=5.2';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=5.2';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=5.2';
+import { gearFor } from './gear.js?v=5.2';
+import { VAPID_PUBLIC_KEY } from './config.js?v=5.2';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=5.2';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=5.2';
 
-export const APP_VERSION = '5.1';
+export const APP_VERSION = '5.2';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -635,7 +635,16 @@ function sessionDetail(e, isBest = false, nav = null) {
   const going = crewGoing(e);
   const photo = coverUrl(e.spot);
   return `<article class="detail ${slideFrom ? `slide-${slideFrom}` : ''}" aria-live="polite">
-    ${photo ? `<div class="detail-photo-wrap"><img class="detail-photo" src="${photo}" alt="${esc(e.spot.name)}"></div>` : ''}
+    ${photo || (nav && nav.total > 1) ? `<div class="detail-photo-wrap ${photo ? '' : 'no-photo'}">
+      ${photo ? `<img class="detail-photo" src="${photo}" alt="${esc(e.spot.name)}">` : ''}
+      ${nav && nav.total > 1 ? `<nav class="slide-nav" aria-label="Sessions this day, ${nav.index + 1} of ${nav.total}">
+        <button class="slide-arrow prev" data-step="-1" aria-label="Previous session" ${nav.index === 0 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg></button>
+        <span class="slide-dots" aria-hidden="true">${nav.total <= 9
+          ? Array.from({ length: nav.total }, (_, k) => `<i class="${k === nav.index ? 'on' : ''}"></i>`).join('')
+          : `<b class="num">${nav.index + 1} / ${nav.total}</b>`}</span>
+        <button class="slide-arrow next" data-step="1" aria-label="Next session" ${nav.index === nav.total - 1 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button>
+      </nav>` : ''}
+    </div>` : ''}
     <div class="detail-head">
       <div>
         <h2 class="detail-name">${esc(e.spot.name)}</h2>
@@ -658,11 +667,6 @@ function sessionDetail(e, isBest = false, nav = null) {
       <button class="btn" data-compass="${esc(e.key)}">Compass</button>
       <button class="btn" data-field="${esc(e.key)}">Field mode</button>
     </div>
-    ${nav && nav.total > 1 ? `<nav class="detail-nav" aria-label="Sessions this day">
-      <button class="icon-btn" data-step="-1" aria-label="Previous session" ${nav.index === 0 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
-      <span>Session ${nav.index + 1} of ${nav.total}<span class="touch-only">. Swipe to move between them.</span></span>
-      <button class="icon-btn" data-step="1" aria-label="Next session" ${nav.index === nav.total - 1 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
-    </nav>` : ''}
   </article>`;
 }
 
@@ -2678,6 +2682,61 @@ async function openCompassHere() {
 }
 
 /* ================= the light dial ================= */
+// The moon's phase as a picture. phase: 0 new, 0.25 first quarter, 0.5 full, 0.75 last quarter.
+// In the southern hemisphere the lit side is mirrored (a waxing moon is lit on the left).
+function moonSvg(phase, lat, size = 72) {
+  const r = 40, rx = Math.abs(Math.cos(2 * Math.PI * phase)) * r;
+  const waxing = phase < 0.5, gibbous = phase > 0.25 && phase < 0.75;
+  let lit = '';
+  if (phase > 0.015 && phase < 0.985) {
+    lit = waxing
+      ? `M0,${-r} A${r},${r} 0 0 1 0,${r} A${rx.toFixed(2)},${r} 0 0 ${gibbous ? 1 : 0} 0,${-r} Z`
+      : `M0,${-r} A${r},${r} 0 0 0 0,${r} A${rx.toFixed(2)},${r} 0 0 ${gibbous ? 0 : 1} 0,${-r} Z`;
+  }
+  return `<svg class="moon-pic" viewBox="-46 -46 92 92" width="${size}" height="${size}" aria-hidden="true">
+    <defs><radialGradient id="moonGlow" cx="35%" cy="30%" r="80%"><stop offset="0%" stop-color="#F4EFE4"/><stop offset="100%" stop-color="#C9C1B0"/></radialGradient></defs>
+    <circle r="${r}" fill="#1E2326" stroke="#3A4246" stroke-width="1"/>
+    <g transform="${lat < 0 ? 'scale(-1,1)' : ''}">${lit ? `<path d="${lit}" fill="url(#moonGlow)"/>` : ''}</g>
+    <circle cx="-12" cy="-10" r="6" fill="rgba(0,0,0,.08)"/><circle cx="10" cy="12" r="8" fill="rgba(0,0,0,.07)"/><circle cx="15" cy="-14" r="4" fill="rgba(0,0,0,.07)"/>
+  </svg>`;
+}
+function moonPhaseName(p) {
+  if (p < 0.03 || p > 0.97) return 'New moon';
+  if (p < 0.22) return 'Waxing crescent';
+  if (p < 0.28) return 'First quarter';
+  if (p < 0.47) return 'Waxing gibbous';
+  if (p < 0.53) return 'Full moon';
+  if (p < 0.72) return 'Waning gibbous';
+  if (p < 0.78) return 'Last quarter';
+  return 'Waning crescent';
+}
+// Every light phase of a day in order, with start and end times (matching the colours on the ring).
+function dayPhases(place, midnight) {
+  const T = window.SunCalc.getTimes(new Date((midnight + 43200) * 1000), place.lat, place.lon);
+  const ok = d => d instanceof Date && !isNaN(d);
+  const t = k => (ok(T[k]) ? T[k].getTime() / 1000 : null);
+  const end = midnight + 86400;
+  const raw = [
+    ['dark', 'Dark', midnight, t('nightEnd')],
+    ['twilight', 'Twilight: first light', t('nightEnd'), t('dawn')],
+    ['blue hour', 'Blue hour', t('dawn'), t('sunrise')],
+    ['sunrise', 'Sunrise', t('sunrise'), null],
+    ['golden hour', 'Golden hour', t('sunrise'), t('goldenHourEnd')],
+    ['daylight', 'Daylight', t('goldenHourEnd'), t('goldenHour')],
+    ['golden hour', 'Golden hour', t('goldenHour'), t('sunset')],
+    ['sunset', 'Sunset', t('sunset'), null],
+    ['blue hour', 'Blue hour', t('sunset'), t('dusk')],
+    ['twilight', 'Twilight: last light', t('dusk'), t('night')],
+    ['dark', 'Dark', t('night'), end],
+  ];
+  const inDay = x => x >= midnight && x < end;
+  return raw
+    .filter(([kind, , a, b]) => a != null && ((kind === 'sunrise' || kind === 'sunset') ? inDay(a) : b != null && b > a))
+    .map(([kind, label, a, b]) => [kind, label, kind === 'sunrise' || kind === 'sunset' ? a : Math.max(a, midnight), b == null ? null : Math.min(b, end)])
+    .filter(([kind, , a, b]) => kind === 'sunrise' || kind === 'sunset' || b > a)
+    .sort((x, y) => x[2] - y[2] || (x[3] == null ? -1 : 1));
+}
+
 // A 24-hour ring coloured by the day's light (noon at the top, midnight at the bottom). Drag the handle
 // to any time to see the light phase and where the sun and moon are.
 function openLightDial({ name, lat, lon, offset, t }) {
@@ -2714,9 +2773,21 @@ function openLightDial({ name, lat, lon, offset, t }) {
     </div>
     <dl class="bf-cond dial-read">
       <div><dt>Sun</dt><dd id="dialSun"></dd></div>
-      <div><dt>Moon</dt><dd id="dialMoon"></dd></div>
     </dl>
-    <div class="row"><button class="btn" id="dialNow">Jump to now</button></div>`);
+    <div class="row"><button class="btn" id="dialNow">Jump to now</button></div>
+    <h3 class="sec">The day's light</h3>
+    <p class="small muted">Tap a phase to move the dial there.</p>
+    <ol class="phase-list" id="phaseList"></ol>
+    <h3 class="sec">The moon</h3>
+    <div class="moon-card">
+      <div id="moonPic"></div>
+      <div class="moon-text">
+        <p class="moon-name" id="moonName"></p>
+        <p class="moon-lit" id="moonLit"></p>
+        <p class="moon-pos" id="dialMoon"></p>
+        <p class="moon-times" id="moonTimes"></p>
+      </div>
+    </div>`);
   const dial = $('#dial');
   const draw = () => {
     const noon = midnight + 43200;
@@ -2728,12 +2799,44 @@ function openLightDial({ name, lat, lon, offset, t }) {
     const sp = window.SunCalc.getPosition(new Date(cur * 1000), lat, lon), sAlt = deg(sp.altitude), sAz = (deg(sp.azimuth) + 180 + 360) % 360;
     $('#dialSun').textContent = `${Math.round(sAz)}° ${compass(sAz)}, ${sAlt >= 0 ? `${Math.round(sAlt)}° up` : `${Math.round(-sAlt)}° below the horizon`}`;
     const mp = window.SunCalc.getMoonPosition(new Date(cur * 1000), lat, lon), mAlt = deg(mp.altitude), mAz = (deg(mp.azimuth) + 180 + 360) % 360;
-    const lit = Math.round((window.SunCalc.getMoonIllumination(new Date(cur * 1000)).fraction || 0) * 100);
-    $('#dialMoon').textContent = `${Math.round(mAz)}° ${compass(mAz)}, ${mAlt >= 0 ? `${Math.round(mAlt)}° up` : 'below the horizon'}, ${lit}% lit`;
+    $('#dialMoon').textContent = mAlt >= 0 ? `At ${fmtTime(cur, offset)}: ${Math.round(mAz)}° ${compass(mAz)}, ${Math.round(mAlt)}° up.` : `At ${fmtTime(cur, offset)}: below the horizon.`;
+    $$('#phaseList li').forEach(li => {
+      const a = Number(li.dataset.a), b = li.dataset.b ? Number(li.dataset.b) : null;
+      li.classList.toggle('on', b == null ? Math.abs(cur - a) < 600 : cur >= a && cur < b);
+    });
     dial.setAttribute('aria-valuenow', String(Math.round((cur - midnight) / 60)));
     dial.setAttribute('aria-valuetext', `${fmtTime(cur, offset)}, ${phaseAt(marks, cur)}`);
   };
-  const setDay = () => { $('#dialRing').style.background = ringGradient(); draw(); };
+  const COL = { dark: BAND.night, twilight: BAND.twilight, 'blue hour': BAND.blue, 'golden hour': BAND.golden, daylight: BAND.day, sunrise: '#E8B27A', sunset: '#E8B27A' };
+  const setDay = () => {
+    $('#dialRing').style.background = ringGradient();
+    // The day's phases, in order.
+    $('#phaseList').innerHTML = dayPhases(place, midnight).map(([kind, label, a, b]) => {
+      const len = b ? Math.round((b - a) / 60) : 0;
+      return `<li class="${kind === 'sunrise' || kind === 'sunset' ? 'event' : ''}" data-a="${a}" ${b ? `data-b="${b}"` : ''}>
+        <button data-jump="${b ? Math.round((a + Math.min(b, a + 1800)) / 2) : a}">
+          <i style="background:${COL[kind]}"></i>
+          <span class="ph-name">${label}</span>
+          <span class="ph-time num">${b ? `${fmtTime(a, offset)} to ${fmtTime(b, offset)}` : fmtTime(a, offset)}</span>
+          ${b ? `<span class="ph-len">${len >= 120 ? `${Math.floor(len / 60)} h ${len % 60 ? `${len % 60} min` : ''}`.trim() : `${len} min`}</span>` : '<span class="ph-len"></span>'}
+        </button></li>`;
+    }).join('');
+    $$('#phaseList [data-jump]').forEach(btn => btn.onclick = () => setTime(Number(btn.dataset.jump)));
+    // The moon for this day.
+    const noonD = new Date((midnight + 43200) * 1000);
+    const ill = window.SunCalc.getMoonIllumination(noonD);
+    const phase = typeof ill.phase === 'number' ? ill.phase : 0.5;
+    $('#moonPic').innerHTML = moonSvg(phase, lat, 84);
+    $('#moonName').textContent = moonPhaseName(phase);
+    const pct = Math.round((ill.fraction || 0) * 100);
+    const days = Math.round(phase * 29.53);
+    $('#moonLit').textContent = `${pct}% lit, ${phase < 0.5 ? 'growing' : 'shrinking'}. Day ${days} of the 29.5-day cycle.`;
+    const mt = window.SunCalc.getMoonTimes ? window.SunCalc.getMoonTimes(new Date(midnight * 1000 + 1), lat, lon) : {};
+    const okd = d => d instanceof Date && !isNaN(d);
+    const parts = [okd(mt.rise) ? `Rises ${fmtTime(mt.rise.getTime() / 1000, offset)}` : '', okd(mt.set) ? `sets ${fmtTime(mt.set.getTime() / 1000, offset)}` : ''].filter(Boolean);
+    $('#moonTimes').textContent = mt.alwaysUp ? 'Up all day and night.' : mt.alwaysDown ? 'Below the horizon all day.' : parts.length ? `${cap(parts.join(', '))}.` : '';
+    draw();
+  };
   const setTime = x => { cur = Math.max(midnight, Math.min(midnight + 86100, Math.round(x / 300) * 300)); draw(); };
   const fromPointer = ev => {
     const r = dial.getBoundingClientRect();
