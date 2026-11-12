@@ -1345,3 +1345,24 @@ input[type="range"], .form input[type="range"], label input[type="range"] { bord
 .band-key .key-icon-wrap { display: flex; align-items: center; gap: 6px; }
 html[data-motion="reduced"] :is(.sky-clouds i, .sky-rain i, .sky-heavy i) { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { :is(.sky-clouds i, .sky-rain i, .sky-heavy i) { animation: none !important; } }
+
+/* =================== v5.5: clouds stay at their time and gently hover =================== */
+.band-sky { --cloud-one: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%2260%22 viewBox=%220 0 100 60%22%3E%3Cdefs%3E%3ClinearGradient id=%22c%22 gradientUnits=%22userSpaceOnUse%22 x1=%220%22 y1=%220.0%22 x2=%220%22 y2=%2257.0%22%3E%3Cstop offset=%220%22 stop-color=%22%23FFFFFF%22/%3E%3Cstop offset=%22.62%22 stop-color=%22%23FFFFFF%22 stop-opacity=%22.96%22/%3E%3Cstop offset=%221%22 stop-color=%22%23AEB4B9%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg fill=%22url(%23c)%22%3E%3Ccircle cx=%2223.0%22 cy=%2240.0%22 r=%2219.0%22/%3E%3Ccircle cx=%2247.0%22 cy=%2227.0%22 r=%2226.0%22/%3E%3Ccircle cx=%2273.0%22 cy=%2237.0%22 r=%2220.0%22/%3E%3Crect x=%226.0%22 y=%2238.0%22 width=%2286.0%22 height=%2219.0%22 rx=%229.5%22/%3E%3C/g%3E%3C/svg%3E"); --cloud-rain: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%2260%22 viewBox=%220 0 100 60%22%3E%3Cdefs%3E%3ClinearGradient id=%22c%22 gradientUnits=%22userSpaceOnUse%22 x1=%220%22 y1=%220.0%22 x2=%220%22 y2=%2257.0%22%3E%3Cstop offset=%220%22 stop-color=%22%238D969D%22/%3E%3Cstop offset=%22.62%22 stop-color=%22%238D969D%22 stop-opacity=%22.96%22/%3E%3Cstop offset=%221%22 stop-color=%22%23454E55%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg fill=%22url(%23c)%22%3E%3Ccircle cx=%2223.0%22 cy=%2240.0%22 r=%2219.0%22/%3E%3Ccircle cx=%2247.0%22 cy=%2227.0%22 r=%2226.0%22/%3E%3Ccircle cx=%2273.0%22 cy=%2237.0%22 r=%2220.0%22/%3E%3Crect x=%226.0%22 y=%2238.0%22 width=%2286.0%22 height=%2219.0%22 rx=%229.5%22/%3E%3C/g%3E%3C/svg%3E"); }
+.cl {
+  position: absolute; width: var(--w); height: calc(var(--w) * .6); margin-left: calc(var(--w) * -.5);
+  background: var(--cloud-one) center / contain no-repeat; opacity: var(--o, 1);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .22));
+  animation: cloud-hover var(--d, 9s) ease-in-out infinite alternate; animation-delay: var(--dl, 0s);
+  will-change: transform;
+}
+.cl.rain { background-image: var(--cloud-rain); filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .35)); z-index: 2; }
+@keyframes cloud-hover {
+  0%   { transform: translateY(1px) scale(.95); }
+  50%  { transform: translateY(-1.5px) scale(1.03); }
+  100% { transform: translateY(.5px) scale(.98); }
+}
+.sky-rain .drops-far, .sky-rain .drops-near, .sky-heavy .drops-near { top: 34%; }
+html[data-motion="reduced"] .cl { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .cl { animation: none !important; } }
+/* Cloud size is a share of the band, so each fits inside its two-hour slot at any width */
+.cl { height: auto; aspect-ratio: 5 / 3; }
