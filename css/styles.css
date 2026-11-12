@@ -1159,3 +1159,95 @@ html[data-motion="reduced"] :is(.sky-clouds i, .sky-rain i, .star, .detail-photo
     radial-gradient(ellipse 40px 11px at 176px 12px, rgba(240, 238, 232, .6), transparent 72%);
 }
 .band-sky-note { font: 400 .74rem var(--sans); color: var(--muted); margin: 6px 0 0; }
+
+/* =================== v5.1: dials and sliders =================== */
+/* ---- Score gauge ---- */
+.gauge { position: relative; display: inline-grid; place-items: center; width: var(--size, 92px); height: var(--size, 92px); }
+.gauge svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.gauge circle { fill: none; stroke-width: 7; stroke-linecap: round; }
+.g-track { stroke: var(--surface-2); }
+.g-value { transition: stroke-dasharray .35s cubic-bezier(.2, .7, .2, 1), stroke .3s ease; animation: gauge-in .9s cubic-bezier(.2, .7, .2, 1) backwards; }
+@keyframes gauge-in { from { stroke-dasharray: 0 252; } }
+.g-tick { stroke: var(--ground); stroke-width: 2.5; }
+.g-num { font: 400 calc(var(--size, 92px) * .36) / 1 var(--serif); color: var(--text); font-variant-numeric: tabular-nums; margin-top: calc(var(--size, 92px) * -.04); }
+.gauge-btn { display: grid; justify-items: center; gap: 0; padding: 0; background: none; border: 0; color: inherit; cursor: pointer; flex: 0 0 auto; }
+.gauge-btn.static { cursor: default; }
+.gauge-hint { font: 600 .74rem var(--sans); color: var(--caramel); margin-top: -10px; }
+.gauge-btn:active .gauge { transform: scale(.96); }
+.gauge { transition: transform .15s ease; }
+
+/* ---- Sliders ---- */
+.slider { display: grid; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.slider-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font: 600 .92rem var(--sans); }
+.slider-head output { font: 600 .95rem var(--sans); color: var(--caramel); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.slider-foot { font: 400 .76rem var(--sans); color: var(--muted); }
+input[type="range"] {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 32px; margin: 0; background: transparent; cursor: pointer; touch-action: pan-y;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 999px;
+  background: linear-gradient(to right, var(--caramel) var(--val, 50%), var(--surface-2) var(--val, 50%));
+}
+input[type="range"]::-moz-range-track { height: 6px; border-radius: 999px; background: var(--surface-2); }
+input[type="range"]::-moz-range-progress { height: 6px; border-radius: 999px; background: var(--caramel); }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 26px; height: 26px; margin-top: -10px; border-radius: 50%;
+  background: var(--text); border: 3px solid var(--ground); box-shadow: 0 0 0 1px var(--line), 0 2px 8px rgba(0, 0, 0, .5);
+  transition: transform .12s ease;
+}
+input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--text); border: 3px solid var(--ground); }
+input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.18); }
+input[type="range"]:focus-visible { outline: 2px solid var(--caramel); outline-offset: 4px; border-radius: 8px; }
+
+/* ---- What if? lab ---- */
+.lab-top { display: flex; align-items: center; gap: 18px; margin: 14px 0 6px; }
+.lab-read { min-width: 0; }
+.lab-verdict { font: 400 1.45rem/1.15 var(--serif); margin: 0; }
+.lab-reason { font: 400 .9rem/1.45 var(--sans); color: var(--muted); margin: 6px 0 0; min-height: 2.6em; }
+.lab-sliders { border-top: 1px solid var(--line); margin-top: 8px; }
+
+/* ---- Light dial ---- */
+.dial-day { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 12px 0 4px; font: 600 .95rem var(--sans); }
+.dial { position: relative; width: min(76vw, 300px); aspect-ratio: 1; margin: 22px auto 26px; touch-action: none; cursor: grab; outline: none; -webkit-user-select: none; user-select: none; }
+.dial.dragging { cursor: grabbing; }
+.dial:focus-visible .dial-ring { outline: 2px solid var(--caramel); outline-offset: 6px; }
+.dial-ring {
+  position: absolute; inset: 0; border-radius: 50%;
+  -webkit-mask: radial-gradient(circle, transparent 0 57%, #000 58% 100%); mask: radial-gradient(circle, transparent 0 57%, #000 58% 100%);
+}
+.dial-arm { position: absolute; inset: 0; pointer-events: none; transition: transform .08s linear; }
+.dial.dragging .dial-arm { transition: none; }
+.dial-knob { position: absolute; top: -3px; left: 50%; width: 34px; height: 34px; margin-left: -17px; border-radius: 50%; background: var(--text); border: 4px solid var(--ground); box-shadow: 0 0 0 2px var(--text), 0 4px 14px rgba(0, 0, 0, .55); transform: translateY(calc(-50% + 21%)); }
+.dial.dragging .dial-knob { box-shadow: 0 0 0 2px var(--caramel), 0 0 0 10px rgba(217, 160, 102, .18); }
+.dial-centre { position: absolute; inset: 22%; display: grid; place-content: center; text-align: center; pointer-events: none; }
+.dial-time { font: 400 2.5rem/1 var(--serif); margin: 0; font-variant-numeric: tabular-nums; }
+.dial-phase { font: 600 .9rem var(--sans); color: var(--caramel); margin: 6px 0 0; }
+.dial-lab { position: absolute; font: 500 .72rem var(--sans); color: var(--muted); pointer-events: none; }
+.dial-lab.n { top: -20px; left: 50%; transform: translateX(-50%); }
+.dial-lab.s { bottom: -20px; left: 50%; transform: translateX(-50%); }
+.dial-lab.e { right: -36px; top: 50%; transform: translateY(-50%); }
+.dial-lab.w { left: -36px; top: 50%; transform: translateY(-50%); }
+.dial-read { grid-template-columns: 1fr; }
+.dial-read dd { text-align: right; font-size: .9rem; }
+
+/* ---- Tide slider ---- */
+.tide { position: relative; height: 110px; touch-action: pan-y; cursor: ew-resize; outline: none; border-radius: 10px; overflow: hidden; background: var(--surface-2); -webkit-user-select: none; user-select: none; }
+.tide:focus-visible { outline: 2px solid var(--caramel); outline-offset: 3px; }
+.tide svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.tide-fill { fill: rgba(157, 173, 177, .22); }
+.tide-line { fill: none; stroke: var(--slate); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.tide-safe { fill: rgba(156, 203, 142, .16); }
+.tide-level { stroke: var(--text); stroke-width: 1; stroke-dasharray: 4 4; opacity: .6; vector-effect: non-scaling-stroke; }
+.tide-event { stroke: var(--caramel); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.tide-handle { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text); pointer-events: none; }
+.tide-handle i { position: absolute; left: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--text); border: 3px solid var(--ground); box-shadow: 0 0 0 1px var(--text); }
+.tide-axis { display: flex; justify-content: space-between; font: 500 .72rem var(--sans); color: var(--muted); margin-top: 6px; }
+.tide-axis span:nth-child(2) { color: var(--caramel); }
+.tide-read { font: 600 .92rem/1.4 var(--sans); margin: 8px 0 4px; min-height: 1.4em; }
+.dial-knob { top: calc(10.5% - 17px); transform: none; }
+/* Sliders shouldn't inherit the text-field box */
+input[type="range"], .form input[type="range"], label input[type="range"] { border: 0; padding: 0; background: transparent; box-shadow: none; border-radius: 0; min-height: 0; }
+/* The lab's gauge stays in view while you move the sliders */
+.lab-top { position: sticky; top: -20px; z-index: 3; background: var(--surface); margin: 8px -20px 0; padding: 12px 64px 10px 20px; border-bottom: 1px solid var(--line); }
+.lab-sliders { border-top: 0; margin-top: 0; }
+.g-track { stroke: #2C3232; }

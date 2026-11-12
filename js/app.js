@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=5.0';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=5.0';
-import { baseScore, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=5.0';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=5.0';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=5.0';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=5.0';
-import { gearFor } from './gear.js?v=5.0';
-import { VAPID_PUBLIC_KEY } from './config.js?v=5.0';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=5.0';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=5.0';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=5.1';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=5.1';
+import { baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=5.1';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=5.1';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=5.1';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=5.1';
+import { gearFor } from './gear.js?v=5.1';
+import { VAPID_PUBLIC_KEY } from './config.js?v=5.1';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=5.1';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=5.1';
 
-export const APP_VERSION = '5.0';
+export const APP_VERSION = '5.1';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -437,6 +437,133 @@ function bandSky(e, w0, marks) {
     </div>`;
 }
 
+/* ---------- the score gauge and the "What if?" lab ---------- */
+const G_R = 40, G_C = 2 * Math.PI * G_R, G_L = G_C * 240 / 360;   // a 240° arc
+const gaugeColor = sc => (sc >= 75 ? '#D9A066' : sc >= 50 ? '#B08A5E' : '#6E7474');
+function gauge(score, size = 92, cls = '') {
+  const tick = val => {
+    const a = (150 + 240 * val / 100) * Math.PI / 180;
+    return `<line class="g-tick" x1="${(50 + 33 * Math.cos(a)).toFixed(1)}" y1="${(50 + 33 * Math.sin(a)).toFixed(1)}" x2="${(50 + 47 * Math.cos(a)).toFixed(1)}" y2="${(50 + 47 * Math.sin(a)).toFixed(1)}"/>`;
+  };
+  return `<span class="gauge ${cls}" style="--size:${size}px">
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <circle class="g-track" cx="50" cy="50" r="${G_R}" stroke-dasharray="${G_L.toFixed(1)} ${G_C.toFixed(1)}" transform="rotate(150 50 50)"/>
+      <circle class="g-value" cx="50" cy="50" r="${G_R}" stroke-dasharray="${(G_L * score / 100).toFixed(1)} ${G_C.toFixed(1)}" transform="rotate(150 50 50)" style="stroke:${gaugeColor(score)}"/>
+      ${tick(50)}${tick(75)}
+    </svg>
+    <span class="g-num num" data-count="${score}">${score}</span>
+  </span>`;
+}
+function setGauge(root, score) {
+  const val = $('.g-value', root), num = $('.g-num', root);
+  if (!val || !num) return;
+  val.setAttribute('stroke-dasharray', `${(G_L * score / 100).toFixed(1)} ${G_C.toFixed(1)}`);
+  val.style.stroke = gaugeColor(score);
+  num.textContent = String(score);
+}
+
+// What each kind of session's score is built from, as sliders you can move.
+function labModel(e) {
+  const h = e.hour || {}, sp = e.spot, H = e.hunts?.[e.topHunt] || {};
+  const cl = x => Math.max(0, Math.min(1, x));
+  if (e.topHunt === 'colour') {
+    const data = forecasts[sp.id];
+    const hz = data ? horizonBlock(data, e.type, e.t) : null;
+    const useTide = sp.coastal && sp.tide !== 'any' && e.tide;
+    const sliders = [
+      { id: 'low', label: 'Low cloud overhead', unit: '%', min: 0, max: 100, step: 1, value: Math.round(h.low ?? 0) },
+      { id: 'mid', label: 'Mid cloud', unit: '%', min: 0, max: 100, step: 1, value: Math.round(h.mid ?? 0) },
+      { id: 'high', label: 'High cloud', unit: '%', min: 0, max: 100, step: 1, value: Math.round(h.high ?? 0) },
+      ...(hz ? [{ id: 'hz', label: `Cloud on the horizon, towards the ${e.type}`, unit: '%', min: 0, max: 100, step: 1, value: Math.round(hz.blk * 100) }] : []),
+      { id: 'pp', label: 'Chance of rain', unit: '%', min: 0, max: 100, step: 1, value: Math.round(h.pp ?? 0) },
+      { id: 'wind', label: 'Wind', unit: ' km/h', min: 0, max: 60, step: 1, value: Math.round(h.wind ?? 0) },
+      ...(useTide ? [{ id: 'tide', label: `Tide height (you want ${sp.tide})`, unit: '%', min: 0, max: 100, step: 1, value: Math.round(e.tide.pos * 100) }] : []),
+    ];
+    const run = v => baseScore({ ...h, low: v.low, mid: v.mid, high: v.high, pp: v.pp, wind: v.wind },
+      useTide ? { ...e.tide, pos: v.tide / 100 } : (e.tide || null), sp, hz ? { horizon: { ...hz, blk: v.hz / 100 } } : {});
+    return { sliders, score: v => run(v).score, reason: v => { const f = run(v).factors; return (f.find(x => x.k === 'bad') || f.find(x => x.k === 'good') || {}).t || ''; } };
+  }
+  if (e.topHunt === 'forest' && H.extra) {
+    const x = H.extra;
+    const sliders = [
+      { id: 'tc', label: 'Cloud cover', unit: '%', min: 0, max: 100, step: 1, value: Math.round(x.tc) },
+      { id: 'r24', label: 'Rain in the 24 hours before', unit: ' mm', min: 0, max: 20, step: 0.5, value: Math.round(x.r24 * 2) / 2 },
+      { id: 'wind', label: 'Wind', unit: ' km/h', min: 0, max: 50, step: 1, value: Math.round(x.wind ?? 0) },
+    ];
+    const score = v => {
+      const soft = cl((v.tc - 40) / 50), wet = cl((v.r24 + 0.5 * x.r48) / 6), windOK = 1 - 0.5 * cl((v.wind - 8) / 20);
+      return Math.round(cl((100 * (0.45 * soft + 0.35 * wet + 0.2 * windOK) * x.now.f + (x.mist ? 10 : 0)) / 100) * 100);
+    };
+    const reason = v => (v.tc < 60 ? 'Thin cloud means harsh, dappled light under the canopy.' : v.r24 + 0.5 * x.r48 < 2 ? 'Dry foliage: the greens won\'t glow without recent rain.' : v.wind >= 20 ? 'Wind this strong blurs leaves on long exposures.' : 'Soft light on wet forest: the conditions you\'re after.');
+    return { sliders, score, reason };
+  }
+  if (e.topHunt === 'waterfall' && H.extra) {
+    const x = H.extra;
+    const sliders = [
+      { id: 'r72', label: 'Rain in the past 3 days', unit: ' mm', min: 0, max: 100, step: 1, value: Math.round(x.r72) },
+      { id: 'tc', label: 'Cloud cover', unit: '%', min: 0, max: 100, step: 1, value: Math.round(x.tc) },
+    ];
+    const score = v => {
+      const r7 = x.r7 == null ? null : Math.max(0, x.r7 + (v.r72 - x.r72));
+      const flow = r7 == null ? cl(v.r72 / 15) : 0.7 * cl(v.r72 / 15) + 0.3 * cl(r7 / 40);
+      const soft = cl((v.tc - 40) / 50), windOK = 1 - 0.5 * cl(((h.wind ?? 0) - 15) / 25), flood = v.r72 >= 80;
+      return Math.round(100 * cl((0.55 * flow + 0.35 * soft + 0.1 * windOK) * x.now.f * (flood ? 0.5 : 1)));
+    };
+    const reason = v => (v.r72 >= 80 ? 'This much rain means flooding: brown water and dangerous access.' : v.r72 < 4 ? 'Little recent rain: expect a thin flow.' : v.tc < 60 ? 'Good flow, but bright sun will blow out the white water.' : 'Good flow under soft light.');
+    return { sliders, score, reason };
+  }
+  return null;
+}
+
+function openLab(key) {
+  const e = eventIndex.get(key);
+  const model = e && labModel(e);
+  if (!model) { toast('What if? works for colour, forest and waterfall sessions.', 4500); return; }
+  const start = Object.fromEntries(model.sliders.map(sl => [sl.id, sl.value]));
+  const vals = { ...start };
+  const base = model.score(start);
+  openSheet(`
+    <h2 class="bf-name">What if?</h2>
+    <p class="bf-when">${esc(e.spot.name)}, ${esc(sessionName(e))}. Move a slider to see how the ${esc(HUNT_LABEL[e.topHunt].toLowerCase())} score responds.</p>
+    <div class="lab-top">
+      ${gauge(base, 118, 'big')}
+      <div class="lab-read">
+        <p class="lab-verdict" id="labVerdict"></p>
+        <p class="lab-reason" id="labReason" aria-live="polite"></p>
+      </div>
+    </div>
+    <div class="lab-sliders">
+      ${model.sliders.map(sl => `<label class="slider">
+        <span class="slider-head"><span>${esc(sl.label)}</span><output class="num" id="out_${sl.id}">${sl.value}${sl.unit}</output></span>
+        <input type="range" data-lab-id="${sl.id}" min="${sl.min}" max="${sl.max}" step="${sl.step}" value="${sl.value}" style="--fc:${((sl.value - sl.min) / (sl.max - sl.min) * 100).toFixed(1)}%">
+        <span class="slider-foot">Forecast: ${sl.value}${sl.unit}</span>
+      </label>`).join('')}
+    </div>
+    <div class="row"><button class="btn" id="labReset">Back to the forecast</button></div>
+    <p class="small muted">This is the conditions score for the session's leading hunt, before your personal score and the model-agreement check are applied${e.score !== base ? `, which is why it starts at ${base} rather than ${e.score}` : ''}.</p>`);
+  const body = $('#sheetBody');
+  const draw = () => {
+    const sc = model.score(vals), d = sc - base;
+    setGauge(body, sc);
+    $('#labVerdict').textContent = `${sc >= 75 ? 'Go' : sc >= 50 ? 'Maybe' : 'Skip'}${d === 0 ? ', as forecast' : `, ${d > 0 ? 'up' : 'down'} ${Math.abs(d)} on the forecast`}`;
+    $('#labReason').textContent = model.reason(vals);
+  };
+  $$('[data-lab-id]', body).forEach(inp => inp.oninput = () => {
+    const sl = model.sliders.find(x => x.id === inp.dataset.labId);
+    vals[sl.id] = Number(inp.value);
+    $(`#out_${sl.id}`).textContent = `${inp.value}${sl.unit}`;
+    inp.style.setProperty('--val', `${((vals[sl.id] - sl.min) / (sl.max - sl.min) * 100).toFixed(1)}%`);
+    draw();
+  });
+  $$('[data-lab-id]', body).forEach(inp => inp.style.setProperty('--val', inp.style.getPropertyValue('--fc')));
+  $('#labReset').onclick = () => {
+    Object.assign(vals, start);
+    $$('[data-lab-id]', body).forEach(inp => { const sl = model.sliders.find(x => x.id === inp.dataset.labId); inp.value = sl.value; inp.style.setProperty('--val', inp.style.getPropertyValue('--fc')); $(`#out_${sl.id}`).textContent = `${sl.value}${sl.unit}`; });
+    draw();
+  };
+  draw();
+}
+
 // "Leave in 3 h 12 min", kept current while the page is open.
 function liveLine(e) {
   const now = Date.now() / 1000;
@@ -514,7 +641,9 @@ function sessionDetail(e, isBest = false, nav = null) {
         <h2 class="detail-name">${esc(e.spot.name)}</h2>
         <p class="detail-when">${TYPE_NAME[e.type]} ${sessionWhen(e)}. Leave ${fmtTime(e.leave, e.offset)}${e.hike ? `, ${e.hike} min walk in` : ''}.</p>
       </div>
-      <p class="detail-score num" aria-label="Score ${e.score} out of 100" data-count="${e.score}">${e.score}</p>
+      ${labModel(e)
+        ? `<button class="gauge-btn" data-lab="${esc(e.key)}" aria-label="Score ${e.score} out of 100. Open What if?">${gauge(e.score)}<span class="gauge-hint">What if?</span></button>`
+        : `<span class="gauge-btn static" role="img" aria-label="Score ${e.score} out of 100">${gauge(e.score)}</span>`}
     </div>
     <p class="detail-live num" id="liveLeave">${esc(liveLine(e))}</p>
     <p class="detail-verdict">${isBest ? '' : `${esc(huntPhrase(e))}. `}${esc(whySentence(e))}</p>
@@ -608,6 +737,20 @@ function wireScrub(v, w0, marks, sel) {
   const end = () => { if (scrubbing) { scrubbing = false; hideSoon(); } };
   bandEl.addEventListener('pointerup', end);
   bandEl.addEventListener('pointercancel', () => { scrubbing = false; out.hidden = true; line.hidden = true; });
+  // First time only: sweep the readout across a couple of hours to show the band can be dragged.
+  if (!localStorage.getItem('tidelight:scrubHint') && motionOK()) {
+    localStorage.setItem('tidelight:scrubHint', '1');
+    const from = Math.max(w0 + 3600, Math.min(w0 + 86400 - 4 * 3600, sel.t)), t0 = performance.now() + 1600;
+    const tick = now => {
+      if (scrubbing || !bandEl.isConnected) return;
+      const k = (now - t0) / 2600;
+      if (k < 0) return requestAnimationFrame(tick);
+      if (k >= 1) { hideSoon(); return; }
+      show(from + Math.sin(k * Math.PI) * 3 * 3600);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
   bandEl.addEventListener('keydown', ev => {
     const step = { ArrowRight: 1800, ArrowLeft: -1800, PageUp: 3 * 3600, PageDown: -3 * 3600 }[ev.key];
     if (step) { ev.preventDefault(); show(current + step); hideSoon(); }
@@ -716,7 +859,7 @@ async function renderForecast(v) {
       <figcaption class="band-key">
         <span><i style="background:${BAND.blue}"></i>Blue hour</span><span><i style="background:${BAND.golden}"></i>Golden hour</span><span><i style="background:${BAND.day}"></i>Daylight</span><span><i style="background:${BAND.night}; outline:1px solid var(--line)"></i>Dark</span>
       </figcaption>
-      ${sel && forecasts[sel.spot.id] ? `<p class="band-sky-note">Cloud, rain and clear night sky shown for ${esc(sel.spot.name)}.</p>` : ''}
+      ${sel && forecasts[sel.spot.id] ? `<p class="band-sky-note">Cloud, rain and clear night sky shown for ${esc(sel.spot.name)}. Drag along the band to see any hour.</p>` : ''}
     </figure>
     ${sel ? sessionDetail(sel, sel.key === best?.key, { index: order.findIndex(e => e.key === sel.key), total: order.length }) : ''}
     ${others.length ? `<section class="others">
@@ -893,12 +1036,16 @@ function openEvent(key) {
       ${currentUser() && crewState.crews.length ? '<button class="link-btn" id="shareBtn">Share with crew</button>' : ''}
       <button class="link-btn" id="icsBtn">Add to calendar</button>
       <button class="link-btn" data-compass="${esc(e.key)}">Open compass</button>
+      ${labModel(e) ? `<button class="link-btn" data-lab="${esc(e.key)}">What if?</button>` : ''}
+      <button class="link-btn" data-dial="${esc(e.key)}">Light dial</button>
     </div>
 
     <h3 class="sec">The plan</h3>
     <ol class="tline" style="--strip: linear-gradient(to bottom, ${stripStops})">
       ${tl.map(x => `<li class="${x.cls || ''}"><time class="num">${fmtTime(x.t, o)}</time><span>${esc(x.label)}</span></li>`).join('')}
     </ol>
+
+    ${tideChart(e)}
 
     <h3 class="sec">Briefing</h3>
     <p class="bf-brief" id="briefText">${esc(briefing(e))}</p>
@@ -924,6 +1071,7 @@ function openEvent(key) {
     </div>
   `);
   runCounts($('#sheetBody'));
+  wireTide(e);
   const sb = $('#shareBtn');
   if (sb) sb.onclick = () => {
     if (!S().plans.some(p => p.key === e.key)) addPlan(e);
@@ -2529,6 +2677,158 @@ async function openCompassHere() {
   openCompass(null, { name: 'Where you are now', lat: pos.lat, lon: pos.lon, targets });
 }
 
+/* ================= the light dial ================= */
+// A 24-hour ring coloured by the day's light (noon at the top, midnight at the bottom). Drag the handle
+// to any time to see the light phase and where the sun and moon are.
+function openLightDial({ name, lat, lon, offset, t }) {
+  if (!window.SunCalc) { toast("The sun data didn't load. Check your connection and try again."); return; }
+  const place = { lat, lon };
+  const dayStart = x => { const d = new Date((x + offset) * 1000); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) / 1000 - offset; };
+  let cur = Math.round(t / 300) * 300;
+  let midnight = dayStart(cur);
+  const deg = r => r * 180 / Math.PI;
+  const ringGradient = () => {
+    const noon = midnight + 43200, stops = [];
+    for (let k = 0; k <= 96; k++) {
+      const tt = noon + k * 900 - (k > 48 ? 86400 : 0);   // noon → midnight on the right, midnight → noon on the left
+      stops.push(`${phaseColor(place, tt, offset)} ${(k / 96 * 360).toFixed(1)}deg`);
+    }
+    return `conic-gradient(from 0deg, ${stops.join(', ')})`;
+  };
+  openSheet(`
+    <h2 class="bf-name">Light dial</h2>
+    <p class="bf-when">${esc(name)}. Drag the handle around the day.</p>
+    <div class="dial-day">
+      <button class="icon-btn" id="dialPrev" aria-label="Previous day"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <span id="dialDate"></span>
+      <button class="icon-btn" id="dialNext" aria-label="Next day"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+    <div class="dial" id="dial" tabindex="0" role="slider" aria-label="Time of day" aria-valuemin="0" aria-valuemax="1435" aria-valuenow="0">
+      <div class="dial-ring" id="dialRing"></div>
+      <span class="dial-lab n">Noon</span><span class="dial-lab e">6pm</span><span class="dial-lab s">Midnight</span><span class="dial-lab w">6am</span>
+      <div class="dial-arm" id="dialArm"><span class="dial-knob"></span></div>
+      <div class="dial-centre">
+        <p class="dial-time num" id="dialTime"></p>
+        <p class="dial-phase" id="dialPhase"></p>
+      </div>
+    </div>
+    <dl class="bf-cond dial-read">
+      <div><dt>Sun</dt><dd id="dialSun"></dd></div>
+      <div><dt>Moon</dt><dd id="dialMoon"></dd></div>
+    </dl>
+    <div class="row"><button class="btn" id="dialNow">Jump to now</button></div>`);
+  const dial = $('#dial');
+  const draw = () => {
+    const noon = midnight + 43200;
+    $('#dialArm').style.transform = `rotate(${((cur - noon) / 86400 * 360).toFixed(2)}deg)`;
+    $('#dialTime').textContent = fmtTime(cur, offset);
+    const marks = lightBand(day3am(cur, offset), place).marks;
+    $('#dialPhase').textContent = cap(phaseAt(marks, cur));
+    $('#dialDate').textContent = fmtDayDate(midnight + 43200, offset);
+    const sp = window.SunCalc.getPosition(new Date(cur * 1000), lat, lon), sAlt = deg(sp.altitude), sAz = (deg(sp.azimuth) + 180 + 360) % 360;
+    $('#dialSun').textContent = `${Math.round(sAz)}° ${compass(sAz)}, ${sAlt >= 0 ? `${Math.round(sAlt)}° up` : `${Math.round(-sAlt)}° below the horizon`}`;
+    const mp = window.SunCalc.getMoonPosition(new Date(cur * 1000), lat, lon), mAlt = deg(mp.altitude), mAz = (deg(mp.azimuth) + 180 + 360) % 360;
+    const lit = Math.round((window.SunCalc.getMoonIllumination(new Date(cur * 1000)).fraction || 0) * 100);
+    $('#dialMoon').textContent = `${Math.round(mAz)}° ${compass(mAz)}, ${mAlt >= 0 ? `${Math.round(mAlt)}° up` : 'below the horizon'}, ${lit}% lit`;
+    dial.setAttribute('aria-valuenow', String(Math.round((cur - midnight) / 60)));
+    dial.setAttribute('aria-valuetext', `${fmtTime(cur, offset)}, ${phaseAt(marks, cur)}`);
+  };
+  const setDay = () => { $('#dialRing').style.background = ringGradient(); draw(); };
+  const setTime = x => { cur = Math.max(midnight, Math.min(midnight + 86100, Math.round(x / 300) * 300)); draw(); };
+  const fromPointer = ev => {
+    const r = dial.getBoundingClientRect();
+    const a = Math.atan2(ev.clientX - (r.left + r.width / 2), -(ev.clientY - (r.top + r.height / 2))) * 180 / Math.PI;   // 0 at the top, clockwise
+    setTime(midnight + 43200 + a / 360 * 86400);
+  };
+  let dragging = false;
+  dial.addEventListener('pointerdown', ev => { dragging = true; try { dial.setPointerCapture(ev.pointerId); } catch {} dial.classList.add('dragging'); fromPointer(ev); });
+  dial.addEventListener('pointermove', ev => { if (dragging) fromPointer(ev); });
+  const end = () => { dragging = false; dial.classList.remove('dragging'); };
+  dial.addEventListener('pointerup', end); dial.addEventListener('pointercancel', end);
+  dial.addEventListener('keydown', ev => {
+    const step = { ArrowRight: 300, ArrowUp: 300, ArrowLeft: -300, ArrowDown: -300, PageUp: 3600, PageDown: -3600 }[ev.key];
+    if (step) { ev.preventDefault(); setTime(cur + step); }
+  });
+  $('#dialPrev').onclick = () => { midnight -= 86400; cur -= 86400; setDay(); };
+  $('#dialNext').onclick = () => { midnight += 86400; cur += 86400; setDay(); };
+  $('#dialNow').onclick = () => { const n = Date.now() / 1000; midnight = dayStart(n); setDay(); setTime(n); };
+  setDay();
+}
+async function openLightDialHere() {
+  let pos = null;
+  try { pos = await getPosition(); } catch { pos = S().settings.home || S().spots[0] || null; }
+  if (!pos) { toast('Turn on location, or set your home under You, to use the light dial.', 5000); return; }
+  openLightDial({ name: pos.name || 'Where you are now', lat: pos.lat, lon: pos.lon, offset: -new Date().getTimezoneOffset() * 60, t: Date.now() / 1000 });
+}
+
+/* ================= the tide slider (coastal briefings) ================= */
+function tideChart(e) {
+  const data = forecasts[e.spot.id];
+  if (!e.spot.coastal || !data || e.idx == null) return '';
+  const pts = [];
+  for (let i = Math.max(0, e.idx - 6); i <= Math.min(data.hours.length - 1, e.idx + 6); i++) if (data.hours[i].sea != null) pts.push({ t: data.hours[i].t, v: data.hours[i].sea });
+  if (pts.length < 8) return '';
+  const lo = Math.max(0, e.idx - 12), hi = Math.min(data.hours.length - 1, e.idx + 12);
+  const all = data.hours.slice(lo, hi + 1).map(x => x.sea).filter(x => x != null);
+  const min = Math.min(...all), max = Math.max(...all);
+  if (max - min < 0.05) return '';
+  const W = 320, Hh = 110, t0 = pts[0].t, t1 = pts[pts.length - 1].t;
+  const x = t => ((t - t0) / (t1 - t0)) * W, y = val => 8 + (1 - (val - min) / (max - min)) * (Hh - 16);
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
+  const acc = e.spot.tideAccess && e.access && !e.access.none ? e.access : null;
+  const level = e.spot.tideAccess ? min + ((Number(e.spot.accessPct) || 40) / 100) * (max - min) : null;
+  const clampT = t => Math.max(t0, Math.min(t1, t));
+  return `<h3 class="sec">The tide</h3>
+    <div class="tide" id="tide" tabindex="0" role="slider" aria-label="Tide through the session. Drag to see the height at any time." aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+      data-t0="${t0}" data-t1="${t1}" data-min="${min}" data-max="${max}">
+      <svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none" aria-hidden="true">
+        ${acc ? `<rect class="tide-safe" x="${x(clampT(acc.start)).toFixed(1)}" y="0" width="${Math.max(0, x(clampT(acc.backBy)) - x(clampT(acc.start))).toFixed(1)}" height="${Hh}"/>` : ''}
+        <path class="tide-fill" d="${line} L${W},${Hh} L0,${Hh} Z"/>
+        <path class="tide-line" d="${line}"/>
+        ${level != null ? `<line class="tide-level" x1="0" x2="${W}" y1="${y(level).toFixed(1)}" y2="${y(level).toFixed(1)}"/>` : ''}
+        <line class="tide-event" x1="${x(e.t).toFixed(1)}" x2="${x(e.t).toFixed(1)}" y1="0" y2="${Hh}"/>
+      </svg>
+      <span class="tide-handle" id="tideHandle"><i></i></span>
+    </div>
+    <div class="tide-axis" aria-hidden="true"><span>${fmtTime(t0, e.offset)}</span><span>${e.type === 'sunrise' || e.type === 'sunset' ? cap(e.type) : 'Best time'} ${fmtTime(e.t, e.offset)}</span><span>${fmtTime(t1, e.offset)}</span></div>
+    <p class="tide-read" id="tideRead" aria-live="polite"></p>
+    ${level != null ? '<p class="small muted">The dashed line is your access level; the shaded window is when you can be out there, with your safety buffer.</p>' : ''}`;
+}
+function wireTide(e) {
+  const el = $('#tide');
+  if (!el) return;
+  const data = forecasts[e.spot.id];
+  const t0 = Number(el.dataset.t0), t1 = Number(el.dataset.t1), min = Number(el.dataset.min), max = Number(el.dataset.max);
+  const seaAt = t => {
+    const hs = data.hours;
+    for (let i = 0; i < hs.length - 1; i++) if (hs[i].t <= t && hs[i + 1].t >= t && hs[i].sea != null && hs[i + 1].sea != null) {
+      const k = (t - hs[i].t) / (hs[i + 1].t - hs[i].t);
+      return { v: hs[i].sea + k * (hs[i + 1].sea - hs[i].sea), rising: hs[i + 1].sea > hs[i].sea };
+    }
+    return null;
+  };
+  const show = t => {
+    const tt = Math.max(t0, Math.min(t1, t)), sea = seaAt(tt);
+    if (!sea) return;
+    const fx = (tt - t0) / (t1 - t0), pos = (sea.v - min) / (max - min);
+    const h = $('#tideHandle');
+    h.style.left = `${(fx * 100).toFixed(2)}%`;
+    h.firstElementChild.style.top = `${(8 + (1 - pos) * (110 - 16)) / 110 * 100}%`;
+    const acc = e.spot.tideAccess && e.access && !e.access.none ? (tt >= e.access.start && tt <= e.access.backBy ? ' Access is open.' : ' Access is closed.') : '';
+    $('#tideRead').textContent = `${fmtTime(tt, e.offset)}: tide at ${Math.round(Math.max(0, Math.min(1, pos)) * 100)}% of its range and ${sea.rising ? 'rising' : 'falling'}.${acc}`;
+    el.setAttribute('aria-valuenow', String(Math.round(fx * 100)));
+    el.setAttribute('aria-valuetext', $('#tideRead').textContent);
+    el.dataset.cur = String(tt);
+  };
+  const tAt = cx => { const r = el.getBoundingClientRect(); return t0 + Math.max(0, Math.min(1, (cx - r.left) / r.width)) * (t1 - t0); };
+  let drag = false;
+  el.addEventListener('pointerdown', ev => { drag = true; try { el.setPointerCapture(ev.pointerId); } catch {} show(tAt(ev.clientX)); });
+  el.addEventListener('pointermove', ev => { if (drag) show(tAt(ev.clientX)); });
+  el.addEventListener('pointerup', () => { drag = false; }); el.addEventListener('pointercancel', () => { drag = false; });
+  el.addEventListener('keydown', ev => { const st2 = { ArrowRight: 600, ArrowLeft: -600 }[ev.key]; if (st2) { ev.preventDefault(); show(Number(el.dataset.cur || e.t) + st2); } });
+  show(e.t);
+}
+
 /* ================= tools tab ================= */
 function renderTools(v) {
   const now = Date.now() / 1000;
@@ -2544,12 +2844,14 @@ function renderTools(v) {
       ${nextPlan ? tool(`data-field="${esc(nextPlan.key)}"`, 'Field mode', `Countdowns and the sky for ${esc(nextPlan.spotName)}, your next plan.`) : ''}
       ${tool('id="toolNow"', 'Right now', 'The next 48 hours where you are, conditions at your spots, and rain radar.')}
       ${tool('id="toolCompass"', 'Compass', "Where the sun rises and sets today, and where the sun, moon and Milky Way are now.")}
+      ${tool('id="toolDial"', 'Light dial', 'Drag around a 24-hour dial to see the light, the sun and the moon at any time.')}
       ${tool('data-lightning', 'Lightning distance', 'Time the gap between flash and thunder to see how far away a storm is.')}
       ${tool('id="toolScout"', 'Scout this spot', 'Save where you stand as a new spot, with the direction of your composition.')}
     </div>
     ${!nextPlan ? '<p class="small muted tool-note">Field mode opens from any session. Plan a shoot and it appears here for the next one.</p>' : ''}`;
   $('#toolNow').onclick = () => openNow();
   $('#toolCompass').onclick = () => openCompassHere();
+  $('#toolDial').onclick = () => openLightDialHere();
   $('#toolScout').onclick = () => openScout();
   // Field mode needs the live forecast for the next plan: load it, then redraw once.
   if (!nextPlan && S().plans.some(p => p.t >= now - 3600) && S().spots.length) {
@@ -2915,12 +3217,21 @@ async function renderAlerts() {
         : `<div class="row"><button class="btn primary block" id="pushOn">Turn on alerts on this device</button></div>`;
   }
   const opt = (v, cur, label) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${label}</option>`;
+  function thPreview(v) {
+    if (!Object.keys(forecasts).length) return 'Lower catches more sessions; higher means fewer, surer alerts.';
+    const n = next3Days().filter(e => e.score >= v).length;
+    return `Right now, ${n} of your sessions in the next 3 days score${n === 1 ? 's' : ''} ${v} or more.`;
+  }
   box.innerHTML = `<h2>Alerts</h2>
     <p class="small muted">Checked every hour from your Supabase account, using the same scores as the app (including your personal score).</p>
     ${device}
     <form class="form alert-prefs" id="alertForm">
-      <label class="check"><input type="checkbox" name="go" ${a.go ? 'checked' : ''}> Tell me when a session in the next 36 hours scores
-        <select name="threshold" aria-label="Score threshold">${[70, 75, 80, 85, 90].map(v => opt(v, a.threshold, `${v}+`)).join('')}</select></label>
+      <label class="check"><input type="checkbox" name="go" ${a.go ? 'checked' : ''}> Tell me when a session in the next 36 hours is worth the alarm</label>
+      <label class="slider">
+        <span class="slider-head"><span>Alert me at a score of</span><output class="num" id="thOut">${a.threshold}+</output></span>
+        <input type="range" name="threshold" id="thRange" min="60" max="95" step="5" value="${a.threshold}" aria-label="Score threshold" style="--val:${((a.threshold - 60) / 35 * 100).toFixed(0)}%">
+        <span class="slider-foot" id="thPreview">${esc(thPreview(a.threshold))}</span>
+      </label>
       <label class="check"><input type="checkbox" name="confident" ${a.confident !== false ? 'checked' : ''}> Skip colour alerts when the weather models disagree (fewer false alarms)</label>
       <label class="check"><input type="checkbox" name="calledOff" ${a.calledOff ? 'checked' : ''}> Tell me if a session I was alerted about falls through</label>
       <label class="check"><input type="checkbox" name="digest" ${a.digest ? 'checked' : ''}> Weekly digest of the best 3 sessions, every
@@ -2966,6 +3277,12 @@ async function renderAlerts() {
     catch (e) { toast(e.message, 7000); }
     test.disabled = false; test.textContent = 'Send a test';
   };
+  const thr = $('#thRange');
+  if (thr) thr.oninput = () => {
+    $('#thOut').textContent = `${thr.value}+`;
+    $('#thPreview').textContent = thPreview(Number(thr.value));
+    thr.style.setProperty('--val', `${((thr.value - 60) / 35 * 100).toFixed(0)}%`);
+  };
   $('#alertForm').onsubmit = ev => {
     ev.preventDefault();
     const f = new FormData(ev.target);
@@ -3002,12 +3319,28 @@ function pageHome(v) {
         <label>Longitude<input name="lon" inputmode="decimal" value="${s.home ? s.home.lon.toFixed(5) : ''}"></label>
       </div>
       <button type="button" class="btn" id="homeHere">Use where I am now</button>
-      <div class="two">
-        <label>Average drive speed (km/h)<input name="speed" inputmode="numeric" value="${s.driveSpeedKmh}"></label>
-        <label>Arrive before each session (min)<input name="arrive" inputmode="numeric" value="${s.arriveBeforeMin}"></label>
-      </div>
+      <label class="slider">
+        <span class="slider-head"><span>Arrive before each session</span><output class="num" id="arriveOut">${s.arriveBeforeMin} min</output></span>
+        <input type="range" name="arrive" id="arriveRange" min="0" max="90" step="5" value="${s.arriveBeforeMin}" style="--val:${(s.arriveBeforeMin / 90 * 100).toFixed(0)}%">
+      </label>
+      <label class="slider">
+        <span class="slider-head"><span>Average drive speed</span><output class="num" id="speedOut">${s.driveSpeedKmh} km/h</output></span>
+        <input type="range" name="speed" id="speedRange" min="30" max="110" step="5" value="${s.driveSpeedKmh}" style="--val:${((s.driveSpeedKmh - 30) / 80 * 100).toFixed(0)}%">
+        <span class="slider-foot" id="travelExample"></span>
+      </label>
       <button type="submit" class="btn primary">Save home and travel</button>
     </form>`;
+  const ar = $('#arriveRange'), sr = $('#speedRange');
+  const example = () => {
+    const mins = Math.round(40 / Number(sr.value) * 60), lead = Number(ar.value) + mins;
+    const at = 6 * 60 - lead, hh = Math.floor(at / 60), mm = String(at % 60).padStart(2, '0');
+    $('#arriveOut').textContent = `${ar.value} min`;
+    $('#speedOut').textContent = `${sr.value} km/h`;
+    ar.style.setProperty('--val', `${(ar.value / 90 * 100).toFixed(0)}%`);
+    sr.style.setProperty('--val', `${((sr.value - 30) / 80 * 100).toFixed(0)}%`);
+    $('#travelExample').textContent = `Example: for a 6:00am sunrise 40 km away, that's a ${mins} min drive, leaving at ${hh}:${mm}am.`;
+  };
+  ar.oninput = example; sr.oninput = example; example();
   $('#homeHere').onclick = async () => {
     try {
       const p = await getPosition();
@@ -3366,6 +3699,10 @@ function drawWelcome() {
 
 document.addEventListener('click', ev => {
   if (ev.target.closest('[data-lightning]')) { openLightningTimer(); return; }
+  const labBtn = ev.target.closest('[data-lab]');
+  if (labBtn) { openLab(labBtn.dataset.lab); return; }
+  const dialBtn = ev.target.closest('[data-dial]');
+  if (dialBtn) { const de = eventIndex.get(dialBtn.dataset.dial); if (de) openLightDial({ name: de.spot.name, lat: de.spot.lat, lon: de.spot.lon, offset: de.offset, t: de.t }); return; }
   const fmBtn = ev.target.closest('[data-field]');
   if (fmBtn) { openField(fmBtn.dataset.field); return; }
   const cpBtn = ev.target.closest('[data-compass]');
