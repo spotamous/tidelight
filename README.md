@@ -105,6 +105,8 @@ Password resets in the app: You → Account and sync → type your email → *Fo
 
 ## Crews
 
+**Automatic sharing and spot copies.** With *Share my plans automatically* on (Plans → Crew; on by default), every shoot you plan is shared with your crews and each crewmate gets a notification, once per plan. Shared plans carry the spot's settings (hunts, tide, facing, hike, notes) and a small cover photo. Crewmates tap the notification, or *View spot* under Who's going where, to see that spot's week of forecasts scored for them (their drive, their personal score), the session's briefing, and the sharer's notes. *Save to my spots* copies it to their device, photo included; afterwards it shows *Open my copy*. Anyone can mute crew notifications under You → Alerts.
+
 Crews let photographers who shoot together share plans. Plans → Crew → *Create a crew* gives a 6-character invite code; friends join with *Join a crew*. Share any plan (with an optional note) from Upcoming or a session's details: crewmates get a notification, see who's going where under *Who's going where*, and can tap *I'm in* to add it to their own Plans with their own leave time. Sessions show "Sam is going" when a crewmate has planned the same place and time. Crew data lives in the `crews`, `crew_members` and `crew_plans` tables with row-level security: only members of a crew can see it. See `supabase/crews.sql`.
 
 ## Gear checklists
@@ -134,7 +136,7 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=5.2`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=5.3`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:

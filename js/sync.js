@@ -2,9 +2,9 @@
 // Local-first: the app always works from this device's copy. When signed in, it merges with your
 // private copy in Supabase record by record (newest change wins, deletions are remembered), then
 // uploads the result. Spot photos sync through a private storage bucket. The Claude key never syncs.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=5.2';
-import { getState, applyMerged, onLocalChange, COLLECTIONS, syncedSettings } from './storage.js?v=5.2';
-import { getPhotoBlob, putPhotoBlob, hasPhoto } from './photos.js?v=5.2';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=5.3';
+import { getState, applyMerged, onLocalChange, COLLECTIONS, syncedSettings } from './storage.js?v=5.3';
+import { getPhotoBlob, putPhotoBlob, hasPhoto } from './photos.js?v=5.3';
 
 const TABLE = 'user_state';
 const BUCKET = 'photos';
@@ -313,12 +313,13 @@ export async function renameInCrew(crewId, displayName) {
   if (error) throw crewErr(error);
 }
 // Share one of your plans with a crew (or update it if already shared), then tell the crew.
-export async function shareToCrew(crewId, displayName, p, note = '') {
+export async function shareToCrew(crewId, displayName, p, note = '', spot = null) {
   const uid = need();
   const row = {
     crew_id: crewId, user_id: uid, display_name: displayName, session_key: p.sessionKey,
     spot_name: p.spotName, lat: p.lat, lon: p.lon, type: p.type, t: p.t, day_t: p.dayT ?? null, leave: p.leave ?? null,
     offset_s: p.offset || 0, score: p.score ?? null, hunt: p.hunt ?? null, note: note || null,
+    ...(spot ? { spot } : {}),
   };
   const { data, error } = await client.from('crew_plans').upsert(row, { onConflict: 'crew_id,user_id,session_key' }).select('id').single();
   if (error) throw crewErr(error);

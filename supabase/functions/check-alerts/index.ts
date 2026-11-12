@@ -1312,7 +1312,7 @@ const { setKp, HUNT_LABEL, HUNT_VERB } = M_hunts;
 const { fetchSpotForecast, fetchKp, clearCache } = M_api;
 const { fmtTime, fmtDay } = M_util;
 
-const DEFAULT_ALERTS = { go: true, threshold: 80, confident: true, calledOff: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 };
+const DEFAULT_ALERTS = { go: true, threshold: 80, confident: true, calledOff: true, crew: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 };
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
@@ -1480,16 +1480,22 @@ async function handler(req) {
     const { data: cp, error: e1 } = await admin.from('crew_plans').select('*').eq('id', body.crewPlanId).maybeSingle();
     if (e1 || !cp) return json({ error: 'That crew plan was not found.' }, 404);
     if (cp.user_id !== data.user.id) return json({ error: 'You can only announce your own plans.' }, 403);
+    // Announce a plan once, when it's first shared (editing its note later doesn't notify everyone again).
+    if (!body.force && Date.now() - new Date(cp.created_at).getTime() > 10 * 60 * 1000) return json({ sent: 0, skipped: 'already announced' });
     const { data: mates } = await admin.from('crew_members').select('user_id').eq('crew_id', cp.crew_id).neq('user_id', data.user.id);
+    // Respect each crewmate's own setting (You → Alerts → crew notifications).
+    const ids = (mates || []).map(m => m.user_id);
+    const { data: states } = ids.length ? await admin.from('user_state').select('user_id, data').in('user_id', ids) : { data: [] };
+    const muted = new Set((states || []).filter(r => r.data?.settings?.alerts?.crew === false).map(r => r.user_id));
     const e = { type: cp.type, t: cp.t, dayT: cp.day_t ?? cp.t, offset: cp.offset_s || 0 };
     const hunt = cp.hunt && cp.hunt !== 'colour' && HUNT_LABEL[cp.hunt] ? ` (${HUNT_LABEL[cp.hunt].toLowerCase()})` : '';
     const payload = {
       title: `${cp.display_name} is heading to ${cp.spot_name}`,
-      body: `${sessionLabel(e)} ${fmtTime(cp.t, e.offset)}${cp.score != null ? `, score ${cp.score}${hunt}` : ''}.${cp.note ? ` "${cp.note}"` : ''} Open Plans to join them.`,
-      tag: `crew-${cp.session_key}`, url: './',
+      body: `${sessionLabel(e)} ${fmtTime(cp.t, e.offset)}${cp.score != null ? `, score ${cp.score}${hunt}` : ''}.${cp.note ? ` "${cp.note}"` : ''} Tap to see the spot.`,
+      tag: `crew-${cp.session_key}`, url: `./#crew-${cp.id}`,
     };
     let sent = 0;
-    for (const m of mates || []) { try { sent += await sendToUser(admin, m.user_id, payload); } catch (err) { console.error('crew push failed', err?.message); } }
+    for (const m of mates || []) { if (muted.has(m.user_id)) continue; try { sent += await sendToUser(admin, m.user_id, payload); } catch (err) { console.error('crew push failed', err?.message); } }
     console.log(`crew plan ${cp.id}: ${mates?.length || 0} crewmates, ${sent} notifications`);
     return json({ sent });
   }

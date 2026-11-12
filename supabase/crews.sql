@@ -27,6 +27,9 @@ create table if not exists public.crew_plans (
   unique (crew_id, user_id, session_key)
 );
 create index if not exists crew_plans_crew_t on public.crew_plans (crew_id, t);
+-- Spot details shared with a plan (settings and a small cover photo), so crewmates can view and save the spot.
+alter table public.crew_plans add column if not exists spot jsonb;
+alter table public.crew_plans add constraint crew_plans_spot_size check (spot is null or pg_column_size(spot) <= 200000);
 alter table public.crews enable row level security;
 alter table public.crew_members enable row level security;
 alter table public.crew_plans enable row level security;

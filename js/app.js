@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=5.2';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=5.2';
-import { baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=5.2';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=5.2';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=5.2';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=5.2';
-import { gearFor } from './gear.js?v=5.2';
-import { VAPID_PUBLIC_KEY } from './config.js?v=5.2';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=5.2';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=5.2';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=5.3';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=5.3';
+import { baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=5.3';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=5.3';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=5.3';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=5.3';
+import { gearFor } from './gear.js?v=5.3';
+import { VAPID_PUBLIC_KEY } from './config.js?v=5.3';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=5.3';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=5.3';
 
-export const APP_VERSION = '5.2';
+export const APP_VERSION = '5.3';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -915,7 +915,7 @@ async function renderForecast(v) {
     if (!e) return;
     addPlan(e);
     b.textContent = 'Planned'; b.disabled = true;
-    toast(crewState.crews.length ? 'Planned. Share it with your crew from Plans.' : 'Planned. Rate it afterwards so your personal score learns.');
+    afterPlanned(e.key);
   });
 }
 
@@ -1086,7 +1086,7 @@ function openEvent(key) {
     addPlan(e);
     $('#planBtn').textContent = 'Planned';
     $('#planBtn').disabled = true;
-    toast('Planned. Rate it afterwards so your personal score learns.');
+    afterPlanned(e.key);
   };
   $('#icsBtn').onclick = () => downloadIcs(e);
   $('#aiBriefBtn').onclick = async () => {
@@ -1120,6 +1120,59 @@ async function loadCrew() {
   } catch (e) {
     Object.assign(crewState, { loaded: true, error: e.message });
   }
+}
+
+// What travels with a shared plan so crewmates can see and save the spot: its settings and a small cover photo.
+const thumbCache = new Map();
+async function spotThumb(sp) {
+  const id = (sp.photos || []).find(x => photoUrl(x));
+  if (!id) return null;
+  if (thumbCache.has(id)) return thumbCache.get(id);
+  try {
+    const img = new Image();
+    img.src = photoUrl(id);
+    await img.decode();
+    const k = Math.min(1, 560 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const url = c.toDataURL('image/jpeg', 0.72);
+    thumbCache.set(id, url);
+    return url;
+  } catch { return null; }
+}
+async function spotPayload(spotId) {
+  const sp = S().spots.find(x => x.id === spotId);
+  if (!sp) return null;
+  const keep = ['events', 'coastal', 'tide', 'tideAccess', 'accessPct', 'accessBuffer', 'facing', 'hikeMin', 'hikeKm', 'difficulty', 'fogMode', 'notes'];
+  const out = { v: 1, hunts: huntsOf(sp) };
+  for (const k of keep) if (sp[k] !== undefined && sp[k] !== '') out[k] = sp[k];
+  if (typeof out.notes === 'string') out.notes = out.notes.slice(0, 1000);
+  const thumb = await spotThumb(sp);
+  if (thumb && thumb.length < 150000) out.photo = thumb;
+  return out;
+}
+// Share a plan with every crew you're in (used when you plan a shoot, if auto-sharing is on).
+async function autoShare(planKey) {
+  const st = S();
+  if (st.settings.crewAutoShare === false || !currentUser()) return false;
+  if (!crewState.loaded) await loadCrew();
+  if (!crewState.crews.length) return false;
+  const plan = S().plans.find(p => p.key === planKey);
+  if (!plan) return false;
+  const spot = await spotPayload(plan.spotId);
+  for (const c of crewState.crews) {
+    try { await shareToCrew(c.id, myNameIn(c), plan, '', spot); } catch (e) { toast(e.message, 6000); return false; }
+  }
+  update(s2 => { const x = s2.plans.find(p => p.key === planKey); if (x) x.sharedTo = crewState.crews.map(c => c.id); });
+  loadCrew();
+  return true;
+}
+// After planning: share automatically if that's on, and say so.
+async function afterPlanned(planKey) {
+  const shared = await autoShare(planKey);
+  const names = crewState.crews.map(c => c.name);
+  toast(shared ? `Planned and shared with ${names.length === 1 ? names[0] : 'your crews'}.` : crewState.crews.length ? 'Planned. Share it with your crew from Plans.' : 'Planned. Rate it afterwards so your personal score learns.', 4500);
 }
 
 // Crewmates heading to roughly the same place and session (within ~1.5 km and 2 hours).
@@ -1168,7 +1221,7 @@ function openShareSheet(planId) {
       const plan = S().plans.find(x => x.id === p.id);
       for (const id of ids) {
         const crew = crewState.crews.find(c => c.id === id);
-        await shareToCrew(id, myNameIn(crew), plan, String(f.get('note') || '').trim());
+        await shareToCrew(id, myNameIn(crew), plan, String(f.get('note') || '').trim(), await spotPayload(plan.spotId));
       }
       update(s => { const x = s.plans.find(y => y.id === p.id); x.sharedTo = [...new Set([...(x.sharedTo || []), ...ids])]; });
       await loadCrew();
@@ -1195,10 +1248,107 @@ async function joinCrewPlan(cpId) {
   };
   if (!S().plans.some(p => p.sessionKey === cp.session_key)) update(s => { s.plans.push(plan); });
   const crew = crewState.crews.find(c => c.id === cp.crew_id);
-  try { await shareToCrew(cp.crew_id, myNameIn(crew), S().plans.find(p => p.sessionKey === cp.session_key), ''); } catch (e) { toast(e.message, 6000); }
+  try { await shareToCrew(cp.crew_id, myNameIn(crew), S().plans.find(p => p.sessionKey === cp.session_key), '', cp.spot || null); } catch (e) { toast(e.message, 6000); }
   await loadCrew();
   toast("You're in. It's in your Plans and the crew knows.");
   render();
+}
+
+// Open a crewmate's spot: its forecast for the week, from your point of view (your drive, your personal score).
+const sharedSpotOf = cp => ({
+  ...(cp.spot || {}), id: `crew-${cp.id}`, name: cp.spot_name, lat: cp.lat, lon: cp.lon,
+  hunts: cp.spot?.hunts || [cp.hunt || 'colour'], events: cp.spot?.events || ['sunrise', 'sunset'], photos: [],
+});
+function mySpotNear(lat, lon) { return S().spots.find(sp => haversineKm(sp, { lat, lon }) <= 0.3); }
+
+async function openSharedSpot(cpId) {
+  const cp = crewState.plans.find(x => x.id === cpId);
+  if (!cp) { toast('That crew plan has been removed.'); return; }
+  const me = currentUser()?.id;
+  const sp = sharedSpotOf(cp);
+  const who = cp.user_id === me ? 'You' : cp.display_name;
+  const photo = cp.spot?.photo || null;
+  openSheet(`<h2 class="bf-name">${esc(cp.spot_name)}</h2>${skeleton('week', 'Loading the forecast for this spot…')}`);
+  let data;
+  try {
+    data = forecasts[sp.id] || await fetchSpotForecast(sp);
+    forecasts[sp.id] = data;
+  } catch (e) { $('#sheetBody').innerHTML = `<h2 class="bf-name">${esc(cp.spot_name)}</h2><div class="alert danger">${esc(e.message)}</div>`; return; }
+  const st = S();
+  const evs = evaluateSpot(sp, data, st.keepers, st.settings);
+  indexEvents(evs);
+  const theirs = evs.find(e => e.type === cp.type && Math.abs(e.t - cp.t) < 7200);
+  const mine = mySpotNear(cp.lat, cp.lon);
+  const going = crewState.plans.filter(x => x.session_key === cp.session_key || (x.type === cp.type && Math.abs(x.t - cp.t) <= 7200 && haversineKm(x, cp) <= 1.5));
+  const names = [...new Set(going.map(x => x.user_id === me ? 'You' : x.display_name))];
+  const inAlready = going.some(x => x.user_id === me);
+
+  const now = Date.now() / 1000;
+  const dayOf = e => dayKey(e.dayT ?? e.t, e.offset);
+  const days = [];
+  for (let i = 0; i < 7; i++) { const t = now + i * 86400, k = dayKey(t, data.offset); if (evs.some(e => dayOf(e) === k)) days.push({ k, label: i === 0 ? 'Today' : fmtWeekday(t, data.offset).slice(0, 3), date: fmtDayDate(t, data.offset).split(' ')[1] }); }
+  const types = SESSION_TYPES.filter(type => evs.some(e => e.type === type));
+  const cellFor = (k, type) => evs.find(e => dayOf(e) === k && e.type === type);
+  const hunts = (cp.spot?.hunts || []).map(k => HUNT_LABEL[k]).filter(Boolean).join(', ');
+
+  $('#sheetBody').innerHTML = `
+    ${photo ? `<img class="banner" src="${photo}" alt="${esc(cp.spot_name)}">` : ''}
+    <header class="bf-head"><div>
+      <h2 class="bf-name">${esc(cp.spot_name)}</h2>
+      <p class="bf-when">Shared by ${esc(who)}${hunts ? `. ${esc(hunts)}` : ''}${cp.spot?.hikeMin || cp.spot?.hikeKm ? `. ${esc(hikeSummary(sp) || '')}` : ''}</p>
+    </div></header>
+    <p class="bf-verdict">${esc(names.join(', '))} ${names.length === 1 && names[0] !== 'You' ? 'is' : 'are'} going ${esc(sessionName({ type: cp.type, t: cp.t, dayT: cp.day_t ?? cp.t, offset: cp.offset_s }))}, ${fmtTime(cp.t, cp.offset_s)}.${theirs ? ` For you it scores ${theirs.score}: ${esc(huntPhrase(theirs).toLowerCase())}, leaving at ${fmtTime(theirs.leave, theirs.offset)}.` : ''}</p>
+    ${cp.note ? `<p class="crew-note">“${esc(cp.note)}” <span class="muted">${esc(who)}</span></p>` : ''}
+    ${mine ? `<p class="bf-note crew">This is near ${esc(mine.name)}, one of your spots.</p>` : ''}
+    <div class="bf-quiet">
+      ${theirs ? `<button class="link-btn" data-ev="${esc(theirs.key)}">Briefing for this session</button>` : ''}
+      <a class="link-btn" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${cp.lat},${cp.lon}">Directions</a>
+    </div>
+
+    <h3 class="sec">The week here, for you</h3>
+    ${days.length && types.length ? `<div class="wk-wrap"><div class="wk" style="grid-template-columns: 74px repeat(${days.length}, 44px)">
+      <span></span>${days.map(d => `<span class="wk-day">${d.label}<small>${d.date}</small></span>`).join('')}
+      ${types.map((type, ti) => `<span class="wk-type">${TYPE_NAME[type]}</span>${days.map((d, di) => {
+        const e = cellFor(d.k, type);
+        return e ? `<button class="mx-cell ${band(e.score)} ${theirs && e.key === theirs.key ? 'theirs' : ''}" style="--n:${ti + di}" data-ev="${esc(e.key)}" aria-label="${TYPE_NAME[type]} ${d.label}, score ${e.score}">${e.score}</button>` : '<span class="mx-none" aria-hidden="true">–</span>';
+      }).join('')}`).join('')}
+    </div></div>
+    <p class="small muted">Scored with your drive time and personal score. The outlined square is ${esc(who === 'You' ? 'your' : `${who}'s`)} session.</p>` : '<p class="muted">No sessions in the next 7 days.</p>'}
+    ${cp.spot?.notes ? `<h3 class="sec">${esc(who === 'You' ? 'Your' : `${who}'s`)} notes</h3><p class="bf-brief">${esc(cp.spot.notes)}</p>` : ''}
+
+    <div class="sheet-actions">
+      ${mine ? `<button class="btn" data-open-mine="${mine.id}">Open my copy</button>` : '<button class="btn primary" id="saveShared">Save to my spots</button>'}
+      ${cp.user_id !== me && !inAlready ? `<button class="btn ${mine ? 'primary' : ''}" data-join="${cp.id}">I'm in</button>` : ''}
+    </div>`;
+  runCounts($('#sheetBody'));
+  const save = $('#saveShared');
+  if (save) save.onclick = async () => {
+    save.disabled = true; save.textContent = 'Saving…';
+    const id = await saveSharedSpot(cp);
+    toast(`${cp.spot_name} saved to your spots.`);
+    for (const k in forecasts) if (k.startsWith('crew-')) delete forecasts[k];
+    openSpotDetail(id);
+  };
+  const om = $('[data-open-mine]');
+  if (om) om.onclick = () => openSpotDetail(om.dataset.openMine);
+  $$('#sheetBody [data-join]').forEach(b => b.onclick = () => { b.disabled = true; closeSheet(); joinCrewPlan(b.dataset.join); });
+}
+
+async function saveSharedSpot(cp) {
+  const src = cp.spot || {};
+  let photos = [];
+  if (src.photo) {
+    try {
+      const blob = await (await fetch(src.photo)).blob();
+      photos = [await addPhotoFile(new File([blob], 'shared.jpg', { type: blob.type || 'image/jpeg' }))];
+    } catch { /* keep the spot even if the photo can't be read */ }
+  }
+  const id = uid();
+  const pick = ['events', 'coastal', 'tide', 'tideAccess', 'accessPct', 'accessBuffer', 'facing', 'hikeMin', 'hikeKm', 'difficulty', 'fogMode', 'notes'];
+  const spot = { id, name: cp.spot_name, lat: cp.lat, lon: cp.lon, events: ['sunrise', 'sunset'], coastal: false, tide: 'any', driveMin: '', facing: '', notes: '', photos, hunts: src.hunts?.length ? src.hunts : [cp.hunt || 'colour'], fogMode: 'in', sharedFrom: cp.display_name };
+  for (const k of pick) if (src[k] !== undefined) spot[k] = src[k];
+  update(st => st.spots.push(spot));
+  return id;
 }
 
 function crewPanel() {
@@ -1236,7 +1386,11 @@ function crewPanel() {
       <div class="ev-sub"><span><strong>${esc(fmtDay(first.day_t ?? first.t, first.offset_s))}, ${esc(TYPE_NAME[first.type] || first.type)} ${fmtTime(first.t, first.offset_s)}</strong></span>${scores.length ? `<span>Score ${Math.max(...scores)}</span>` : ''}</div>
       <p class="crew-people">${esc(people.join(', '))}</p>
       ${notes}
-      ${mine ? '<p class="small caramel">You\'re in</p>' : `<div class="row"><button class="btn" data-join="${first.id}">I'm in</button></div>`}
+      <div class="row">
+        <button class="btn ${mine ? '' : 'primary'}" data-view-spot="${first.id}">${first.spot?.photo ? 'View spot' : 'View spot and forecast'}</button>
+        ${mine ? '<span class="small caramel crew-in">You\'re in</span>' : `<button class="btn" data-join="${first.id}">I'm in</button>`}
+      </div>
+      ${mySpotNear(first.lat, first.lon) ? '' : '<p class="small muted">Not in your spots yet. Open it to save a copy.</p>'}
     </div>`;
   };
   return `<section class="panel">
@@ -1248,6 +1402,8 @@ function crewPanel() {
         <div class="crew-code"><span class="num">${esc(c.invite_code)}</span><button class="btn ghost small-btn" data-invite="${c.id}">Invite</button></div>
       </div>`;
     }).join('')}
+    <label class="switch-row"><span><strong>Share my plans automatically</strong><small>Every shoot you plan is shared with your crew, and they get a notification.</small></span>
+      <input type="checkbox" id="autoShare" role="switch" ${S().settings.crewAutoShare !== false ? 'checked' : ''}></label>
     <h3>Who's going where</h3>
     ${groups.length ? groups.map(groupRow).join('') : '<p class="small muted">No crew plans yet. Share one of yours from Upcoming below.</p>'}
     <div class="row"><button class="btn ghost small-btn" id="crewMore">Join or make another crew</button>${crewState.crews.length ? `<button class="btn ghost small-btn" id="crewLeave">Leave a crew</button>` : ''}</div>
@@ -1279,6 +1435,9 @@ function wireCrewPanel(v) {
     } catch { /* cancelled */ }
   });
   $$('[data-join]', v).forEach(b => b.onclick = () => { b.disabled = true; joinCrewPlan(b.dataset.join); });
+  $$('[data-view-spot]', v).forEach(b => b.onclick = () => openSharedSpot(b.dataset.viewSpot));
+  const as = $('#autoShare', v);
+  if (as) as.onchange = () => { update(s2 => { s2.settings.crewAutoShare = as.checked; }); toast(as.checked ? 'New plans will be shared with your crew.' : 'New plans stay private until you share them.'); };
   const more = $('#crewMore', v);
   if (more) more.onclick = () => { openSheet(`<h2>Another crew</h2>
     <form class="form" id="crewCreate"><div class="two"><label>Crew name<input name="name" maxlength="60" required></label><label>Your name<input name="me" maxlength="40" required value="${esc(myNameIn(crewState.crews[0] || {}))}"></label></div><button class="btn primary" type="submit">Create a crew</button></form>
@@ -3336,6 +3495,7 @@ async function renderAlerts() {
         <span class="slider-foot" id="thPreview">${esc(thPreview(a.threshold))}</span>
       </label>
       <label class="check"><input type="checkbox" name="confident" ${a.confident !== false ? 'checked' : ''}> Skip colour alerts when the weather models disagree (fewer false alarms)</label>
+      <label class="check"><input type="checkbox" name="crew" ${a.crew !== false ? 'checked' : ''}> Tell me when someone in my crew plans a shoot</label>
       <label class="check"><input type="checkbox" name="calledOff" ${a.calledOff ? 'checked' : ''}> Tell me if a session I was alerted about falls through</label>
       <label class="check"><input type="checkbox" name="digest" ${a.digest ? 'checked' : ''}> Weekly digest of the best 3 sessions, every
         <select name="digestDay" aria-label="Digest day">${DAYS.map((d, i) => opt(i, a.digestDay, d)).join('')}</select>
@@ -3393,7 +3553,7 @@ async function renderAlerts() {
     update(s => {
       s.settings.alerts = {
         go: !!f.get('go'), threshold: parseInt(f.get('threshold'), 10),
-        calledOff: !!f.get('calledOff'), confident: !!f.get('confident'),
+        calledOff: !!f.get('calledOff'), confident: !!f.get('confident'), crew: !!f.get('crew'),
         digest: !!f.get('digest'), digestDay: parseInt(f.get('digestDay'), 10), digestHour: parseInt(f.get('digestHour'), 10),
         quietStart: qs < 0 ? 0 : qs, quietEnd: qs < 0 ? 0 : qe,
       };
@@ -3850,6 +4010,22 @@ function openRecoverySheet() {
   };
 }
 
+async function openLink(hash) {
+  const m = /^#crew(?:-([0-9a-f-]{8,}))?$/i.exec(hash || '');
+  if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  closeWelcome(false);
+  plansView = 'crew';
+  setTab('plans');
+  if (!m[1]) return;
+  if (!crewState.loaded || !crewState.plans.some(x => x.id === m[1])) { crewState.loaded = false; await loadCrew(); }
+  openSharedSpot(m[1]);
+}
+navigator.serviceWorker?.addEventListener('message', ev => {
+  if (ev.data?.type === 'open') openLink(new URL(ev.data.url).hash);
+});
+window.addEventListener('hashchange', () => openLink(location.hash));
+
 function backfillRatings() {
   const st = S();
   const linked = new Set(st.keepers.map(k => k.planId).filter(Boolean));
@@ -3874,7 +4050,10 @@ loadAllPhotos().finally(() => {
     if (!$('#sheet').classList.contains('hidden')) return;
     render();
   })
-    .then(() => loadCrew()).then(() => { if (['forecast', 'plans', 'spots'].includes(tab) && $('#sheet').classList.contains('hidden')) render(); })
+    .then(() => loadCrew()).then(() => {
+      if (location.hash.startsWith('#crew')) return openLink(location.hash);
+      if (['forecast', 'plans', 'spots'].includes(tab) && $('#sheet').classList.contains('hidden')) render();
+    })
     .catch(() => {});
   let wasSignedIn = !!currentUser();
   onSyncStatus(st => {

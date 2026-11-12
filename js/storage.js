@@ -12,9 +12,10 @@ const DEFAULTS = {
     claudeKey: '',
     claudeModel: 'claude-sonnet-5-5',
     gearAlways: [],           // You → My kit
+    crewAutoShare: true,      // Plans → Crew: share every new plan with your crews
     textSize: 'standard',     // You → Display (this device only, not synced)
     motion: 'full',           // You → Display: 'full' or 'reduced' (this device only)
-    alerts: { go: true, threshold: 80, confident: true, calledOff: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 },
+    alerts: { go: true, threshold: 80, confident: true, calledOff: true, crew: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 },
   },
   spots: [],                  // { id, name, lat, lon, events[], coastal, tide, driveMin, facing, notes }
   keepers: [],                // { id, label: keeper|dud, source, date(ms), lat, lon, spotName, features[], thumb }
@@ -24,7 +25,7 @@ const DEFAULTS = {
 
 export const COLLECTIONS = ['spots', 'plans', 'keepers'];
 // Settings that follow you between devices. The Claude key never leaves the device.
-export const syncedSettings = s => ({ home: s.home, driveSpeedKmh: s.driveSpeedKmh, arriveBeforeMin: s.arriveBeforeMin, claudeModel: s.claudeModel, alerts: s.alerts, gearAlways: s.gearAlways });
+export const syncedSettings = s => ({ home: s.home, driveSpeedKmh: s.driveSpeedKmh, arriveBeforeMin: s.arriveBeforeMin, claudeModel: s.claudeModel, alerts: s.alerts, gearAlways: s.gearAlways, crewAutoShare: s.crewAutoShare });
 
 const clone = o => JSON.parse(JSON.stringify(o));
 

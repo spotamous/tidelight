@@ -3,7 +3,7 @@
 // - Forecast, tide and aurora data: network first, falling back to the last saved copy.
 // - Map tiles you've viewed are kept for offline use; live radar is never cached.
 // Bump VERSION with each release (matches APP_VERSION in js/app.js).
-const VERSION = '5.2';
+const VERSION = '5.3';
 const SHELL = `tidelight-shell-${VERSION}`;
 const DATA = 'tidelight-data';
 const TILES = 'tidelight-tiles';
@@ -96,7 +96,13 @@ self.addEventListener('notificationclick', event => {
   const target = new URL(event.notification.data?.url || './', self.registration.scope).href;
   event.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const w of wins) { if (w.url.startsWith(self.registration.scope)) { await w.focus(); return; } }
+    for (const w of wins) {
+      if (w.url.startsWith(self.registration.scope)) {
+        await w.focus();
+        if (target.includes('#')) w.postMessage({ type: 'open', url: target });   // e.g. a crewmate's spot
+        return;
+      }
+    }
     await self.clients.openWindow(target);
   })());
 });
