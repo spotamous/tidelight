@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=5.3';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=5.3';
-import { baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=5.3';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=5.3';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=5.3';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=5.3';
-import { gearFor } from './gear.js?v=5.3';
-import { VAPID_PUBLIC_KEY } from './config.js?v=5.3';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=5.3';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=5.3';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=5.4';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=5.4';
+import { baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=5.4';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=5.4';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=5.4';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=5.4';
+import { gearFor } from './gear.js?v=5.4';
+import { VAPID_PUBLIC_KEY } from './config.js?v=5.4';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=5.4';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=5.4';
 
-export const APP_VERSION = '5.3';
+export const APP_VERSION = '5.4';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -408,32 +408,42 @@ function runCounts(root) {
 
 // The sky over the band, from the selected spot's hourly forecast: cloud drifts where there's cloud
 // (denser where it's overcast), rain falls in the hours rain is likely, stars show in clear dark hours.
+// The sky over the band, from the selected spot's hourly forecast: cumulus drifts where there's cloud
+// (thicker where it's overcast, dimmer after dark), dark rain cloud with falling drops where rain is
+// likely (a denser second layer for heavy rain), and stars in clear dark hours.
 function bandSky(e, w0, marks) {
   const data = e && forecasts[e.spot.id];
   if (!data) return '';
   const cl = x => Math.max(0, Math.min(1, x));
-  const cloudStops = [], rainStops = [], clearDark = [];
-  let anyCloud = false, anyRain = false;
+  const cloudStops = [], rainStops = [], heavyStops = [], clearDark = [];
+  let anyCloud = false, anyRain = false, anyHeavy = false;
   for (let h = 0; h <= 24; h++) {
     const t = w0 + h * 3600, i = nearestIndex(data.hours, t), hr = i >= 0 ? data.hours[i] : null;
     const c = hr ? (hr.total ?? Math.max(hr.low ?? 0, hr.mid ?? 0, hr.high ?? 0)) : 0;
-    const ca = cl((c - 10) / 90) * 0.9, ra = hr ? cl(((hr.pp ?? 0) - 35) / 45) : 0;
+    const ph = phaseAt(marks, t);
+    const dim = ph === 'dark' ? 0.4 : ph === 'twilight' ? 0.6 : ph === 'blue hour' ? 0.8 : 1;   // cloud looks darker after sunset
+    const ra = hr ? cl(((hr.pp ?? 0) - 35) / 40) : 0;
+    const ha = hr ? cl(((hr.precip ?? 0) - 0.8) / 1.7) * ra : 0;
+    const ca = cl((c - 10) / 80) * dim * (1 - 0.6 * ra);   // rain hours show the dark rain cloud instead
     if (ca > 0.08) anyCloud = true;
     if (ra > 0.05) anyRain = true;
+    if (ha > 0.05) anyHeavy = true;
     const x = ((h / 24) * 100).toFixed(1);
     cloudStops.push(`rgba(0,0,0,${ca.toFixed(2)}) ${x}%`);
     rainStops.push(`rgba(0,0,0,${ra.toFixed(2)}) ${x}%`);
+    heavyStops.push(`rgba(0,0,0,${ha.toFixed(2)}) ${x}%`);
     if (h < 24 && hr && c < 35 && /dark|twilight/.test(phaseAt(marks, t + 1800))) clearDark.push(h);
   }
   const mask = stops => { const g = `linear-gradient(to right, ${stops.join(', ')})`; return `-webkit-mask-image:${g}; mask-image:${g}`; };
-  // A few stars per clear dark hour, placed the same way each time for a given day.
   let seed = Math.floor(w0 / 86400);
   const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
   const stars = clearDark.flatMap(h => [0, 1].map(() => `<i class="star" style="left:${(((h + rnd()) / 24) * 100).toFixed(1)}%; top:${(12 + rnd() * 70).toFixed(0)}%; animation-delay:${(rnd() * 4).toFixed(1)}s"></i>`)).slice(0, 18).join('');
+  bandSky.last = { cloud: anyCloud, rain: anyRain };
   return `<div class="band-sky" aria-hidden="true">
       ${stars}
-      ${anyCloud ? `<div class="sky-clouds" style="${mask(cloudStops)}"><i></i></div>` : ''}
-      ${anyRain ? `<div class="sky-rain" style="${mask(rainStops)}"><i></i></div>` : ''}
+      ${anyCloud ? `<div class="sky-clouds" style="${mask(cloudStops)}"><i class="far"></i><i class="near"></i></div>` : ''}
+      ${anyRain ? `<div class="sky-rain" style="${mask(rainStops)}"><i class="drops-far"></i><i class="drops-near"></i><i class="storm"></i></div>` : ''}
+      ${anyHeavy ? `<div class="sky-heavy" style="${mask(heavyStops)}"><i class="drops-near"></i></div>` : ''}
     </div>`;
 }
 
@@ -861,7 +871,7 @@ async function renderForecast(v) {
       </div>
       <div class="band-ticks" aria-hidden="true">${ticks}</div>
       <figcaption class="band-key">
-        <span><i style="background:${BAND.blue}"></i>Blue hour</span><span><i style="background:${BAND.golden}"></i>Golden hour</span><span><i style="background:${BAND.day}"></i>Daylight</span><span><i style="background:${BAND.night}; outline:1px solid var(--line)"></i>Dark</span>
+        <span><i style="background:${BAND.blue}"></i>Blue hour</span><span><i style="background:${BAND.golden}"></i>Golden hour</span><span><i style="background:${BAND.day}"></i>Daylight</span>${bandSky.last?.cloud ? '<span class="key-icon-wrap"><b class="key-icon sky-key-cloud" aria-hidden="true"></b>Cloud</span>' : ''}${bandSky.last?.rain ? '<span class="key-icon-wrap"><b class="key-icon sky-key-rain" aria-hidden="true"></b>Rain likely</span>' : ''}<span><i style="background:${BAND.night}; outline:1px solid var(--line)"></i>Dark</span>
       </figcaption>
       ${sel && forecasts[sel.spot.id] ? `<p class="band-sky-note">Cloud, rain and clear night sky shown for ${esc(sel.spot.name)}. Drag along the band to see any hour.</p>` : ''}
     </figure>
