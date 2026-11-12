@@ -968,3 +968,90 @@ a.link-btn { text-decoration: none; display: inline-block; }
 .wl-tips { list-style: none; padding: 0; margin: 18px 0 6px; display: grid; gap: 0; border-top: 1px solid var(--line); }
 .wl-tips li { padding: 14px 0; border-bottom: 1px solid var(--line); font: 400 .98rem/1.5 var(--sans); }
 #replayWelcome { margin-top: 10px; }
+
+/* =================== v4.9: polish pass =================== */
+/* ---- Text size: everything is sized in rem, so the root scales it all ---- */
+body { font-size: 1rem; }
+html[data-text="large"] { font-size: 112.5%; }
+html[data-text="larger"] { font-size: 125%; }
+.size-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 6px; }
+.size-opt { display: grid; justify-items: center; gap: 6px; padding: 16px 8px; border-radius: 12px; border: 1px solid var(--line); background: none; color: var(--text); font: 600 .86rem var(--sans); cursor: pointer; }
+.size-opt.on { border-color: var(--caramel); background: var(--surface); }
+.size-a { font-family: var(--serif); line-height: 1; }
+.size-a.size-standard { font-size: 24px; }
+.size-a.size-large { font-size: 30px; }
+.size-a.size-larger { font-size: 36px; }
+
+/* ---- Header: a labelled Now button ---- */
+.now-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px 0 11px; border-radius: 999px;
+  border: 1px solid var(--line); background: transparent; color: var(--text); font: 600 .84rem var(--sans); cursor: pointer;
+}
+.top-actions { display: flex; gap: 8px; align-items: center; }
+@media (max-width: 380px) { .brand .app-name { display: none; } }
+
+/* ---- Loading placeholders ---- */
+.sk-wrap { display: grid; gap: 14px; margin-top: 6px; }
+.sk { border-radius: 10px; background: var(--surface); animation: sk-pulse 1.4s ease-in-out infinite; }
+@keyframes sk-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+.sk-title { height: 44px; width: 68%; }
+.sk-line { height: 18px; width: 88%; }
+.sk-band { height: 76px; border-radius: 14px; }
+.sk-panel { height: 230px; border-radius: 16px; }
+.sk-row { height: 52px; }
+.sk-card { height: 98px; border-radius: 12px; }
+.sk-grid { height: 150px; }
+.sk-status { font: 400 .86rem var(--sans); color: var(--muted); margin: 14px 0 0; }
+
+/* ---- Wide screens: a navigation rail and room to breathe ---- */
+@media (min-width: 1000px) {
+  body { padding-bottom: 0; padding-left: 96px; }
+  .topbar { margin-left: -96px; padding-left: 28px; padding-right: 28px; }
+  .tabbar {
+    left: 0; right: auto; top: 65px; bottom: 0; width: 96px;
+    grid-template-columns: 1fr; grid-auto-rows: min-content; align-content: start; gap: 6px;
+    padding: 20px 8px; border-top: 0; border-right: 1px solid var(--line);
+  }
+  .tabbar button { padding: 12px 0; border-radius: 12px; }
+  .tabbar button:hover { background: var(--surface); }
+  main { max-width: 1080px; padding: 28px 36px 48px; }
+  main[data-view="plans"], main[data-view="tools"], main[data-view="you"] { max-width: 760px; }
+
+  /* Home: the day on the left, the selected session beside it */
+  .home-grid {
+    display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); column-gap: 44px; align-items: start;
+    grid-template-areas: "head detail" "band detail" "others detail" "foot detail";
+    grid-template-rows: auto auto auto 1fr;
+  }
+  .home-grid > .day-head-v2 { grid-area: head; }
+  .home-grid > .band-wrap { grid-area: band; }
+  .home-grid > .others { grid-area: others; }
+  .home-grid > .foot-note { grid-area: foot; }
+  .home-grid > .detail { grid-area: detail; margin-top: 6px; position: sticky; top: 92px; max-height: calc(100vh - 116px); overflow-y: auto; }
+  .day-pills { margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0; }
+
+  /* Spots in two columns */
+  #spotCards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  #spotCards .spot-card { margin-bottom: 0; }
+  #spotCards > p, #spotCards > .sk-wrap, #spotCards > .sk-status { grid-column: 1 / -1; }
+  main[data-view="spots"] .search, main[data-view="spots"] .spot-actions { max-width: 640px; }
+
+  /* Pop-ups become centred dialogs */
+  .sheet { align-items: center; padding: 24px; }
+  .sheet-panel { border-radius: 16px; border: 1px solid var(--line); max-height: 86vh; }
+  .sheet-actions { border-radius: 0 0 16px 16px; }
+  #toast { top: 84px; }
+}
+/* Polish follow-ups */
+.sk { background: #1B1F1F; }
+.touch-only { display: none; }
+@media (hover: none) { .touch-only { display: inline; } }
+.brand { gap: 10px; }
+.brand img { height: 34px; }
+.brand .app-name { letter-spacing: .18em; padding-left: 10px; }
+.now-btn { padding: 0 12px 0 10px; font-size: .8rem; gap: 5px; }
+.now-btn svg { width: 18px; height: 18px; }
+html[data-text="larger"] .brand .app-name { display: none; }
+html[data-text="larger"] .day-title { font-size: 2.1rem; }
+html[data-text="larger"] .day-title span { font-size: 1.15rem; }

@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.8';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.8';
-import { baseScore, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.8';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.8';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=4.8';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.8';
-import { gearFor } from './gear.js?v=4.8';
-import { VAPID_PUBLIC_KEY } from './config.js?v=4.8';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.8';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.8';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=4.9';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=4.9';
+import { baseScore, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=4.9';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=4.9';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=4.9';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=4.9';
+import { gearFor } from './gear.js?v=4.9';
+import { VAPID_PUBLIC_KEY } from './config.js?v=4.9';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=4.9';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=4.9';
 
-export const APP_VERSION = '4.8';
+export const APP_VERSION = '4.9';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -250,6 +250,7 @@ function render() {
   clearInterval(plansTimer);
   $$('.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   const v = $('#view');
+  v.dataset.view = tab;   // lets wide screens size each page appropriately
   ({ forecast: renderForecast, spots: renderSpots, plans: renderPlans, tools: renderTools, you: renderYou })[tab](v);
 }
 
@@ -371,6 +372,16 @@ function sessionWhen(e) {
   return e.type === 'night' ? `best ${fmtTime(e.t, o)}` : fmtTime(e.t, o);
 }
 
+// Placeholder shapes in the layout of the page that's loading, with a plain status line for screen readers.
+function skeleton(kind, status) {
+  const shapes = {
+    home: '<div class="sk sk-title"></div><div class="sk sk-line"></div><div class="sk sk-band"></div><div class="sk sk-panel"></div><div class="sk sk-row"></div><div class="sk sk-row"></div>',
+    cards: '<div class="sk sk-card"></div><div class="sk sk-card"></div><div class="sk sk-card"></div>',
+    week: '<div class="sk sk-line"></div><div class="sk sk-grid"></div>',
+  }[kind];
+  return `<div class="sk-wrap" aria-hidden="true">${shapes}</div><p class="sk-status" role="status">${esc(status)}</p>`;
+}
+
 let homeSel = null;   // the session shown in the detail panel
 let bandRevealed = false;   // the band's reveal plays once per app open
 
@@ -453,7 +464,7 @@ function sessionDetail(e, isBest = false, nav = null) {
     </div>
     ${nav && nav.total > 1 ? `<nav class="detail-nav" aria-label="Sessions this day">
       <button class="icon-btn" data-step="-1" aria-label="Previous session" ${nav.index === 0 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
-      <span>Session ${nav.index + 1} of ${nav.total}. Swipe to move between them.</span>
+      <span>Session ${nav.index + 1} of ${nav.total}<span class="touch-only">. Swipe to move between them.</span></span>
       <button class="icon-btn" data-step="1" aria-label="Next session" ${nav.index === nav.total - 1 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
     </nav>` : ''}
   </article>`;
@@ -576,7 +587,7 @@ window.addEventListener('resize', () => { if (tab === 'forecast') layoutBandMark
 async function renderForecast(v) {
   const st = S();
   if (!st.spots.length) return emptySpots(v);
-  v.innerHTML = `<p class="loading-plain">Reading the sky for ${st.spots.length} spot${st.spots.length > 1 ? 's' : ''}…</p>`;
+  v.innerHTML = `${dayPills(0)}${skeleton('home', `Reading the sky for ${st.spots.length} spot${st.spots.length > 1 ? 's' : ''}…`)}`;
   const failed = await ensureForecasts();
   if (tab !== 'forecast') return;
   const evs = next3Days();
@@ -621,6 +632,7 @@ async function renderForecast(v) {
   v.innerHTML = `
     ${dayPills(offset)}
     ${forecastAlerts(st, failed)}
+    <div class="home-grid">
     <header class="day-head-v2">
       <h1 class="day-title">${homeDay === 0 ? 'Today' : homeDay === 1 ? 'Tomorrow' : esc(weekday)}<span>, ${esc(homeDay > 1 ? dateLine : `${weekday} ${dateLine}`)}</span></h1>
       <p class="day-lede">${best ? `${esc(huntPhrase(best))} at ${esc(best.spot.name)}, ${TYPE_NAME[best.type].toLowerCase()} ${sessionWhen(best)}.` : 'No sessions left for this day. Try another day.'}</p>
@@ -646,7 +658,8 @@ async function renderForecast(v) {
         <span class="other-score num" style="--fill:${bandFill(e.score)}; --ink:${bandInk(e.score)}">${e.score}</span>
       </button>`).join('')}
     </section>` : ''}
-    <p class="small muted foot-note">Scores are estimates from forecast data. Check official warnings before heading out.</p>`;
+    <p class="small muted foot-note">Scores are estimates from forecast data. Check official warnings before heading out.</p>
+    </div>`;
 
   bandRevealed = true;
   slideFrom = '';
@@ -670,7 +683,7 @@ async function renderForecast(v) {
   $$('[data-step]', v).forEach(b => b.onclick = () => step(Number(b.dataset.step)));
   $$('[data-sel]', v).forEach(b => b.onclick = () => {
     homeSel = b.dataset.sel;
-    renderForecast(v).then(() => { const d = $('.detail'); if (d && b.classList.contains('other-row')) d.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); });
+    renderForecast(v).then(() => { const d = $('.detail'); if (d && b.classList.contains('other-row') && !matchMedia('(min-width: 1000px)').matches) d.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); });
   });
   $$('[data-plan]', v).forEach(b => b.onclick = () => {
     const e = eventIndex.get(b.dataset.plan);
@@ -1368,7 +1381,7 @@ async function renderSpots(v) {
     <div class="day-pills filter" role="tablist" aria-label="Filter by session">
       ${['all', ...SESSION_TYPES].map(f => `<button role="tab" aria-selected="${spotFilter === f}" class="${spotFilter === f ? 'on' : ''}" data-filter="${f}">${f === 'all' ? 'All' : TYPE_NAME[f]}</button>`).join('')}
     </div>
-    <section id="spotCards">${st.spots.length ? '<p class="loading">Scoring your spots…</p>' : '<p class="muted">No spots yet. Search above, tap the map, or add where you are.</p>'}</section>`;
+    <section id="spotCards">${st.spots.length ? skeleton('cards', 'Scoring your spots…') : '<p class="muted">No spots yet. Search above, tap the map, or add where you are.</p>'}</section>`;
 
   $('#addSpot').onclick = () => openSpotForm();
   found = null;
@@ -1660,7 +1673,7 @@ function openSpotForm(prefill = {}, existing = null) {
 async function openSpotDetail(id) {
   const s = S().spots.find(x => x.id === id);
   if (!s) return;
-  openSheet(`<h2 class="bf-name">${esc(s.name)}</h2><p class="loading-plain">Loading the week…</p>`);
+  openSheet(`<h2 class="bf-name">${esc(s.name)}</h2>${skeleton('week', 'Loading the week…')}`);
   try {
     if (!forecasts[id]) forecasts[id] = await fetchSpotForecast(s);
   } catch (e) {
@@ -2517,13 +2530,19 @@ function openLightningTimer() {
 /* ================= you tab: your light profile, account, alerts and setup ================= */
 let youPage = null;   // null shows the list; otherwise profile | recreate | account | alerts | home | kit | ai | data
 
+const TEXT_SIZES = { standard: 'Standard', large: 'Large', larger: 'Larger' };
+function applyTextSize() {
+  const size = S().settings.textSize || 'standard';
+  if (size === 'standard') delete document.documentElement.dataset.text; else document.documentElement.dataset.text = size;
+}
+
 const youHead = (title, lede = '') => `<button class="link-btn back" id="youBack">‹ You</button>
     <h1 class="page-title">${title}</h1>${lede ? `<p class="page-lede">${lede}</p>` : ''}`;
 
 function renderYou(v, logLines = []) {
   const st = S(), s = st.settings;
   if (youPage) {
-    ({ profile: pageProfile, recreate: pageRecreate, account: pageAccount, alerts: pageAlerts, home: pageHome, kit: pageKit, ai: pageAI, data: pageData })[youPage](v, logLines);
+    ({ profile: pageProfile, recreate: pageRecreate, account: pageAccount, alerts: pageAlerts, home: pageHome, kit: pageKit, display: pageDisplay, ai: pageAI, data: pageData })[youPage](v, logLines);
     const back = $('#youBack', v);
     if (back) back.onclick = () => { youPage = null; renderYou(v); window.scrollTo(0, 0); };
     return;
@@ -2555,6 +2574,7 @@ function renderYou(v, logLines = []) {
     <div class="you-list">
       ${row('home', 'Home and travel', s.home ? `Home set. Arrive ${s.arriveBeforeMin} min before each session.` : 'Home not set. Needed for leave times.')}
       ${row('kit', 'My kit', kit ? `${kit} item${kit === 1 ? '' : 's'} you always bring.` : 'Nothing added yet.')}
+      ${row('display', 'Text size', `${TEXT_SIZES[s.textSize || 'standard']}.`)}
       ${row('ai', 'AI coach', hasAI(s) ? 'On, using your Claude key.' : 'Off. Optional.')}
       ${row('data', 'Your data', 'Back up, restore or delete.')}
     </div>
@@ -2946,6 +2966,23 @@ function pageKit(v) {
   };
 }
 
+function pageDisplay(v) {
+  const cur = S().settings.textSize || 'standard';
+  v.innerHTML = `
+    ${youHead('Text size', 'Make everything easier to read in the field. This applies to this device only.')}
+    <div class="size-options" role="radiogroup" aria-label="Text size">
+      ${Object.entries(TEXT_SIZES).map(([k, label]) => `<button class="size-opt ${cur === k ? 'on' : ''}" role="radio" aria-checked="${cur === k}" data-size="${k}"><span class="size-a size-${k}">Aa</span><span>${label}</span></button>`).join('')}
+    </div>
+    <h3 class="sec">Preview</h3>
+    <p class="bf-verdict" style="margin-top:0">Worth the alarm. Clear horizon towards the sunrise.</p>
+    <p class="you-copy">Leave at 4:20am, a 47 minute drive and a 25 minute walk in. Low cloud 8%, wind 6 km/h.</p>`;
+  $$('[data-size]', v).forEach(b => b.onclick = () => {
+    update(s2 => { s2.settings.textSize = b.dataset.size; });
+    applyTextSize();
+    renderYou(v);
+  });
+}
+
 function pageAI(v) {
   const s = S().settings;
   v.innerHTML = `
@@ -3292,6 +3329,7 @@ function backfillRatings() {
   });
 }
 
+applyTextSize();
 loadAllPhotos().finally(() => {
   backfillRatings();
   render();
