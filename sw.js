@@ -3,7 +3,7 @@
 // - Forecast, tide and aurora data: network first, falling back to the last saved copy.
 // - Map tiles you've viewed are kept for offline use; live radar is never cached.
 // Bump VERSION with each release (matches APP_VERSION in js/app.js).
-const VERSION = '5.7';
+const VERSION = '5.9';
 const SHELL = `tidelight-shell-${VERSION}`;
 const DATA = 'tidelight-data';
 const TILES = 'tidelight-tiles';
@@ -27,17 +27,19 @@ self.addEventListener('activate', event => {
 
 const matches = (host, list) => list.some(h => host === h || host.endsWith('.' + h));
 
-async function networkFirst(req, cacheName) {
+// Network first, but never wait forever: if a saved copy exists and the network hasn't answered
+// within `timeout` ms, use the saved copy (the fresh response still updates the cache when it arrives).
+async function networkFirst(req, cacheName, timeout = 0) {
   const cache = await caches.open(cacheName);
-  try {
-    const res = await fetch(req);
+  const net = fetch(req).then(res => {
     if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone());
     return res;
-  } catch (e) {
-    const hit = await cache.match(req);
-    if (hit) return hit;
-    throw e;
-  }
+  });
+  const hit = await cache.match(req);
+  if (!hit) return net;                       // nothing saved yet: the page's own time limit applies
+  if (!timeout) { try { return await net; } catch { return hit; } }
+  const slow = new Promise(resolve => setTimeout(() => resolve(null), timeout));
+  try { return (await Promise.race([net, slow])) || hit; } catch { return hit; }
 }
 
 async function cacheFirst(req, cacheName, trim) {
@@ -73,7 +75,7 @@ self.addEventListener('fetch', event => {
     }
     return;
   }
-  if (matches(url.hostname, DATA_HOSTS)) { event.respondWith(networkFirst(req, DATA)); return; }
+  if (matches(url.hostname, DATA_HOSTS)) { event.respondWith(networkFirst(req, DATA, 8000)); return; }
   if (url.hostname === 'tile.openstreetmap.org') { event.respondWith(cacheFirst(req, TILES, MAX_TILES)); return; }
   if (matches(url.hostname, LIB_HOSTS)) { event.respondWith(cacheFirst(req, SHELL)); return; }
 });

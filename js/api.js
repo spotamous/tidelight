@@ -1,6 +1,6 @@
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
-import { nearestIndex, tideInfo } from './scoring.js?v=5.7';
-import { huntsOf, DAY_HUNTS } from './hunts.js?v=5.7';
+import { nearestIndex, tideInfo } from './scoring.js?v=5.9';
+import { huntsOf, DAY_HUNTS } from './hunts.js?v=5.9';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
@@ -8,8 +8,15 @@ const ARCHIVE = 'https://archive-api.open-meteo.com/v1/archive';
 const TTL = 30 * 60 * 1000;
 const cache = new Map();
 
-async function getJSON(url) {
-  const r = await fetch(url);
+class SlowError extends Error {}
+// Every request has a time limit, so a stalled connection can never freeze the app.
+async function getJSON(url, ms = 15000) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  let r;
+  try { r = await fetch(url, { signal: ctl.signal }); }
+  catch (e) { throw ctl.signal.aborted ? new SlowError('The weather service took too long to answer') : new Error('No connection to the weather service'); }
+  finally { clearTimeout(timer); }
   if (!r.ok) {
     let reason = '';
     try { reason = (await r.json()).reason || ''; } catch {}
@@ -33,14 +40,16 @@ export async function fetchSpotForecast(spot) {
   let wx;
   try {
     wx = await getJSON(`${FORECAST}?${qs({ ...common, hourly: `${BASE},${FOG_STORM}`, daily: 'sunrise,sunset' })}`);
-  } catch {
+  } catch (e) {
+    if (e instanceof SlowError || /connection/i.test(e.message)) throw e;   // only retry with fewer variables if the service refused them
     // Some variables aren't offered for every region/model; fall back to the core set.
     wx = await getJSON(`${FORECAST}?${qs({ ...common, hourly: `${BASE},relative_humidity_2m,dew_point_2m,cape,wind_gusts_10m,weather_code`, daily: 'sunrise,sunset' })}`)
       .catch(() => getJSON(`${FORECAST}?${qs({ ...common, hourly: BASE, daily: 'sunrise,sunset' })}`));
   }
 
   const getMarine = async () => {
-    const mr = await getJSON(`${MARINE}?${qs({ ...common, hourly: 'wave_height,swell_wave_height,sea_level_height_msl' })}`);
+    if (!spot.coastal) return null;   // inland spots don't need tide or waves
+    const mr = await getJSON(`${MARINE}?${qs({ ...common, hourly: 'wave_height,swell_wave_height,sea_level_height_msl' })}`, 10000);
     const m = mr.hourly || {};
     const hasAny = (m.wave_height || []).some(v => v != null) || (m.sea_level_height_msl || []).some(v => v != null);
     return hasAny ? mr : null;
@@ -51,7 +60,9 @@ export async function fetchSpotForecast(spot) {
     const j = await getJSON(`${FORECAST}?${qs({ latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime', daily: 'precipitation_sum', past_days: 14, forecast_days: 7 })}`);
     return (j.daily?.time || []).map((t, i) => ({ t, mm: j.daily.precipitation_sum?.[i] ?? 0 }));
   };
-  const [mr, hz, md, rd] = await Promise.allSettled([getMarine(), fetchHorizon(spot), fetchModels(spot), getRainDaily()]);
+  // The horizon and model-agreement checks only matter for sunrise and sunset colour.
+  const wantsColour = huntsOf(spot).includes('colour') && (spot.events || []).length > 0;
+  const [mr, hz, md, rd] = await Promise.allSettled([getMarine(), wantsColour ? fetchHorizon(spot) : null, wantsColour ? fetchModels(spot) : null, getRainDaily()]);
   const marine = mr.status === 'fulfilled' ? mr.value : null;
 
   const data = normalize(wx, marine);
@@ -82,7 +93,7 @@ async function fetchHorizon(spot) {
   const j = await getJSON(`${FORECAST}?${qs({
     latitude: pts.map(p => p.lat.toFixed(3)).join(','), longitude: pts.map(p => p.lon.toFixed(3)).join(','),
     hourly: 'cloud_cover_low,cloud_cover_mid,cloud_cover_high', timezone: 'auto', timeformat: 'unixtime', forecast_days: 7, past_days: 2,
-  })}`);
+  })}`, 10000);
   const arr = Array.isArray(j) ? j : [j];
   const out = { sunrise: { az: dirs.sunrise, points: [] }, sunset: { az: dirs.sunset, points: [] } };
   arr.forEach((r, i) => {
@@ -101,12 +112,12 @@ async function fetchModels(spot) {
       const j = await getJSON(`${FORECAST}?${qs({
         latitude: spot.lat, longitude: spot.lon, models: ms.join(','), hourly: 'cloud_cover_low,cloud_cover_mid,cloud_cover_high',
         timezone: 'auto', timeformat: 'unixtime', forecast_days: 7, past_days: 2,
-      })}`);
+      })}`, 10000);
       const H = j.hourly || {};
       const models = ms.map(m => ({ model: m, low: H[`cloud_cover_low_${m}`], mid: H[`cloud_cover_mid_${m}`], high: H[`cloud_cover_high_${m}`] }))
         .filter(x => Array.isArray(x.low) && x.low.some(v => v != null));
       if (models.length >= 2) return { times: H.time, models };
-    } catch { /* try the smaller set */ }
+    } catch (e) { if (e instanceof SlowError) return null; /* refused: try the smaller set */ }
   }
   return null;
 }

@@ -1412,3 +1412,23 @@ a.you-row { text-decoration: none; color: var(--text); }
 .dof-bar i { position: absolute; top: 0; bottom: 0; background: rgba(156, 203, 142, .55); border-radius: 999px; transition: left .12s ease, width .12s ease; }
 .dof-bar b { position: absolute; top: -2px; bottom: -2px; width: 3px; margin-left: -1.5px; background: var(--caramel); }
 .dof-read { font: 600 .92rem/1.45 var(--sans); margin: 10px 0 4px; }
+.load-error h2 { font: 400 1.9rem/1.1 var(--serif); }
+.load-error p { max-width: 32em; }
+
+/* =================== v5.9: score tuning =================== */
+.tune-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 8px; }
+.tune-compare > div { display: grid; gap: 4px; padding: 14px; border-radius: 12px; background: var(--surface-2); }
+.tune-compare .tuned { background: rgba(217, 160, 102, .14); box-shadow: inset 0 0 0 1px rgba(217, 160, 102, .45); }
+.tune-k { font: 600 .82rem var(--sans); color: var(--muted); }
+.tune-compare b { font: 400 2.4rem/1 var(--serif); }
+.tune-compare b small { font-size: 1.1rem; color: var(--muted); }
+.tune-compare .tuned b { color: var(--caramel); }
+.tune-d { font: 400 .76rem/1.4 var(--sans); color: var(--muted); }
+.miss { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.miss-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.miss-name { font: 400 1.2rem var(--serif); }
+.miss-rate { font: 600 .8rem var(--sans); }
+.miss-rate.keeper { color: var(--ok); } .miss-rate.dud { color: var(--danger); } .miss-rate.meh { color: var(--muted); }
+.miss-when, .miss-scores { font: 400 .86rem/1.45 var(--sans); margin: 4px 0 0; color: var(--muted); }
+.miss-scores b { color: var(--text); font-weight: 700; }
+.miss-scores b.tuned { color: var(--caramel); }

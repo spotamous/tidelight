@@ -622,8 +622,12 @@ function baseScore(h, tide, spot, ctx = {}) {
 
   // Upper cloud is the canvas that catches colour. Too little = clean but plain; too much = muted.
   const canvasCover = Math.min(100, 0.7 * mid + 0.9 * high);
-  const canvas = 0.35 + 0.65 * (1 - Math.abs(canvasCover - 50) / 50);
-  if (canvasCover < 15) factors.push({ k: 'neutral', t: 'Mostly clear upper sky: clean light, but little colour in the clouds' });
+  // A spot that shines in clean light (learned from your ratings, or set by you) needs less cloud to score well.
+  // The boost only applies on the clear side of the sky; heavy cloud is judged by the standard rule.
+  const floor = ctx.canvasFloor ?? 0.35;
+  const canvas = canvasCover < 50 ? floor + (1 - floor) * (canvasCover / 50) : 0.35 + 0.65 * (1 - (canvasCover - 50) / 50);
+  if (canvasCover < 15 && floor > 0.35) factors.push({ k: 'good', t: 'Clean light suits this spot: clear-sky sessions here have delivered for you' });
+  else if (canvasCover < 15) factors.push({ k: 'neutral', t: 'Mostly clear upper sky: clean light, but little colour in the clouds' });
   else if (canvasCover <= 75) factors.push({ k: 'good', t: `Good canvas: about ${Math.round(canvasCover)}% mid/high cloud to catch colour` });
   else factors.push({ k: 'bad', t: 'Heavy upper cloud may mute the colour' });
 
@@ -671,7 +675,7 @@ function baseScore(h, tide, spot, ctx = {}) {
   // Each factor as 0–100, for the "why" bars.
   const pct = x => Math.round(clamp(x) * 100);
   const parts = [
-    { label: 'Cloud canvas', value: pct((canvas - 0.35) / 0.65), note: `${Math.round(canvasCover)}% mid/high cloud (best near 50%)` },
+    { label: 'Cloud canvas', value: pct((canvas - 0.35) / 0.65), note: `${Math.round(canvasCover)}% mid/high cloud (best near 50%)${floor > 0.35 ? '; this spot shines in clean light' : ''}` },
     { label: 'Low cloud', value: pct(block), note: `${Math.round(low)}% low cloud overhead` },
   ];
   if (ctx.horizon) parts.push({ label: 'Horizon', value: pct(horizonF), note: `Towards the ${ctx.horizon.kind} (${ctx.horizon.dir})` });
@@ -699,6 +703,79 @@ const avg = arr => arr.length ? arr.reduce((x, y) => x + y, 0) / arr.length : 0;
 const topK = (f, list, k = 3) => list.map(x => similarity(f, x.features)).sort((a, b) => b - a).slice(0, k);
 
 const MIN_KEEPERS = 3;
+
+/* ---------- learning each spot's light from your ratings ----------
+   Feature vector: [low, mid, high, precip/2, wind/40, tide, wave/3, (temp−dew)/10, cape/2500, thunder].
+   Some spots shine in clean, clear light (light on rock, sand or a landform is the picture); others need
+   cloud overhead to catch colour. A spot earns a "clean light" boost only when its clear-sky sessions
+   have actually been keepers, more often than they've been misses. */
+const canvasOf = f => Math.min(100, 0.7 * (f[1] ?? 0) * 100 + 0.9 * (f[2] ?? 0) * 100);
+const isClean = f => canvasOf(f) < 25 && (f[0] ?? 0) < 0.3;
+const isFoggy = f => f.length > 7 && f[7] != null && f[7] < 0.05 && (f[0] ?? 0) >= 0.8;
+const CLEAN_FLOOR = 0.8;
+
+// Ratings that can teach a spot's colour score: sunrise/sunset (or photos), not fog mornings, no duplicates.
+function colourRatings(keepers, spot) {
+  const seen = new Set();
+  return keepers.filter(k => {
+    if (!k.features || !['keeper', 'meh', 'dud'].includes(k.label)) return false;
+    if (k.type && !['sunrise', 'sunset'].includes(k.type)) return false;
+    if (k.hunt && k.hunt !== 'colour') return false;
+    if (isFoggy(k.features)) return false;
+    if (spot) {
+      const near = k.spotId ? k.spotId === spot.id : (k.lat != null ? haversineKm({ lat: k.lat, lon: k.lon }, spot) <= 1 : k.spotName === spot.name);
+      if (!near) return false;
+    }
+    const sig = `${k.spotId || k.spotName}|${k.features.map(x => (x == null ? '' : x.toFixed(3))).join(',')}`;
+    if (seen.has(sig)) return false;
+    seen.add(sig);
+    return true;
+  });
+}
+
+// The colour-score floor for a spot: your own setting wins; otherwise learned from ratings (if learning is on).
+function spotFloor(spot, keepers = [], settings = {}) {
+  if (spot.cleanLight === 'yes') return { floor: CLEAN_FLOOR, source: 'yours' };
+  if (spot.cleanLight === 'no') return { floor: 0.35, source: 'yours' };
+  if (settings.tuning === false) return { floor: 0.35, source: 'off' };
+  const mine = colourRatings(keepers, spot);
+  const k = mine.filter(r => isClean(r.features) && r.label === 'keeper').length;
+  const d = mine.filter(r => isClean(r.features) && r.label !== 'keeper').length;
+  if (k < 2 || k <= d) return { floor: 0.35, source: 'learned', k, d, n: mine.length };
+  return { floor: Math.min(0.85, 0.35 + 0.6 * (k - d) / (k + d + 1)), source: 'learned', k, d, n: mine.length };
+}
+
+// A quick colour score from a saved feature vector (used to compare the standard and tuned rules fairly).
+function colourFromFeatures(f, floor = 0.35) {
+  const low = (f[0] ?? 0) * 100, pp = Math.min(90, (f[3] ?? 0) * 2 * 60), wind = (f[4] ?? 0) * 40;
+  const cc = canvasOf(f);
+  const canvas = cc < 50 ? floor + (1 - floor) * (cc / 50) : 0.35 + 0.65 * (1 - (cc - 50) / 50);
+  return Math.round(100 * canvas * (1 - 0.8 * low / 100) * (1 - 0.6 * clamp(pp / 100)) * (1 - 0.3 * clamp(wind / 60)));
+}
+
+// Fair test: score each rated session with what was learned from all the *other* sessions.
+function tuningReport(keepers, spots, settings = {}) {
+  const band = sc => (sc >= 75 ? 'keeper' : sc >= 50 ? 'meh' : 'dud');
+  const rows = [];
+  for (const sp of spots) for (const r of colourRatings(keepers, sp)) rows.push({ r, sp });
+  const tally = { n: rows.length, std: { right: 0, keepGo: 0, dudGo: 0, dudSkip: 0 }, tuned: { right: 0, keepGo: 0, dudGo: 0, dudSkip: 0 }, keepers: 0, duds: 0, items: [] };
+  for (const { r, sp } of rows) {
+    const others = keepers.filter(k => k !== r);
+    const learned = spotFloor({ ...sp, cleanLight: sp.cleanLight === 'yes' || sp.cleanLight === 'no' ? sp.cleanLight : undefined }, others, settings).floor;
+    const s0 = colourFromFeatures(r.features), s1 = colourFromFeatures(r.features, learned);
+    for (const [key, sc] of [['std', s0], ['tuned', s1]]) {
+      if (band(sc) === r.label) tally[key].right++;
+      if (r.label === 'keeper' && sc >= 75) tally[key].keepGo++;
+      if (r.label === 'dud' && sc >= 75) tally[key].dudGo++;
+      if (r.label === 'dud' && sc < 50) tally[key].dudSkip++;
+    }
+    if (r.label === 'keeper') tally.keepers++;
+    if (r.label === 'dud') tally.duds++;
+    tally.items.push({ rating: r, spot: sp, standard: s0, tuned: s1 });
+  }
+  return tally;
+}
+
 
 function personalScore(f, keepers) {
   const good = keepers.filter(k => k.label === 'keeper' && k.features);
@@ -811,7 +888,7 @@ function evaluateEvent({ spot, data, type, t, keepers, settings }) {
   const h = data.hours[idx];
   const tide = spot.coastal ? tideInfo(data.hours, idx) : null;
   const hz = horizonBlock(data, type, t);
-  const ctx = hz ? { horizon: hz } : {};
+  const ctx = { ...(hz ? { horizon: hz } : {}), canvasFloor: spotFloor(spot, keepers, settings).floor };
   const base = baseScore(h, tide, spot, ctx);
   const confidence = modelConfidence(data, idx, h, tide, spot, ctx);
   if (confidence) {
@@ -988,7 +1065,7 @@ function evaluateDay({ spot, data, d, keepers, settings }) {
   };
 }
 
-return { nearestIndex, tideInfo, accessWindow, FEATURE_NAMES, featureVector, baseScore, similarity, MIN_KEEPERS, personalScore, personalModelSummary, horizonBlock, modelConfidence, HIKE_SPEED, DIFFICULTIES, hikeMinutes, hikeIsEstimate, driveMinutes, evaluateEvent, evaluateSpot, evaluateNight, evaluateDay };
+return { nearestIndex, tideInfo, accessWindow, FEATURE_NAMES, featureVector, baseScore, similarity, MIN_KEEPERS, CLEAN_FLOOR, colourRatings, spotFloor, colourFromFeatures, tuningReport, personalScore, personalModelSummary, horizonBlock, modelConfidence, HIKE_SPEED, DIFFICULTIES, hikeMinutes, hikeIsEstimate, driveMinutes, evaluateEvent, evaluateSpot, evaluateNight, evaluateDay };
 })();
 
 /* ===== js/api.js ===== */
@@ -1002,8 +1079,15 @@ const ARCHIVE = 'https://archive-api.open-meteo.com/v1/archive';
 const TTL = 30 * 60 * 1000;
 const cache = new Map();
 
-async function getJSON(url) {
-  const r = await fetch(url);
+class SlowError extends Error {}
+// Every request has a time limit, so a stalled connection can never freeze the app.
+async function getJSON(url, ms = 15000) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  let r;
+  try { r = await fetch(url, { signal: ctl.signal }); }
+  catch (e) { throw ctl.signal.aborted ? new SlowError('The weather service took too long to answer') : new Error('No connection to the weather service'); }
+  finally { clearTimeout(timer); }
   if (!r.ok) {
     let reason = '';
     try { reason = (await r.json()).reason || ''; } catch {}
@@ -1027,14 +1111,16 @@ async function fetchSpotForecast(spot) {
   let wx;
   try {
     wx = await getJSON(`${FORECAST}?${qs({ ...common, hourly: `${BASE},${FOG_STORM}`, daily: 'sunrise,sunset' })}`);
-  } catch {
+  } catch (e) {
+    if (e instanceof SlowError || /connection/i.test(e.message)) throw e;   // only retry with fewer variables if the service refused them
     // Some variables aren't offered for every region/model; fall back to the core set.
     wx = await getJSON(`${FORECAST}?${qs({ ...common, hourly: `${BASE},relative_humidity_2m,dew_point_2m,cape,wind_gusts_10m,weather_code`, daily: 'sunrise,sunset' })}`)
       .catch(() => getJSON(`${FORECAST}?${qs({ ...common, hourly: BASE, daily: 'sunrise,sunset' })}`));
   }
 
   const getMarine = async () => {
-    const mr = await getJSON(`${MARINE}?${qs({ ...common, hourly: 'wave_height,swell_wave_height,sea_level_height_msl' })}`);
+    if (!spot.coastal) return null;   // inland spots don't need tide or waves
+    const mr = await getJSON(`${MARINE}?${qs({ ...common, hourly: 'wave_height,swell_wave_height,sea_level_height_msl' })}`, 10000);
     const m = mr.hourly || {};
     const hasAny = (m.wave_height || []).some(v => v != null) || (m.sea_level_height_msl || []).some(v => v != null);
     return hasAny ? mr : null;
@@ -1045,7 +1131,9 @@ async function fetchSpotForecast(spot) {
     const j = await getJSON(`${FORECAST}?${qs({ latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime', daily: 'precipitation_sum', past_days: 14, forecast_days: 7 })}`);
     return (j.daily?.time || []).map((t, i) => ({ t, mm: j.daily.precipitation_sum?.[i] ?? 0 }));
   };
-  const [mr, hz, md, rd] = await Promise.allSettled([getMarine(), fetchHorizon(spot), fetchModels(spot), getRainDaily()]);
+  // The horizon and model-agreement checks only matter for sunrise and sunset colour.
+  const wantsColour = huntsOf(spot).includes('colour') && (spot.events || []).length > 0;
+  const [mr, hz, md, rd] = await Promise.allSettled([getMarine(), wantsColour ? fetchHorizon(spot) : null, wantsColour ? fetchModels(spot) : null, getRainDaily()]);
   const marine = mr.status === 'fulfilled' ? mr.value : null;
 
   const data = normalize(wx, marine);
@@ -1076,7 +1164,7 @@ async function fetchHorizon(spot) {
   const j = await getJSON(`${FORECAST}?${qs({
     latitude: pts.map(p => p.lat.toFixed(3)).join(','), longitude: pts.map(p => p.lon.toFixed(3)).join(','),
     hourly: 'cloud_cover_low,cloud_cover_mid,cloud_cover_high', timezone: 'auto', timeformat: 'unixtime', forecast_days: 7, past_days: 2,
-  })}`);
+  })}`, 10000);
   const arr = Array.isArray(j) ? j : [j];
   const out = { sunrise: { az: dirs.sunrise, points: [] }, sunset: { az: dirs.sunset, points: [] } };
   arr.forEach((r, i) => {
@@ -1095,12 +1183,12 @@ async function fetchModels(spot) {
       const j = await getJSON(`${FORECAST}?${qs({
         latitude: spot.lat, longitude: spot.lon, models: ms.join(','), hourly: 'cloud_cover_low,cloud_cover_mid,cloud_cover_high',
         timezone: 'auto', timeformat: 'unixtime', forecast_days: 7, past_days: 2,
-      })}`);
+      })}`, 10000);
       const H = j.hourly || {};
       const models = ms.map(m => ({ model: m, low: H[`cloud_cover_low_${m}`], mid: H[`cloud_cover_mid_${m}`], high: H[`cloud_cover_high_${m}`] }))
         .filter(x => Array.isArray(x.low) && x.low.some(v => v != null));
       if (models.length >= 2) return { times: H.time, models };
-    } catch { /* try the smaller set */ }
+    } catch (e) { if (e instanceof SlowError) return null; /* refused: try the smaller set */ }
   }
   return null;
 }

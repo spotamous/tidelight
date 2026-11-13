@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=5.7';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=5.7';
-import { baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=5.7';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=5.7';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=5.7';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=5.7';
-import { gearFor } from './gear.js?v=5.7';
-import { VAPID_PUBLIC_KEY } from './config.js?v=5.7';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=5.7';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=5.7';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=5.9';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=5.9';
+import { spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=5.9';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=5.9';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=5.9';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=5.9';
+import { gearFor } from './gear.js?v=5.9';
+import { VAPID_PUBLIC_KEY } from './config.js?v=5.9';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=5.9';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=5.9';
 
-export const APP_VERSION = '5.7';
+export const APP_VERSION = '5.9';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -40,9 +40,13 @@ async function loadForecasts(force = false) {
   return failed;
 }
 
+// One load at a time: anything that asks while forecasts are already loading waits for that same load.
+let loadingForecasts = null;
 async function ensureForecasts() {
   const missing = S().spots.some(s => !forecasts[s.id]);
-  return missing ? loadForecasts() : [];
+  if (!missing) return [];
+  if (!loadingForecasts) loadingForecasts = loadForecasts().finally(() => { loadingForecasts = null; });
+  return loadingForecasts;
 }
 
 function indexEvents(evs) { evs.forEach(e => eventIndex.set(e.key, e)); }
@@ -254,7 +258,20 @@ function render() {
   clearInterval(homeTimer);
   v.classList.remove('view-in');
   if (tabChanged) { void v.offsetWidth; v.classList.add('view-in'); tabChanged = false; }
-  ({ forecast: renderForecast, spots: renderSpots, plans: renderPlans, tools: renderTools, you: renderYou })[tab](v);
+  const shown = tab;
+  Promise.resolve()
+    .then(() => ({ forecast: renderForecast, spots: renderSpots, plans: renderPlans, tools: renderTools, you: renderYou })[shown](v))
+    .catch(err => {
+      console.error(err);
+      if (tab !== shown) return;
+      v.innerHTML = `<div class="empty load-error">
+        <h2>That page didn't load</h2>
+        <p>${esc(err?.message || 'Something went wrong')}.</p>
+        <p class="small muted">Your spots and plans are safe. Try again, and if it keeps happening, send feedback from the You tab with what you were doing.</p>
+        <div class="row"><button class="btn primary" id="retryLoad">Try again</button></div>
+      </div>`;
+      $('#retryLoad').onclick = () => { for (const k in forecasts) delete forecasts[k]; render(); };
+    });
 }
 
 /* ================= forecast ================= */
@@ -513,8 +530,9 @@ function labModel(e) {
       { id: 'wind', label: 'Wind', unit: ' km/h', min: 0, max: 60, step: 1, value: Math.round(h.wind ?? 0) },
       ...(useTide ? [{ id: 'tide', label: `Tide height (you want ${sp.tide})`, unit: '%', min: 0, max: 100, step: 1, value: Math.round(e.tide.pos * 100) }] : []),
     ];
+    const floor = spotFloor(sp, S().keepers, S().settings).floor;
     const run = v => baseScore({ ...h, low: v.low, mid: v.mid, high: v.high, pp: v.pp, wind: v.wind },
-      useTide ? { ...e.tide, pos: v.tide / 100 } : (e.tide || null), sp, hz ? { horizon: { ...hz, blk: v.hz / 100 } } : {});
+      useTide ? { ...e.tide, pos: v.tide / 100 } : (e.tide || null), sp, { ...(hz ? { horizon: { ...hz, blk: v.hz / 100 } } : {}), canvasFloor: floor });
     return { sliders, score: v => run(v).score, reason: v => { const f = run(v).factors; return (f.find(x => x.k === 'bad') || f.find(x => x.k === 'good') || {}).t || ''; } };
   }
   if (e.topHunt === 'forest' && H.extra) {
@@ -836,7 +854,8 @@ async function renderForecast(v) {
   const st = S();
   if (!st.spots.length) return emptySpots(v);
   v.innerHTML = `${dayPills(0)}${skeleton('home', `Reading the sky for ${st.spots.length} spot${st.spots.length > 1 ? 's' : ''}…`)}`;
-  const failed = await ensureForecasts();
+  const slowNote = setTimeout(() => { const el = $('.sk-status'); if (el) el.textContent = 'Taking longer than usual. The weather service is slow to answer; saved forecasts are used where it doesn\'t.'; }, 6000);
+  const failed = await ensureForecasts().finally(() => clearTimeout(slowNote));
   if (tab !== 'forecast') return;
   const evs = next3Days();
   indexEvents(evs);
@@ -1744,6 +1763,7 @@ async function ratePlan(id, rating, btn) {
     pl.rating = rating;
     s.keepers.push({
       id: uid(), label: rating, source: 'session', planId: p.id,   // keeper | meh | dud
+      type: p.type, hunt: p.hunt || null, spotId: p.spotId || null,
       date: p.t * 1000, lat: p.lat, lon: p.lon, spotName: p.spotName, features, thumb: null,
     });
   });
@@ -1974,6 +1994,11 @@ function openSpotForm(prefill = {}, existing = null) {
         </div>`)}
 
       ${fold('Composition and notes', hasComposition ? [s.facing !== '' && s.facing != null ? `Facing ${Math.round(Number(s.facing))}°` : '', s.notes ? 'Notes added' : ''].filter(Boolean).join(', ') : 'Optional', hasComposition, `
+        <label>Light at this spot<span class="hint">Does a clear sky work here, or does it need cloud to catch colour?</span><select name="cleanLight">
+          <option value="" ${!s.cleanLight ? 'selected' : ''}>Learn from my ratings</option>
+          <option value="no" ${s.cleanLight === 'no' ? 'selected' : ''}>Needs cloud for colour</option>
+          <option value="yes" ${s.cleanLight === 'yes' ? 'selected' : ''}>Shines in clean light too</option>
+        </select></label>
         <label>Facing (°)<span class="hint">The compass bearing of your composition. Used for sun and Milky Way alignment.</span><input name="facing" inputmode="numeric" value="${s.facing ?? ''}"></label>
         <label>Notes<textarea name="notes" placeholder="Access, parking, hazards, compositions">${esc(s.notes || '')}</textarea></label>`)}
 
@@ -2064,6 +2089,7 @@ function openSpotForm(prefill = {}, existing = null) {
       hikeKm: f.get('hikeKm') ? Math.max(0, parseFloat(f.get('hikeKm')) || 0) || '' : '',
       difficulty: DIFFICULTIES.includes(f.get('difficulty')) ? f.get('difficulty') : '',
       facing: f.get('facing') !== '' ? parseFloat(f.get('facing')) : '',
+      cleanLight: f.get('cleanLight') || '',
       notes: String(f.get('notes') || ''),
       hunts: HUNT_ORDER.filter(k => f.get(`hunt_${k}`)).length ? HUNT_ORDER.filter(k => f.get(`hunt_${k}`)) : ['colour'],
       fogMode: f.get('fogMode') === 'above' ? 'above' : 'in',
@@ -2146,6 +2172,13 @@ async function openSpotDetail(id) {
     <h3 class="sec">The week here</h3>
     ${week}
 
+    ${(() => {
+      const fl = spotFloor(s, S().keepers, S().settings);
+      if (fl.floor <= 0.35 && fl.source !== 'yours') return '';
+      return `<p class="bf-note crew">${fl.source === 'yours'
+        ? (s.cleanLight === 'yes' ? 'You\'ve set this spot as shining in clean light, so clear skies still score well here.' : 'You\'ve set this spot as needing cloud for colour.')
+        : `Shines in clean light: learned from ${fl.k} clear-sky keepers here, so clear skies still score well.`}</p>`;
+    })()}
     ${alignmentText(s) || s.notes ? `<h3 class="sec">About this spot</h3>
       ${alignmentText(s) ? `<p class="align-line">${esc(alignmentText(s))}</p>` : ''}
       ${s.notes ? `<p class="bf-brief">${esc(s.notes)}</p>` : ''}` : ''}
@@ -3452,7 +3485,7 @@ const youHead = (title, lede = '') => `<button class="link-btn back" id="youBack
 function renderYou(v, logLines = []) {
   const st = S(), s = st.settings;
   if (youPage) {
-    ({ profile: pageProfile, recreate: pageRecreate, account: pageAccount, alerts: pageAlerts, home: pageHome, kit: pageKit, display: pageDisplay, ai: pageAI, data: pageData, feedback: pageFeedback })[youPage](v, logLines);
+    ({ profile: pageProfile, recreate: pageRecreate, account: pageAccount, alerts: pageAlerts, home: pageHome, kit: pageKit, display: pageDisplay, ai: pageAI, data: pageData, feedback: pageFeedback, tuning: pageTuning })[youPage](v, logLines);
     const back = $('#youBack', v);
     if (back) back.onclick = () => { youPage = null; renderYou(v); window.scrollTo(0, 0); };
     return;
@@ -3471,6 +3504,7 @@ function renderYou(v, logLines = []) {
     <h3 class="sec">Your light</h3>
     <div class="you-list">
       ${row('profile', 'Light profile and keepers', good >= MIN_KEEPERS ? `${good} keepers. Your personal score is on.` : `${good} keeper${good === 1 ? '' : 's'}. Add ${MIN_KEEPERS - good} more to switch on your personal score.`)}
+      ${row('tuning', 'Score tuning', s.tuning === false ? 'Off. Scores use the standard rules.' : (() => { const n = st.spots.filter(sp => spotFloor(sp, st.keepers, s).floor > 0.35).length; return n ? `Learning from your ratings. ${n} spot${n === 1 ? '' : 's'} adjusted.` : 'Learning from your ratings.'; })())}
       ${row('recreate', 'Recreate a shot', 'Find upcoming sessions that match a photo.')}
     </div>
 
@@ -3917,6 +3951,65 @@ function pageKit(v) {
   };
 }
 
+// What the score has learned from your ratings, how much it helps, and the sessions it got wrong.
+function pageTuning(v) {
+  const st = S(), on = st.settings.tuning !== false;
+  const rep2 = tuningReport(st.keepers, st.spots, st.settings);
+  const perSpot = st.spots.map(sp => ({ sp, fl: spotFloor(sp, st.keepers, st.settings), n: colourRatings(st.keepers, sp).length })).filter(x => x.n || x.fl.source === 'yours');
+  const condText = f => {
+    const parts = [`low cloud ${Math.round((f[0] ?? 0) * 100)}%`, `upper cloud ${Math.round(Math.min(100, 0.7 * (f[1] ?? 0) * 100 + 0.9 * (f[2] ?? 0) * 100))}%`];
+    if ((f[3] ?? 0) > 0.05) parts.push('some rain');
+    parts.push(`wind ${Math.round((f[4] ?? 0) * 40)} km/h`);
+    return parts.join(', ');
+  };
+  const planScore = r => st.plans.find(p => p.id === r.planId)?.score;
+  const misses = rep2.items.filter(x => (x.rating.label === 'keeper' && (planScore(x.rating) ?? x.standard) < 75) || (x.rating.label === 'dud' && (planScore(x.rating) ?? x.standard) >= 50))
+    .sort((a, b) => (b.rating.date || 0) - (a.rating.date || 0));
+  const lbl = { keeper: 'Delivered', meh: 'So-so', dud: 'Not worth it' };
+  const stat = (k, t) => `${t.right} of ${rep2.n} in the right band; ${t.keepGo} of ${rep2.keepers} keepers called Go; ${t.dudGo} dud${t.dudGo === 1 ? '' : 's'} called Go`;
+  v.innerHTML = `
+    ${youHead('Score tuning', 'Tidelight learns from your ratings which spots shine in clean light and which need cloud to catch colour, and adjusts each spot\'s colour score to match.')}
+    <label class="switch-row"><span><strong>Learn from my ratings</strong><small>Applies to the forecast, briefings and alerts. Spots you've set yourself always follow your setting.</small></span>
+      <input type="checkbox" id="tuneOn" role="switch" ${on ? 'checked' : ''}></label>
+
+    <h3 class="sec">What it has learned</h3>
+    ${perSpot.length ? perSpot.map(({ sp, fl, n }) => `<div class="hist-row">
+        <span class="hist-name">${esc(sp.name)}<small>${fl.source === 'yours'
+          ? (sp.cleanLight === 'yes' ? 'Set by you: shines in clean light.' : 'Set by you: needs cloud for colour.')
+          : fl.floor > 0.35 ? `Shines in clean light: ${fl.k} clear-sky keeper${fl.k === 1 ? '' : 's'}${fl.d ? `, ${fl.d} miss${fl.d === 1 ? '' : 'es'}` : ''}. Clear skies now score well here.`
+          : fl.d ? `Needs cloud for colour: ${fl.d} clear-sky session${fl.d === 1 ? ' was a miss' : 's were misses'}. Standard rules.`
+          : `${n} rated session${n === 1 ? '' : 's'} so far. Not enough clear-sky sessions to judge yet.`}</small></span>
+        <button class="btn small-btn" data-open-spot="${sp.id}">Spot</button>
+      </div>`).join('') : '<p class="muted">Rate a few sunrise and sunset sessions in Plans and this fills in.</p>'}
+
+    <h3 class="sec">Does it help?</h3>
+    ${rep2.n >= 6 ? `<div class="tune-compare">
+        <div><span class="tune-k">Standard rules</span><b class="num">${rep2.std.right}<small>/${rep2.n}</small></b><span class="tune-d">${esc(stat('std', rep2.std))}</span></div>
+        <div class="tuned"><span class="tune-k">Tuned to you</span><b class="num">${rep2.tuned.right}<small>/${rep2.n}</small></b><span class="tune-d">${esc(stat('tuned', rep2.tuned))}</span></div>
+      </div>
+      <p class="small muted">A fair test: each of your ${rep2.n} rated sunrise and sunset sessions is scored using only what was learned from the others. Fog mornings and duplicate photos are left out.</p>`
+      : `<p class="muted">After about 6 rated sunrise and sunset sessions, this shows how much the tuning improves the score.</p>`}
+
+    <h3 class="sec">Near misses</h3>
+    <p class="small muted">Keepers it scored low, and duds it scored high. These are what it learns from.</p>
+    ${misses.length ? misses.slice(0, 12).map(x => {
+      const before = planScore(x.rating) ?? x.standard;
+      return `<div class="miss">
+        <div class="miss-head"><span class="miss-name">${esc(x.spot.name)}</span><span class="miss-rate ${x.rating.label}">${lbl[x.rating.label]}</span></div>
+        <p class="miss-when">${esc(x.rating.type ? `${cap(x.rating.type)}, ` : 'Photo, ')}${esc(fmtDate(x.rating.date))}. ${esc(cap(condText(x.rating.features)))}.</p>
+        <p class="miss-scores">Scored <b class="num">${before}</b> at the time${x.tuned !== x.standard ? `; tuned, it would score <b class="num tuned">${x.tuned}</b>` : '; the tuning doesn\'t change this one'}.</p>
+      </div>`;
+    }).join('') : '<p class="muted">No near misses yet.</p>'}
+    <p class="small muted">Something it can't learn? Set it yourself: Edit spot, then <em>Light at this spot</em> under Composition and notes.</p>`;
+  $('#tuneOn').onchange = ev => {
+    update(s2 => { s2.settings.tuning = ev.target.checked; });
+    for (const k in forecasts) delete forecasts[k];
+    toast(ev.target.checked ? 'Learning from your ratings.' : 'Using the standard rules.');
+    renderYou(v);
+  };
+  $$('[data-open-spot]', v).forEach(b => b.onclick = () => openSpotDetail(b.dataset.openSpot));
+}
+
 // Where the tester was before opening feedback, so the note says which screen it's about.
 let lastScreen = 'Forecast';
 function pageFeedback(v) {
@@ -4359,6 +4452,12 @@ navigator.serviceWorker?.addEventListener('message', ev => {
 window.addEventListener('hashchange', () => openLink(location.hash));
 
 function backfillRatings() {
+  // Older ratings: copy each one's session type, hunt and spot from its plan, so fog and night
+  // sessions never teach the colour score.
+  const plansById = new Map(S().plans.map(p => [p.id, p]));
+  if (S().keepers.some(k => k.planId && !k.type && plansById.get(k.planId)?.type)) {
+    update(s2 => { for (const k of s2.keepers) { const p = plansById.get(k.planId); if (p && !k.type) { k.type = p.type; k.hunt = p.hunt || k.hunt || null; k.spotId = p.spotId || k.spotId || null; } } });
+  }
   const st = S();
   const linked = new Set(st.keepers.map(k => k.planId).filter(Boolean));
   const missing = st.plans.filter(p => p.rating === 'meh' && !linked.has(p.id) && p.features);
