@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.0';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.0';
-import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.0';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.0';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.0';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.0';
-import { gearFor } from './gear.js?v=6.0';
-import { VAPID_PUBLIC_KEY } from './config.js?v=6.0';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.0';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.0';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.2';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.2';
+import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.2';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.2';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.2';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.2';
+import { gearFor } from './gear.js?v=6.2';
+import { VAPID_PUBLIC_KEY } from './config.js?v=6.2';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.2';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.2';
 
-export const APP_VERSION = '6.0';
+export const APP_VERSION = '6.2';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -847,6 +847,14 @@ function layoutBandMarks() {
     m.el.style.left = `${m.p}%`;
     m.el.classList.toggle('nudged', Math.abs(m.p - m.x) > 0.5);
   });
+  const label = $('.span-label', bandEl);
+  if (label) {
+    const hits = () => { const r = label.getBoundingClientRect(); return $$('.band-mark', bandEl).some(el => { const m = el.getBoundingClientRect(); return r.left < m.right + 2 && r.right > m.left - 2 && r.top < m.bottom && r.bottom > m.top; }); };
+    const fits = () => label.getBoundingClientRect().width <= label.parentElement.getBoundingClientRect().width + 1;
+    label.classList.remove('end', 'hide');
+    if (!fits()) label.classList.add('hide');
+    else if (hits()) { label.classList.add('end'); if (hits()) label.classList.add('hide'); }
+  }
 }
 window.addEventListener('resize', () => { if (tab === 'forecast') layoutBandMarks(); });
 
@@ -881,10 +889,12 @@ async function renderForecast(v) {
   // One marker per session type: the best spot for it. Daytime sessions also draw their window.
   const perType = SESSION_TYPES.map(type => dayEvs.find(e => e.type === type)).filter(Boolean);
   const counts = Object.fromEntries(SESSION_TYPES.map(t => [t, dayEvs.filter(e => e.type === t).length]));
+  let spanTimes = '';   // the good-light window's times, for the legend
   const markers = perType.map((e, mi) => {
     const H = e.hunts?.[e.topHunt];
+    if (e.type === 'day' && H?.from && H.to > H.from) spanTimes = `${fmtTime(H.from, e.offset).replace(':00', '')}–${fmtTime(H.to, e.offset).replace(':00', '')}`;
     const span = e.type === 'day' && H?.from && H.to > H.from
-      ? `<span class="band-span" style="left:${band.pos(H.from)}%; width:${Math.max(1, band.pos(H.to) - band.pos(H.from))}%"></span>` : '';
+      ? `<span class="band-span" style="left:${band.pos(H.from)}%; width:${Math.max(1, band.pos(H.to) - band.pos(H.from))}%"><b class="span-label">Good light ${fmtTime(H.from, e.offset).replace(':00', '')}–${fmtTime(H.to, e.offset).replace(':00', '')}</b></span>` : '';
     const more = counts[e.type] > 1 ? `<span class="band-more">+${counts[e.type] - 1}</span>` : '';
     return `${span}<span class="band-pin" style="left:${band.pos(e.t)}%" aria-hidden="true"></span><button class="band-mark ${e.key === homeSel ? 'on' : ''}" data-pos="${band.pos(e.t)}" style="left:${band.pos(e.t)}%; --i:${mi}; --fill:${bandFill(e.score)}; --ink:${bandInk(e.score)}" data-sel="${esc(e.key)}"
       aria-label="${TYPE_NAME[e.type]} at ${esc(e.spot.name)}, ${sessionWhen(e)}, score ${e.score}">${e.score}${more}</button>`;
@@ -914,9 +924,9 @@ async function renderForecast(v) {
       </div>
       <div class="band-ticks" aria-hidden="true">${ticks}</div>
       <figcaption class="band-key">
-        <span><i style="background:${BAND.blue}"></i>Blue hour</span><span><i style="background:${BAND.golden}"></i>Golden hour</span><span><i style="background:${BAND.day}"></i>Daylight</span>${bandSky.last?.cloud ? '<span class="key-icon-wrap"><b class="key-icon sky-key-cloud" aria-hidden="true"></b>Cloud</span>' : ''}${bandSky.last?.rain ? '<span class="key-icon-wrap"><b class="key-icon sky-key-rain" aria-hidden="true"></b>Rain likely</span>' : ''}<span><i style="background:${BAND.night}; outline:1px solid var(--line)"></i>Dark</span>
+        <span><i style="background:${BAND.blue}"></i>Blue hour</span><span><i style="background:${BAND.golden}"></i>Golden hour</span><span><i style="background:${BAND.day}"></i>Daylight</span>${spanTimes ? `<span class="key-icon-wrap"><b class="key-span" aria-hidden="true"></b>Good light window, ${spanTimes}</span>` : ''}${bandSky.last?.cloud ? '<span class="key-icon-wrap"><b class="key-icon sky-key-cloud" aria-hidden="true"></b>Cloud</span>' : ''}${bandSky.last?.rain ? '<span class="key-icon-wrap"><b class="key-icon sky-key-rain" aria-hidden="true"></b>Rain likely</span>' : ''}<span><i style="background:${BAND.night}; outline:1px solid var(--line)"></i>Dark</span>
       </figcaption>
-      ${sel && forecasts[sel.spot.id] ? `<p class="band-sky-note">Cloud, rain and clear night sky shown for ${esc(sel.spot.name)}. Drag along the band to see any hour.</p>` : ''}
+      ${sel && forecasts[sel.spot.id] ? `<p class="band-sky-note">Cloud, rain and clear night sky shown for ${esc(sel.spot.name)}.${spanTimes ? ' The white bar is the good-light window for the daytime session: the hours its score stays close to its best.' : ''} Drag along the band to see any hour.</p>` : ''}
     </figure>
     ${sel ? sessionDetail(sel, sel.key === best?.key, { index: order.findIndex(e => e.key === sel.key), total: order.length }) : ''}
     ${others.length ? `<section class="others">
@@ -3847,7 +3857,7 @@ async function renderAlerts() {
     return `Right now, ${n} of your sessions in the next 3 days score${n === 1 ? 's' : ''} ${v} or more.`;
   }
   box.innerHTML = `<h2>Alerts</h2>
-    <p class="small muted">Checked every hour from your Supabase account, using the same scores as the app (including your personal score).</p>
+    <p class="small muted">Your spots are checked every hour, using the same scores you see in the app, including what it has learned from your ratings.</p>
     ${device}
     <form class="form alert-prefs" id="alertForm">
       <label class="check"><input type="checkbox" name="go" ${a.go ? 'checked' : ''}> Tell me when a session in the next 36 hours is worth the alarm</label>

@@ -1454,3 +1454,13 @@ a.you-row { text-decoration: none; color: var(--text); }
 .rate-chip.on { animation: pop .25s cubic-bezier(.2, 1.6, .4, 1); }
 .hist-btn { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--line); color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .hist-rating.keeper { color: var(--ok); }
+
+/* =================== v6.2: the good-light window, labelled =================== */
+.span-label {
+  position: absolute; left: 0; bottom: 7px; white-space: nowrap; pointer-events: none;
+  font: 700 .62rem/1 var(--sans); color: #F4EFE4; letter-spacing: .01em;
+  padding: 3px 7px; border-radius: 999px; background: rgba(15, 17, 17, .55);
+}
+.span-label.end { left: auto; right: 0; }
+.span-label.hide { display: none; }
+.key-span { display: inline-block; width: 18px; height: 4px; border-radius: 2px; background: rgba(236, 232, 225, .85); }
