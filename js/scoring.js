@@ -1,5 +1,5 @@
-import { clamp, haversineKm, angleDiff, compass } from './util.js?v=5.9';
-import { computeHunts, computeNightHunts, computeDayHunts, huntsOf, NIGHT_HUNTS, DAY_HUNTS, HUNT_LABEL } from './hunts.js?v=5.9';
+import { clamp, haversineKm, angleDiff, compass } from './util.js?v=6.0';
+import { computeHunts, computeNightHunts, computeDayHunts, huntsOf, NIGHT_HUNTS, DAY_HUNTS, HUNT_LABEL } from './hunts.js?v=6.0';
 
 /* ---------- helpers ---------- */
 
@@ -99,7 +99,7 @@ export function baseScore(h, tide, spot, ctx = {}) {
   else factors.push({ k: 'bad', t: 'Heavy upper cloud may mute the colour' });
 
   // Low cloud on the horizon blocks the light from reaching the canvas.
-  const block = 1 - 0.8 * (low / 100);
+  const block = 1 - (ctx.lowK ?? 0.8) * (low / 100);
   if (low >= 60) factors.push({ k: 'bad', t: `Low cloud ${Math.round(low)}%: the horizon is likely blocked` });
   else if (low <= 20) factors.push({ k: 'good', t: 'Clear horizon for the light to come through' });
 
@@ -123,7 +123,7 @@ export function baseScore(h, tide, spot, ctx = {}) {
   }
 
   const wind = h.wind ?? 0;
-  const windF = 1 - 0.3 * clamp(wind / 60);
+  const windF = ctx.windK ? 1 - ctx.windK * clamp(wind / 40) : 1 - 0.3 * clamp(wind / 60);
   if (wind >= 30) factors.push({ k: 'bad', t: `Strong wind (${Math.round(wind)} km/h): tripod shake and choppy water` });
   else if (wind <= 10) factors.push({ k: 'good', t: 'Light wind, good for long exposures' });
 
@@ -181,6 +181,19 @@ const isClean = f => canvasOf(f) < 25 && (f[0] ?? 0) < 0.3;
 const isFoggy = f => f.length > 7 && f[7] != null && f[7] < 0.05 && (f[0] ?? 0) >= 0.8;
 export const CLEAN_FLOOR = 0.8;
 
+// Rating tags. "Not the light's fault" sessions never teach the score; fog, storm and rainbow keepers
+// were made by another hunt, so they don't teach the colour score.
+export const RATING_TAGS = {
+  made: [['colour', 'Colour in the clouds'], ['landscape', 'Light on the landscape'], ['fog', 'Fog or mist'], ['storm', 'Storm light'], ['rainbow', 'A rainbow']],
+  spoiled: [['horizon', 'Cloud blocked the horizon'], ['rain', 'Rained out'], ['wind', 'Too windy'], ['tide', 'Wrong tide'], ['plain', 'Clear and plain']],
+  notLight: [['crowds', 'Crowds'], ['late', 'I was late or out of position'], ['gear', 'Gear trouble']],
+};
+const NOT_LIGHT = new Set(RATING_TAGS.notLight.map(([k]) => k));
+const OTHER_HUNT = new Set(['fog', 'storm', 'rainbow']);
+// A rating as 0–10: the slider value, or the old three-way rating (delivered 8, so-so 5, not worth it 2).
+export const ratingScore = r => (typeof r?.score10 === 'number' ? r.score10 : typeof r?.lightScore === 'number' ? r.lightScore : ({ keeper: 8, meh: 5, dud: 2 })[r?.label ?? r?.rating] ?? null);
+export const labelFor = s10 => (s10 >= 7 ? 'keeper' : s10 >= 4 ? 'meh' : 'dud');
+
 // Ratings that can teach a spot's colour score: sunrise/sunset (or photos), not fog mornings, no duplicates.
 export function colourRatings(keepers, spot) {
   const seen = new Set();
@@ -189,6 +202,9 @@ export function colourRatings(keepers, spot) {
     if (k.type && !['sunrise', 'sunset'].includes(k.type)) return false;
     if (k.hunt && k.hunt !== 'colour') return false;
     if (isFoggy(k.features)) return false;
+    const tags = k.tags || [];
+    if (tags.some(t => NOT_LIGHT.has(t))) return false;                                        // not the light's fault
+    if (tags.some(t => OTHER_HUNT.has(t)) && !tags.includes('colour') && ratingScore(k) >= 6) return false;   // made by fog, storm or a rainbow
     if (spot) {
       const near = k.spotId ? k.spotId === spot.id : (k.lat != null ? haversineKm({ lat: k.lat, lon: k.lon }, spot) <= 1 : k.spotName === spot.name);
       if (!near) return false;
@@ -202,44 +218,63 @@ export function colourRatings(keepers, spot) {
 
 // The colour-score floor for a spot: your own setting wins; otherwise learned from ratings (if learning is on).
 export function spotFloor(spot, keepers = [], settings = {}) {
-  if (spot.cleanLight === 'yes') return { floor: CLEAN_FLOOR, source: 'yours' };
-  if (spot.cleanLight === 'no') return { floor: 0.35, source: 'yours' };
-  if (settings.tuning === false) return { floor: 0.35, source: 'off' };
-  const mine = colourRatings(keepers, spot);
-  const k = mine.filter(r => isClean(r.features) && r.label === 'keeper').length;
-  const d = mine.filter(r => isClean(r.features) && r.label !== 'keeper').length;
-  if (k < 2 || k <= d) return { floor: 0.35, source: 'learned', k, d, n: mine.length };
-  return { floor: Math.min(0.85, 0.35 + 0.6 * (k - d) / (k + d + 1)), source: 'learned', k, d, n: mine.length };
+  const off = settings.tuning === false;
+  const mine = off ? [] : colourRatings(keepers, spot);
+  // Repeated complaints at a spot make it more sensitive to that factor (two or more tagged sessions).
+  const tagged = t => keepers.filter(k => (k.tags || []).includes(t) && (k.spotId ? k.spotId === spot.id : k.lat != null ? haversineKm({ lat: k.lat, lon: k.lon }, spot) <= 1 : k.spotName === spot.name)).length;
+  const windTags = off ? 0 : tagged('wind'), horizonTags = off ? 0 : tagged('horizon');
+  const extra = { windK: windTags >= 2 ? 0.55 : undefined, lowK: horizonTags >= 2 ? 0.95 : undefined, windTags, horizonTags };
+  if (spot.cleanLight === 'yes') return { floor: CLEAN_FLOOR, source: 'yours', ...extra };
+  if (spot.cleanLight === 'no') return { floor: 0.35, source: 'yours', ...extra };
+  if (off) return { floor: 0.35, source: 'off' };
+  // Clear-sky evidence, weighted by how good or bad each session was (a 10 counts for more than a 7).
+  // "Light on the landscape" counts as a clean-light success; "clear and plain" as a clean-light miss.
+  let k = 0, d = 0, kn = 0, dn = 0;
+  for (const r of mine) {
+    const s10 = ratingScore(r), tags = r.tags || [];
+    const cleanSky = isClean(r.features) || (tags.includes('landscape') && canvasOf(r.features) < 40) || tags.includes('plain');
+    if (!cleanSky || s10 == null) continue;
+    if (s10 >= 7 || (tags.includes('landscape') && s10 >= 6)) { k += 1 + Math.max(0, s10 - 8) / 2; kn++; }
+    else if (s10 <= 4 || tags.includes('plain')) { d += 1 + Math.max(0, 2 - s10) / 2; dn++; }
+  }
+  const base = { source: 'learned', k: kn, d: dn, n: mine.length, ...extra };
+  if (kn < 2 || k <= d) return { floor: 0.35, ...base };
+  return { floor: Math.min(0.85, 0.35 + 0.6 * (k - d) / (k + d + 1)), ...base };
 }
 
 // A quick colour score from a saved feature vector (used to compare the standard and tuned rules fairly).
-export function colourFromFeatures(f, floor = 0.35) {
+export function colourFromFeatures(f, floor = 0.35, k = {}) {
   const low = (f[0] ?? 0) * 100, pp = Math.min(90, (f[3] ?? 0) * 2 * 60), wind = (f[4] ?? 0) * 40;
   const cc = canvasOf(f);
   const canvas = cc < 50 ? floor + (1 - floor) * (cc / 50) : 0.35 + 0.65 * (1 - (cc - 50) / 50);
-  return Math.round(100 * canvas * (1 - 0.8 * low / 100) * (1 - 0.6 * clamp(pp / 100)) * (1 - 0.3 * clamp(wind / 60)));
+  const windF = k.windK ? 1 - k.windK * clamp(wind / 40) : 1 - 0.3 * clamp(wind / 60);
+  return Math.round(100 * canvas * (1 - (k.lowK ?? 0.8) * low / 100) * (1 - 0.6 * clamp(pp / 100)) * windF);
 }
 
 // Fair test: score each rated session with what was learned from all the *other* sessions.
 export function tuningReport(keepers, spots, settings = {}) {
   const band = sc => (sc >= 75 ? 'keeper' : sc >= 50 ? 'meh' : 'dud');
+  const yours = r => labelFor(ratingScore(r));
   const rows = [];
   for (const sp of spots) for (const r of colourRatings(keepers, sp)) rows.push({ r, sp });
-  const tally = { n: rows.length, std: { right: 0, keepGo: 0, dudGo: 0, dudSkip: 0 }, tuned: { right: 0, keepGo: 0, dudGo: 0, dudSkip: 0 }, keepers: 0, duds: 0, items: [] };
+  const tally = { n: rows.length, std: { right: 0, keepGo: 0, dudGo: 0, dudSkip: 0, gap: 0 }, tuned: { right: 0, keepGo: 0, dudGo: 0, dudSkip: 0, gap: 0 }, keepers: 0, duds: 0, items: [] };
   for (const { r, sp } of rows) {
     const others = keepers.filter(k => k !== r);
-    const learned = spotFloor({ ...sp, cleanLight: sp.cleanLight === 'yes' || sp.cleanLight === 'no' ? sp.cleanLight : undefined }, others, settings).floor;
-    const s0 = colourFromFeatures(r.features), s1 = colourFromFeatures(r.features, learned);
+    const t2 = spotFloor({ ...sp, cleanLight: sp.cleanLight === 'yes' || sp.cleanLight === 'no' ? sp.cleanLight : undefined }, others, settings);
+    const s0 = colourFromFeatures(r.features), s1 = colourFromFeatures(r.features, t2.floor, t2);
+    const lab = yours(r), s10 = ratingScore(r);
     for (const [key, sc] of [['std', s0], ['tuned', s1]]) {
-      if (band(sc) === r.label) tally[key].right++;
-      if (r.label === 'keeper' && sc >= 75) tally[key].keepGo++;
-      if (r.label === 'dud' && sc >= 75) tally[key].dudGo++;
-      if (r.label === 'dud' && sc < 50) tally[key].dudSkip++;
+      if (band(sc) === lab) tally[key].right++;
+      if (lab === 'keeper' && sc >= 75) tally[key].keepGo++;
+      if (lab === 'dud' && sc >= 75) tally[key].dudGo++;
+      if (lab === 'dud' && sc < 50) tally[key].dudSkip++;
+      tally[key].gap += Math.abs(sc - s10 * 10);
     }
-    if (r.label === 'keeper') tally.keepers++;
-    if (r.label === 'dud') tally.duds++;
+    if (lab === 'keeper') tally.keepers++;
+    if (lab === 'dud') tally.duds++;
     tally.items.push({ rating: r, spot: sp, standard: s0, tuned: s1 });
   }
+  for (const key of ['std', 'tuned']) tally[key].gap = rows.length ? Math.round(tally[key].gap / rows.length) : 0;
   return tally;
 }
 
@@ -355,7 +390,8 @@ export function evaluateEvent({ spot, data, type, t, keepers, settings }) {
   const h = data.hours[idx];
   const tide = spot.coastal ? tideInfo(data.hours, idx) : null;
   const hz = horizonBlock(data, type, t);
-  const ctx = { ...(hz ? { horizon: hz } : {}), canvasFloor: spotFloor(spot, keepers, settings).floor };
+  const tune = spotFloor(spot, keepers, settings);
+  const ctx = { ...(hz ? { horizon: hz } : {}), canvasFloor: tune.floor, lowK: tune.lowK, windK: tune.windK };
   const base = baseScore(h, tide, spot, ctx);
   const confidence = modelConfidence(data, idx, h, tide, spot, ctx);
   if (confidence) {

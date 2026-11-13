@@ -1432,3 +1432,25 @@ a.you-row { text-decoration: none; color: var(--text); }
 .miss-when, .miss-scores { font: 400 .86rem/1.45 var(--sans); margin: 4px 0 0; color: var(--muted); }
 .miss-scores b { color: var(--text); font-weight: 700; }
 .miss-scores b.tuned { color: var(--caramel); }
+
+/* =================== v6.0: 0–10 light rating =================== */
+.rate-face { text-align: center; margin: 18px 0 6px; }
+.rate-num { --warm: .5; font: 400 5.4rem/1 var(--serif); margin: 0; font-variant-numeric: tabular-nums;
+  color: color-mix(in oklab, #9DADB1 calc((1 - var(--warm)) * 100%), #D9A066); }
+.rate-num.bump { animation: rate-bump .22s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes rate-bump { from { transform: scale(.9); } to { transform: scale(1); } }
+.rate-word { font: 600 1.05rem var(--sans); margin: 6px 0 0; min-height: 1.4em; }
+.rate-slider { height: 44px; margin-top: 8px; --warm: .5; }
+.rate-slider::-webkit-slider-runnable-track { height: 10px; background: linear-gradient(to right, color-mix(in oklab, #9DADB1 calc((1 - var(--warm)) * 100%), #D9A066) var(--val, 50%), var(--surface-2) var(--val, 50%)); }
+.rate-slider::-webkit-slider-thumb { width: 34px; height: 34px; margin-top: -12px; }
+.rate-slider::-moz-range-progress { height: 10px; background: #D9A066; }
+.rate-ticks { position: relative; height: 34px; margin: 0 14px; font: 400 .66rem/1.2 var(--sans); color: var(--muted); }
+.rate-ticks span { position: absolute; transform: translateX(-50%); display: grid; justify-items: center; text-align: center; white-space: nowrap; }
+.rate-ticks span:first-child { transform: none; justify-items: start; }
+.rate-ticks span:last-child { transform: translateX(-100%); justify-items: end; }
+.rate-ticks b { font: 700 .74rem var(--sans); color: var(--text); }
+.rate-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.rate-chip { min-height: 40px; }
+.rate-chip.on { animation: pop .25s cubic-bezier(.2, 1.6, .4, 1); }
+.hist-btn { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--line); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.hist-rating.keeper { color: var(--ok); }

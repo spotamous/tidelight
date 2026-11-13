@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=5.9';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=5.9';
-import { spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=5.9';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=5.9';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=5.9';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=5.9';
-import { gearFor } from './gear.js?v=5.9';
-import { VAPID_PUBLIC_KEY } from './config.js?v=5.9';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=5.9';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=5.9';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.0';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.0';
+import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.0';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.0';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.0';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.0';
+import { gearFor } from './gear.js?v=6.0';
+import { VAPID_PUBLIC_KEY } from './config.js?v=6.0';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.0';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.0';
 
-export const APP_VERSION = '5.9';
+export const APP_VERSION = '6.0';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -1542,7 +1542,7 @@ function downloadIcs(e) {
 
 // How often the app's call matched your rating. A "go" call is a predicted score of 60+.
 function hitStats(plans) {
-  const rated = plans.filter(p => p.rating && p.rating !== 'meh');
+  const rated = plans.filter(p => p.rating && p.rating !== 'meh' && p.rating !== 'skipped');
   const bySpot = {};
   let hits = 0;
   for (const p of rated) {
@@ -1635,11 +1635,7 @@ async function renderPlans(v, refreshed = false) {
       <p class="small muted">Each rating teaches your personal score, and counts towards the hit rate under History.</p>
       ${toRate.map(p => `<div class="rate-row">
         <p class="rate-name">${esc(p.spotName)}<small>${esc(cap(planWhen(p)))}${p.score != null ? `, predicted ${p.score}` : ''}</small></p>
-        <div class="rate-btns">
-          <button class="btn" data-rate="keeper" data-id="${p.id}">It delivered</button>
-          <button class="btn" data-rate="meh" data-id="${p.id}">So-so</button>
-          <button class="btn" data-rate="dud" data-id="${p.id}">Not worth it</button>
-        </div></div>`).join('')}
+        <div class="rate-btns"><button class="btn primary" data-rate-open="${p.id}">Rate the light</button></div></div>`).join('')}
     </section>` : ''}
     ${next ? `<section class="next-up">
       <h2 class="nu-name">${esc(next.spotName)}</h2>
@@ -1664,11 +1660,15 @@ async function renderPlans(v, refreshed = false) {
   const historyView = () => `
     ${hitPanel(st)}
     ${rated.length ? `<section><h3 class="sec">Rated sessions</h3>
-      ${rated.slice(0, 40).map(p => `<div class="hist-row">
-        <span class="hist-name">${esc(p.spotName)}<small>${esc(cap(planWhen(p)))}</small></span>
-        <span class="hist-score num">${p.score ?? '–'}</span>
-        <span class="hist-rating ${p.rating}">${label[p.rating] || ''}</span>
-      </div>`).join('')}</section>` : '<p class="muted">No rated sessions yet. After a planned session passes, it appears under Upcoming to rate.</p>'}
+      ${rated.slice(0, 40).map(p => {
+        const tagNames = (p.tags || []).map(t => Object.values(RATING_TAGS).flat().find(([k]) => k === t)?.[1]).filter(Boolean);
+        return `<button class="hist-row hist-btn" data-rate-open="${p.id}" aria-label="Change the rating for ${esc(p.spotName)}">
+        <span class="hist-name">${esc(p.spotName)}<small>${esc(cap(planWhen(p)))}${tagNames.length ? `. ${esc(tagNames.join(', '))}` : ''}</small></span>
+        <span class="hist-score num" title="Predicted">${p.score ?? '–'}</span>
+        <span class="hist-rating ${p.rating}">${p.rating === 'skipped' ? label.skipped : `${ratingScore(p)}/10`}</span>
+      </button>`;
+      }).join('')}
+      <p class="small muted">The middle number is what the app predicted. Tap a session to change its rating.</p></section>` : '<p class="muted">No rated sessions yet. After a planned session passes, it appears under Upcoming to rate.</p>'}
     <div id="unplanned"></div>`;
 
   v.innerHTML = `
@@ -1713,7 +1713,7 @@ async function renderPlans(v, refreshed = false) {
   });
   $$('[data-gearbox]', v).forEach(d => d.ontoggle = () => { if (d.open) openGear.add(d.dataset.gearbox); else openGear.delete(d.dataset.gearbox); });
   $$('[data-item]', v).forEach(d => d.ontoggle = () => { const k = 'item:' + d.dataset.item; if (d.open) openGear.add(k); else openGear.delete(k); });
-  $$('[data-rate]', v).forEach(b => b.onclick = () => ratePlan(b.dataset.id, b.dataset.rate, b));
+  $$('[data-rate-open]', v).forEach(b => b.onclick = () => openRating(b.dataset.rateOpen));
   if (plansView === 'crew') {
     wireCrewPanel(v);
     if (currentUser() && !crewState.loaded) loadCrew().then(() => { if (tab === 'plans' && plansView === 'crew') renderPlans(v); });
@@ -1748,7 +1748,57 @@ async function renderPlans(v, refreshed = false) {
   });
 }
 
-async function ratePlan(id, rating, btn) {
+const RATING_WORDS = ['Nothing happened', 'Nothing much', 'Not worth it', 'Flat', 'A little something', 'Decent, nothing special', 'Good', 'Really good', 'Properly good', 'Excellent', 'One of the best'];
+
+// Rate a session's light 0–10, with optional reasons. Takes about five seconds.
+function openRating(id) {
+  const p = S().plans.find(x => x.id === id);
+  if (!p) return;
+  let val = typeof p.lightScore === 'number' ? p.lightScore : 5;
+  const tags = new Set(p.tags || []);
+  const chips = (group, hint) => `<div class="rate-chips">${RATING_TAGS[group].map(([k, l]) => `<button type="button" class="chip-btn rate-chip ${tags.has(k) ? 'on' : ''}" data-tag="${k}" aria-pressed="${tags.has(k)}">${l}</button>`).join('')}</div>${hint ? `<p class="small muted">${hint}</p>` : ''}`;
+  openSheet(`
+    <h2 class="bf-name">How was the light?</h2>
+    <p class="bf-when">${esc(p.spotName)}, ${esc(planWhen(p))}${p.score != null ? `. The app predicted ${p.score}.` : '.'}</p>
+    <div class="rate-face" aria-live="polite">
+      <p class="rate-num num" id="rNum">${val}</p>
+      <p class="rate-word" id="rWord">${RATING_WORDS[val]}</p>
+    </div>
+    <input type="range" id="rSlider" class="rate-slider" min="0" max="10" step="1" value="${val}" aria-label="Light rating out of 10" aria-valuetext="${val} out of 10, ${RATING_WORDS[val]}">
+    <div class="rate-ticks" aria-hidden="true">${[[0, 'Nothing'], [2, ''], [5, 'Decent'], [8, ''], [10, 'Best']].map(([n, l]) => `<span style="left:${n * 10}%"><b>${n}</b>${l}</span>`).join('')}</div>
+
+    <h3 class="sec">What made it?</h3>${chips('made')}
+    <h3 class="sec">What spoiled it?</h3>${chips('spoiled')}
+    <h3 class="sec">Not the light's fault</h3>${chips('notLight', 'Sessions marked here don\'t teach the score, because the light wasn\'t the problem.')}
+
+    <div class="sheet-actions">
+      <button class="btn primary" id="rSave">Save rating</button>
+      <button class="btn" id="rSkip">I didn't go</button>
+    </div>`);
+  const slider = $('#rSlider'), num = $('#rNum'), word = $('#rWord');
+  const paint = () => {
+    slider.style.setProperty('--val', `${val * 10}%`);
+    slider.style.setProperty('--warm', String(val / 10));
+    num.style.setProperty('--warm', String(val / 10));
+    num.textContent = String(val); word.textContent = RATING_WORDS[val];
+    slider.setAttribute('aria-valuetext', `${val} out of 10, ${RATING_WORDS[val]}`);
+    num.classList.remove('bump'); void num.offsetWidth; num.classList.add('bump');
+  };
+  slider.oninput = () => { const n = Number(slider.value); if (n !== val) { val = n; paint(); } };
+  $$('[data-tag]').forEach(b => b.onclick = () => {
+    const k = b.dataset.tag;
+    if (tags.has(k)) tags.delete(k); else tags.add(k);
+    b.classList.toggle('on', tags.has(k)); b.setAttribute('aria-pressed', String(tags.has(k)));
+  });
+  $('#rSave').onclick = () => ratePlan(id, val, [...tags], $('#rSave'));
+  $('#rSkip').onclick = () => {
+    update(s2 => { const pl = s2.plans.find(x => x.id === id); pl.rating = 'skipped'; delete pl.lightScore; pl.tags = []; s2.keepers = s2.keepers.filter(k => k.planId !== id); });
+    closeSheet(); toast("Noted. Sessions you didn't go to don't count."); render();
+  };
+  paint();
+}
+
+async function ratePlan(id, score10, tags, btn) {
   const p = S().plans.find(x => x.id === id);
   if (!p) return;
   btn.disabled = true; btn.textContent = 'Saving…';
@@ -1758,16 +1808,19 @@ async function ratePlan(id, rating, btn) {
     const { hour, tide } = await fetchHistorical(p.lat, p.lon, new Date(p.t * 1000));
     features = featureVector(hour, tide);
   } catch { /* fall back to the forecast snapshot */ }
+  const label = labelFor(score10);
   update(s => {
     const pl = s.plans.find(x => x.id === id);
-    pl.rating = rating;
+    pl.rating = label; pl.lightScore = score10; pl.tags = tags;
+    s.keepers = s.keepers.filter(k => k.planId !== id);   // re-rating replaces the earlier rating
     s.keepers.push({
-      id: uid(), label: rating, source: 'session', planId: p.id,   // keeper | meh | dud
+      id: uid(), label, score10, tags, source: 'session', planId: p.id,
       type: p.type, hunt: p.hunt || null, spotId: p.spotId || null,
       date: p.t * 1000, lat: p.lat, lon: p.lon, spotName: p.spotName, features, thumb: null,
     });
   });
-  toast('Saved. Your personal score just learned from that.');
+  closeSheet();
+  toast(tags.some(t => RATING_TAGS.notLight.some(([k]) => k === t)) ? `Saved: ${score10}/10. Marked as not the light's fault, so it won't teach the score.` : `Saved: ${score10}/10. Your score just learned from that.`, 4500);
   render();
 }
 
@@ -3955,7 +4008,7 @@ function pageKit(v) {
 function pageTuning(v) {
   const st = S(), on = st.settings.tuning !== false;
   const rep2 = tuningReport(st.keepers, st.spots, st.settings);
-  const perSpot = st.spots.map(sp => ({ sp, fl: spotFloor(sp, st.keepers, st.settings), n: colourRatings(st.keepers, sp).length })).filter(x => x.n || x.fl.source === 'yours');
+  const perSpot = st.spots.map(sp => ({ sp, fl: spotFloor(sp, st.keepers, st.settings), n: colourRatings(st.keepers, sp).length })).filter(x => x.n || x.fl.source === 'yours' || x.fl.windK || x.fl.lowK);
   const condText = f => {
     const parts = [`low cloud ${Math.round((f[0] ?? 0) * 100)}%`, `upper cloud ${Math.round(Math.min(100, 0.7 * (f[1] ?? 0) * 100 + 0.9 * (f[2] ?? 0) * 100))}%`];
     if ((f[3] ?? 0) > 0.05) parts.push('some rain');
@@ -3963,10 +4016,10 @@ function pageTuning(v) {
     return parts.join(', ');
   };
   const planScore = r => st.plans.find(p => p.id === r.planId)?.score;
-  const misses = rep2.items.filter(x => (x.rating.label === 'keeper' && (planScore(x.rating) ?? x.standard) < 75) || (x.rating.label === 'dud' && (planScore(x.rating) ?? x.standard) >= 50))
+  const misses = rep2.items.filter(x => { const s10 = ratingScore(x.rating), pred = planScore(x.rating) ?? x.standard; return (s10 >= 7 && pred < 75) || (s10 <= 3 && pred >= 50); })
     .sort((a, b) => (b.rating.date || 0) - (a.rating.date || 0));
   const lbl = { keeper: 'Delivered', meh: 'So-so', dud: 'Not worth it' };
-  const stat = (k, t) => `${t.right} of ${rep2.n} in the right band; ${t.keepGo} of ${rep2.keepers} keepers called Go; ${t.dudGo} dud${t.dudGo === 1 ? '' : 's'} called Go`;
+  const stat = (k, t) => `Usually ${t.gap} points off your rating. ${t.right} of ${rep2.n} in the right band; ${t.keepGo} of ${rep2.keepers} keepers called Go; ${t.dudGo} dud${t.dudGo === 1 ? '' : 's'} called Go.`;
   v.innerHTML = `
     ${youHead('Score tuning', 'Tidelight learns from your ratings which spots shine in clean light and which need cloud to catch colour, and adjusts each spot\'s colour score to match.')}
     <label class="switch-row"><span><strong>Learn from my ratings</strong><small>Applies to the forecast, briefings and alerts. Spots you've set yourself always follow your setting.</small></span>
@@ -3978,7 +4031,7 @@ function pageTuning(v) {
           ? (sp.cleanLight === 'yes' ? 'Set by you: shines in clean light.' : 'Set by you: needs cloud for colour.')
           : fl.floor > 0.35 ? `Shines in clean light: ${fl.k} clear-sky keeper${fl.k === 1 ? '' : 's'}${fl.d ? `, ${fl.d} miss${fl.d === 1 ? '' : 'es'}` : ''}. Clear skies now score well here.`
           : fl.d ? `Needs cloud for colour: ${fl.d} clear-sky session${fl.d === 1 ? ' was a miss' : 's were misses'}. Standard rules.`
-          : `${n} rated session${n === 1 ? '' : 's'} so far. Not enough clear-sky sessions to judge yet.`}</small></span>
+          : `${n} rated session${n === 1 ? '' : 's'} so far. Not enough clear-sky sessions to judge yet.`}${fl.windK ? ` Tagged too windy ${fl.windTags} times: wind now counts for more here.` : ''}${fl.lowK ? ` Tagged cloud-blocked ${fl.horizonTags} times: low cloud now counts for more here.` : ''}</small></span>
         <button class="btn small-btn" data-open-spot="${sp.id}">Spot</button>
       </div>`).join('') : '<p class="muted">Rate a few sunrise and sunset sessions in Plans and this fills in.</p>'}
 
@@ -3987,7 +4040,7 @@ function pageTuning(v) {
         <div><span class="tune-k">Standard rules</span><b class="num">${rep2.std.right}<small>/${rep2.n}</small></b><span class="tune-d">${esc(stat('std', rep2.std))}</span></div>
         <div class="tuned"><span class="tune-k">Tuned to you</span><b class="num">${rep2.tuned.right}<small>/${rep2.n}</small></b><span class="tune-d">${esc(stat('tuned', rep2.tuned))}</span></div>
       </div>
-      <p class="small muted">A fair test: each of your ${rep2.n} rated sunrise and sunset sessions is scored using only what was learned from the others. Fog mornings and duplicate photos are left out.</p>`
+      <p class="small muted">A fair test: each of your ${rep2.n} rated sunrise and sunset sessions is scored using only what was learned from the others. Fog mornings, sessions marked not the light's fault, and duplicate photos are left out. Older three-way ratings count as 8, 5 and 2 out of 10.</p>`
       : `<p class="muted">After about 6 rated sunrise and sunset sessions, this shows how much the tuning improves the score.</p>`}
 
     <h3 class="sec">Near misses</h3>
@@ -3995,7 +4048,7 @@ function pageTuning(v) {
     ${misses.length ? misses.slice(0, 12).map(x => {
       const before = planScore(x.rating) ?? x.standard;
       return `<div class="miss">
-        <div class="miss-head"><span class="miss-name">${esc(x.spot.name)}</span><span class="miss-rate ${x.rating.label}">${lbl[x.rating.label]}</span></div>
+        <div class="miss-head"><span class="miss-name">${esc(x.spot.name)}</span><span class="miss-rate ${x.rating.label}">You rated it ${ratingScore(x.rating)}/10</span></div>
         <p class="miss-when">${esc(x.rating.type ? `${cap(x.rating.type)}, ` : 'Photo, ')}${esc(fmtDate(x.rating.date))}. ${esc(cap(condText(x.rating.features)))}.</p>
         <p class="miss-scores">Scored <b class="num">${before}</b> at the time${x.tuned !== x.standard ? `; tuned, it would score <b class="num tuned">${x.tuned}</b>` : '; the tuning doesn\'t change this one'}.</p>
       </div>`;
