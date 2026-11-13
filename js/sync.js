@@ -2,9 +2,9 @@
 // Local-first: the app always works from this device's copy. When signed in, it merges with your
 // private copy in Supabase record by record (newest change wins, deletions are remembered), then
 // uploads the result. Spot photos sync through a private storage bucket. The Claude key never syncs.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=5.5';
-import { getState, applyMerged, onLocalChange, COLLECTIONS, syncedSettings } from './storage.js?v=5.5';
-import { getPhotoBlob, putPhotoBlob, hasPhoto } from './photos.js?v=5.5';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=5.7';
+import { getState, applyMerged, onLocalChange, COLLECTIONS, syncedSettings } from './storage.js?v=5.7';
+import { getPhotoBlob, putPhotoBlob, hasPhoto } from './photos.js?v=5.7';
 
 const TABLE = 'user_state';
 const BUCKET = 'photos';
@@ -330,4 +330,18 @@ export async function unshareFromCrew(crewId, sessionKey) {
   const uid = need();
   const { error } = await client.from('crew_plans').delete().eq('crew_id', crewId).eq('user_id', uid).eq('session_key', sessionKey);
   if (error) throw crewErr(error);
+}
+
+/* ---------- tester feedback (You → Send feedback) ---------- */
+export async function sendFeedback({ kind, message, appVersion, screen }) {
+  const uid = need();
+  const device = `${navigator.userAgent.slice(0, 180)} | ${innerWidth}x${innerHeight}${matchMedia('(display-mode: standalone)').matches || navigator.standalone ? ' | home screen' : ' | browser'}`;
+  const { error } = await client.from('feedback').insert({ user_id: uid, email: session.user.email || null, kind, message, app_version: appVersion, screen, device });
+  if (error) throw new Error(/does not exist/.test(error.message) ? "Feedback isn't set up in Supabase yet." : error.message);
+}
+export async function myFeedback() {
+  const uid = need();
+  const { data, error } = await client.from('feedback').select('kind, message, created_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(10);
+  if (error) throw new Error(error.message);
+  return data || [];
 }

@@ -25,7 +25,7 @@ const DEFAULTS = {
 
 export const COLLECTIONS = ['spots', 'plans', 'keepers'];
 // Settings that follow you between devices. The Claude key never leaves the device.
-export const syncedSettings = s => ({ home: s.home, driveSpeedKmh: s.driveSpeedKmh, arriveBeforeMin: s.arriveBeforeMin, claudeModel: s.claudeModel, alerts: s.alerts, gearAlways: s.gearAlways, crewAutoShare: s.crewAutoShare });
+export const syncedSettings = s => ({ home: s.home, driveSpeedKmh: s.driveSpeedKmh, arriveBeforeMin: s.arriveBeforeMin, claudeModel: s.claudeModel, alerts: s.alerts, gearAlways: s.gearAlways, crewAutoShare: s.crewAutoShare, exposure: s.exposure });
 
 const clone = o => JSON.parse(JSON.stringify(o));
 

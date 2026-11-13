@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=5.5';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=5.5';
-import { baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=5.5';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=5.5';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=5.5';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew } from './sync.js?v=5.5';
-import { gearFor } from './gear.js?v=5.5';
-import { VAPID_PUBLIC_KEY } from './config.js?v=5.5';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=5.5';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=5.5';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=5.7';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=5.7';
+import { baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=5.7';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=5.7';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=5.7';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=5.7';
+import { gearFor } from './gear.js?v=5.7';
+import { VAPID_PUBLIC_KEY } from './config.js?v=5.7';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=5.7';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=5.7';
 
-export const APP_VERSION = '5.5';
+export const APP_VERSION = '5.7';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -243,7 +243,7 @@ function closeSheet() {
 
 /* ================= router ================= */
 
-function setTab(t) { if (t !== tab) { tabChanged = true; homeAnimate = true; } if (t === 'forecast' && tab !== 'forecast') { homeDay = 0; homeSel = null; } if (t === 'you') youPage = null; tab = t; closeSheet(); render(); window.scrollTo(0, 0); }
+function setTab(t) { if (t !== tab && t === 'you' && tab !== 'you') lastScreen = { forecast: 'Forecast', spots: 'Spots', plans: 'Plans', tools: 'Tools' }[tab] || 'You'; if (t !== tab) { tabChanged = true; homeAnimate = true; } if (t === 'forecast' && tab !== 'forecast') { homeDay = 0; homeSel = null; } if (t === 'you') youPage = null; tab = t; closeSheet(); render(); window.scrollTo(0, 0); }
 
 function render() {
   if (map) { map.remove(); map = null; }
@@ -2719,6 +2719,7 @@ async function openField(key) {
     <div class="fm-actions">
       <button class="btn" data-compass="${esc(e.key)}">Compass</button>
       <button class="btn" id="fmRadar">Radar and hourly</button>
+      <button class="btn" id="fmExposure">Exposure</button>
       <button class="btn" id="fmNight" aria-pressed="false">Night vision</button>
     </div>
     <p class="small muted fm-wake" id="fmWake"></p>`;
@@ -2739,6 +2740,7 @@ async function openField(key) {
   lock();
 
   $('#fmClose').onclick = closeField;
+  $('#fmExposure').onclick = () => openExposure(['aurora', 'astro'].includes(e.topHunt) ? 'stars' : e.topHunt === 'waterfall' ? 'nd' : undefined);
   $('#fmRadar').onclick = () => openNow({ kind: 'spot', id: e.spot.id, lat: e.spot.lat, lon: e.spot.lon, name: e.spot.name });
   $('#fmNight').onclick = () => {
     fieldState.night = !fieldState.night;
@@ -3125,6 +3127,234 @@ function wireTide(e) {
   show(e.t);
 }
 
+/* ================= exposure tools: ND filter, sharp stars, hyperfocal ================= */
+const SHUTTERS = [1/8000, 1/6400, 1/5000, 1/4000, 1/3200, 1/2500, 1/2000, 1/1600, 1/1250, 1/1000, 1/800, 1/640, 1/500, 1/400, 1/320, 1/250, 1/200, 1/160, 1/125, 1/100, 1/80, 1/60, 1/50, 1/40, 1/30, 1/25, 1/20, 1/15, 1/13, 1/10, 1/8, 1/6, 1/5, 1/4, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 1.3, 1.6, 2, 2.5, 3.2, 4, 5, 6, 8, 10, 13, 15, 20, 25, 30];
+const APERTURES = [1.2, 1.4, 1.8, 2, 2.2, 2.5, 2.8, 3.2, 3.5, 4, 4.5, 5, 5.6, 6.3, 7.1, 8, 9, 10, 11, 13, 16, 18, 22];
+const SENSORS = {
+  full: { label: 'Full frame', w: 36, crop: 1, coc: 0.03, ratio: 1.5 },
+  apsc: { label: 'APS-C (Sony, Nikon, Fuji)', w: 23.5, crop: 1.5, coc: 0.02, ratio: 1.5 },
+  canon: { label: 'APS-C (Canon)', w: 22.3, crop: 1.6, coc: 0.019, ratio: 1.5 },
+  m43: { label: 'Micro Four Thirds', w: 17.3, crop: 2, coc: 0.015, ratio: 4 / 3 },
+};
+const ND_PRESETS = [[3, 'ND8'], [6, 'ND64'], [10, 'ND1000'], [15, '15 stop']];
+function fmtShutter(t) {
+  if (t < 0.95) { const d = Math.round(1 / t); return `1/${d} s`; }
+  if (t < 60) return `${t < 10 && Math.abs(t - Math.round(t)) > 0.05 ? t.toFixed(1) : Math.round(t)} s`;
+  if (t < 3600) { const m = Math.floor(t / 60), sec = Math.round(t % 60); return sec ? `${m} min ${sec} s` : `${m} min`; }
+  const h = Math.floor(t / 3600), m = Math.round((t % 3600) / 60);
+  return `${h} h ${m} min`;
+}
+const fmtF = n => `f/${n % 1 ? n.toFixed(1) : n}`;
+const fmtDist = m => (!isFinite(m) ? 'infinity' : m >= 10 ? `${Math.round(m)} m` : m >= 1 ? `${m.toFixed(1)} m` : `${Math.round(m * 100)} cm`);
+const nearIndex = (arr, v) => arr.reduce((bi, x, i) => (Math.abs(Math.log(x / v)) < Math.abs(Math.log(arr[bi] / v)) ? i : bi), 0);
+const ISOS = [400, 640, 800, 1250, 1600, 2500, 3200, 5000, 6400, 10000, 12800, 25600];
+
+let exposureTab = 'nd';
+let ndTimer = null;   // { end, total, raf, wake }
+
+function expSettings() {
+  const e = S().settings.exposure || {};
+  return { sensor: 'full', mp: 24, base: 1/60, stops: 6, focal: 16, aperture: 2.8, hfFocal: 24, hfAperture: 11, focus: 2, ...e };
+}
+function saveExp(patch) { update(s2 => { s2.settings.exposure = { ...expSettings(), ...patch }; }); }
+
+function rangeRow(id, label, out, min, max, step, value, foot = '') {
+  const pct = ((value - min) / (max - min) * 100).toFixed(1);
+  return `<label class="slider">
+    <span class="slider-head"><span>${label}</span><output class="num" id="${id}Out">${out}</output></span>
+    <input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${value}" style="--val:${pct}%">
+    ${foot ? `<span class="slider-foot" id="${id}Foot">${foot}</span>` : ''}
+  </label>`;
+}
+const setFill = el => el.style.setProperty('--val', `${((el.value - el.min) / (el.max - el.min) * 100).toFixed(1)}%`);
+
+function cameraLine(c) {
+  return `<div class="cam-line">
+    <span>${esc(SENSORS[c.sensor].label)}, ${c.mp} MP</span>
+    <button class="link-btn" id="camEdit" type="button">Change camera</button>
+  </div>
+  <div class="cam-edit" id="camBox" hidden>
+    <label>Sensor<select id="camSensor">${Object.entries(SENSORS).map(([k, v]) => `<option value="${k}" ${k === c.sensor ? 'selected' : ''}>${v.label}</option>`).join('')}</select></label>
+    <label>Megapixels<input id="camMp" inputmode="numeric" value="${c.mp}"></label>
+    <button class="btn" id="camSave" type="button">Save camera</button>
+  </div>`;
+}
+function wireCamera(redraw) {
+  $('#camEdit').onclick = () => { $('#camBox').hidden = !$('#camBox').hidden; };
+  $('#camSave').onclick = () => {
+    const mp = Math.max(4, Math.min(120, parseFloat($('#camMp').value) || 24));
+    saveExp({ sensor: $('#camSensor').value, mp });
+    toast('Camera saved.');
+    redraw();
+  };
+}
+
+function openExposure(tabName) {
+  if (tabName) exposureTab = tabName;
+  const tabs = [['nd', 'ND filter'], ['stars', 'Sharp stars'], ['hf', 'Hyperfocal']];
+  openSheet(`
+    <h2 class="bf-name">Exposure</h2>
+    <div class="day-pills exp-tabs" role="tablist" aria-label="Exposure tools">
+      ${tabs.map(([k, l]) => `<button role="tab" aria-selected="${exposureTab === k}" class="${exposureTab === k ? 'on' : ''}" data-exp="${k}">${l}</button>`).join('')}
+    </div>
+    <div id="expBody"></div>`);
+  $$('[data-exp]').forEach(b => b.onclick = () => { stopNdTimer(); exposureTab = b.dataset.exp; $$('[data-exp]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', String(x === b)); }); drawExposure(); });
+  onSheetClose = stopNdTimer;
+  drawExposure();
+}
+
+function drawExposure() {
+  const box = $('#expBody');
+  if (!box) return;
+  const c = expSettings();
+  const sensor = SENSORS[c.sensor];
+
+  if (exposureTab === 'nd') {
+    let bi = nearIndex(SHUTTERS, c.base), stops = c.stops;
+    box.innerHTML = `
+      <p class="bf-when">Meter without the filter, then dial in that shutter speed and your filter.</p>
+      <div class="exp-result"><p class="exp-big num" id="ndResult"></p><p class="exp-sub" id="ndSub"></p></div>
+      ${rangeRow('ndBase', 'Shutter speed without the filter', fmtShutter(SHUTTERS[bi]), 0, SHUTTERS.length - 1, 1, bi)}
+      ${rangeRow('ndStops', 'Filter strength', `${stops} stops`, 0, 20, 1, stops)}
+      <div class="chip-row">${ND_PRESETS.map(([n, l]) => `<button class="chip-btn" data-nd="${n}">${l}</button>`).join('')}</div>
+      <div class="timer" id="ndTimerBox" hidden>
+        <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="t-track" cx="60" cy="60" r="52"/><circle class="t-val" id="ndRing" cx="60" cy="60" r="52" transform="rotate(-90 60 60)"/></svg>
+        <p class="timer-left num" id="ndLeft" role="timer" aria-live="off"></p>
+      </div>
+      <div class="sheet-actions"><button class="btn primary" id="ndStart">Start timer</button></div>`;
+    const draw = () => {
+      const t = SHUTTERS[bi] * 2 ** stops;
+      $('#ndResult').textContent = fmtShutter(t);
+      $('#ndSub').textContent = stops === 0 ? 'No filter.' : `${fmtShutter(SHUTTERS[bi])} with ${stops} stops of ND${t > 30 ? '. Use bulb mode with a remote, and cover the viewfinder.' : '.'}`;
+      $('#ndBaseOut').textContent = fmtShutter(SHUTTERS[bi]);
+      $('#ndStopsOut').textContent = `${stops} stop${stops === 1 ? '' : 's'}`;
+      const start = $('#ndStart');
+      if (!ndTimer) { start.disabled = t < 1; start.textContent = t < 1 ? 'Too short to need a timer' : `Start timer: ${fmtShutter(t)}`; }
+      $$('[data-nd]').forEach(x => x.classList.toggle('on', Number(x.dataset.nd) === stops));
+    };
+    $('#ndBase').oninput = ev => { bi = Number(ev.target.value); setFill(ev.target); draw(); saveExp({ base: SHUTTERS[bi] }); };
+    $('#ndStops').oninput = ev => { stops = Number(ev.target.value); setFill(ev.target); draw(); saveExp({ stops }); };
+    $$('[data-nd]').forEach(x => x.onclick = () => { stops = Number(x.dataset.nd); const r = $('#ndStops'); r.value = stops; setFill(r); draw(); saveExp({ stops }); });
+    $('#ndStart').onclick = () => (ndTimer ? stopNdTimer(true) : startNdTimer(SHUTTERS[bi] * 2 ** stops));
+    draw();
+    return;
+  }
+
+  if (exposureTab === 'stars') {
+    let focal = c.focal, ai = nearIndex(APERTURES, c.aperture);
+    box.innerHTML = `
+      ${cameraLine(c)}
+      <div class="exp-result"><p class="exp-big num" id="stResult"></p><p class="exp-sub" id="stSub"></p></div>
+      ${rangeRow('stFocal', 'Focal length', `${focal} mm`, 8, 135, 1, focal)}
+      ${rangeRow('stAp', 'Aperture', fmtF(APERTURES[ai]), 0, 12, 1, Math.min(ai, 12))}
+      <dl class="bf-cond exp-facts">
+        <div><dt>Old 500 rule</dt><dd id="st500"></dd></div>
+        <div><dt>Starting ISO</dt><dd id="stIso"></dd></div>
+      </dl>
+      <p class="small muted">The NPF rule accounts for your sensor's pixel size and aperture, so stars stay pin-sharp when viewed full size. The 500 rule allows slight trailing. Stars near the south celestial pole move more slowly and can take longer exposures.</p>`;
+    const draw = () => {
+      const N = APERTURES[ai];
+      const px = sensor.w * 1000 / Math.sqrt(c.mp * 1e6 * sensor.ratio);   // pixel pitch in microns
+      const t = (35 * N + 30 * px) / focal;
+      const r500 = 500 / (focal * sensor.crop);
+      const iso = ISOS[nearIndex(ISOS, Math.max(400, Math.min(25600, 3200 * (N / 2.8) ** 2 * (20 / t))))];
+      $('#stResult').textContent = fmtShutter(t);
+      $('#stSub').textContent = `Longest exposure for sharp stars at ${focal} mm, ${fmtF(N)}.`;
+      $('#st500').textContent = fmtShutter(r500);
+      $('#stIso').textContent = `ISO ${iso.toLocaleString('en-AU')} in a dark sky`;
+      $('#stFocalOut').textContent = `${focal} mm`;
+      $('#stApOut').textContent = fmtF(N);
+    };
+    $('#stFocal').oninput = ev => { focal = Number(ev.target.value); setFill(ev.target); draw(); saveExp({ focal }); };
+    $('#stAp').oninput = ev => { ai = Number(ev.target.value); setFill(ev.target); draw(); saveExp({ aperture: APERTURES[ai] }); };
+    wireCamera(drawExposure);
+    draw();
+    return;
+  }
+
+  // Hyperfocal and depth of field
+  let focal = c.hfFocal, ai = nearIndex(APERTURES, c.hfAperture);
+  const fToSlider = d => Math.round(Math.log(d / 0.3) / Math.log(100 / 0.3) * 100), sliderToF = v => 0.3 * (100 / 0.3) ** (v / 100);
+  let fv = fToSlider(c.focus);
+  box.innerHTML = `
+    ${cameraLine(c)}
+    <div class="exp-result"><p class="exp-big num" id="hfResult"></p><p class="exp-sub" id="hfSub"></p></div>
+    ${rangeRow('hfFocal', 'Focal length', `${focal} mm`, 8, 200, 1, focal)}
+    ${rangeRow('hfAp', 'Aperture', fmtF(APERTURES[ai]), 0, APERTURES.length - 1, 1, ai)}
+    <h3 class="sec">Try a focus distance</h3>
+    ${rangeRow('hfFocus', 'Focus at', fmtDist(sliderToF(fv)), 0, 100, 1, fv)}
+    <div class="dof" aria-hidden="true">
+      <div class="dof-scale">${['30 cm', '1 m', '3 m', '10 m', '30 m', '∞'].map((l, i) => `<span style="left:${i * 20}%">${l}</span>`).join('')}</div>
+      <div class="dof-bar"><i id="dofZone"></i><b id="dofFocus"></b></div>
+    </div>
+    <p class="dof-read" id="dofRead" aria-live="polite"></p>`;
+  const pos = d => (!isFinite(d) ? 100 : Math.max(0, Math.min(100, Math.log(d / 0.3) / Math.log(100 / 0.3) * 100)));
+  const draw = () => {
+    const N = APERTURES[ai], f = focal, coc = sensor.coc;
+    const H = (f * f) / (N * coc) / 1000 + f / 1000;   // metres
+    const s0 = sliderToF(fv);
+    const near = (H * s0) / (H + s0), far = s0 >= H ? Infinity : (H * s0) / (H - s0);
+    $('#hfResult').textContent = fmtDist(H);
+    $('#hfSub').textContent = `Focus here and everything from ${fmtDist(H / 2)} to the horizon is sharp, at ${f} mm, ${fmtF(N)}.`;
+    $('#hfFocalOut').textContent = `${f} mm`;
+    $('#hfApOut').textContent = fmtF(N);
+    $('#hfFocusOut').textContent = fmtDist(s0);
+    $('#dofZone').style.left = `${pos(near)}%`;
+    $('#dofZone').style.width = `${pos(far) - pos(near)}%`;
+    $('#dofFocus').style.left = `${pos(s0)}%`;
+    $('#dofRead').textContent = `Sharp from ${fmtDist(near)} to ${fmtDist(far)}.${s0 < H / 2 ? ' Focus further away to bring the horizon into the sharp zone.' : s0 > H * 1.2 ? ' Focusing this far loses near detail; try the hyperfocal distance.' : ''}`;
+  };
+  $('#hfFocal').oninput = ev => { focal = Number(ev.target.value); setFill(ev.target); draw(); saveExp({ hfFocal: focal }); };
+  $('#hfAp').oninput = ev => { ai = Number(ev.target.value); setFill(ev.target); draw(); saveExp({ hfAperture: APERTURES[ai] }); };
+  $('#hfFocus').oninput = ev => { fv = Number(ev.target.value); setFill(ev.target); draw(); saveExp({ focus: sliderToF(fv) }); };
+  wireCamera(drawExposure);
+  draw();
+}
+
+// The long-exposure timer: a ring counting down, three beeps at the end, screen kept on while it runs.
+function startNdTimer(total) {
+  stopNdTimer();
+  const end = performance.now() + total * 1000;
+  ndTimer = { end, total, raf: 0, wake: null };
+  if ('wakeLock' in navigator) navigator.wakeLock.request('screen').then(w => { if (ndTimer) ndTimer.wake = w; }).catch(() => {});
+  try { (window.__ac ||= new (window.AudioContext || window.webkitAudioContext)()).resume(); } catch {}   // unlock sound on this tap
+  $('#ndTimerBox').hidden = false;
+  const btn = $('#ndStart'); btn.disabled = false; btn.textContent = 'Stop timer'; btn.classList.remove('primary');
+  const C = 2 * Math.PI * 52;
+  $('#ndRing').style.strokeDasharray = `${C}`;
+  const tick = () => {
+    if (!ndTimer) return;
+    const left = Math.max(0, (ndTimer.end - performance.now()) / 1000);
+    const el = $('#ndLeft'), ring = $('#ndRing');
+    if (!el) { stopNdTimer(); return; }
+    el.textContent = left >= 60 ? `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}` : left >= 10 ? `${Math.ceil(left)}` : left.toFixed(1);
+    ring.style.strokeDashoffset = `${C * (1 - left / total)}`;
+    if (left <= 0) { finishNdTimer(); return; }
+    ndTimer.raf = requestAnimationFrame(tick);
+  };
+  tick();
+}
+function finishNdTimer() {
+  try {
+    const ac = window.__ac;
+    if (ac) [0, 0.35, 0.7].forEach(d => { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(0.0001, ac.currentTime + d); g.gain.exponentialRampToValueAtTime(0.4, ac.currentTime + d + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + d + 0.25); o.connect(g).connect(ac.destination); o.start(ac.currentTime + d); o.stop(ac.currentTime + d + 0.3); });
+  } catch {}
+  navigator.vibrate?.([200, 100, 200, 100, 200]);
+  const el = $('#ndLeft'); if (el) el.textContent = 'Done';
+  $('#ndTimerBox')?.classList.add('done');
+  stopNdTimer();
+  toast('Exposure done. Close the shutter.', 5000);
+}
+function stopNdTimer(byUser = false) {
+  if (!ndTimer) return;
+  cancelAnimationFrame(ndTimer.raf);
+  ndTimer.wake?.release().catch(() => {});
+  ndTimer = null;
+  const btn = $('#ndStart');
+  if (btn) { btn.classList.add('primary'); }
+  if (byUser) { $('#ndTimerBox').hidden = true; drawExposure(); }
+}
+
 /* ================= tools tab ================= */
 function renderTools(v) {
   const now = Date.now() / 1000;
@@ -3140,6 +3370,7 @@ function renderTools(v) {
       ${nextPlan ? tool(`data-field="${esc(nextPlan.key)}"`, 'Field mode', `Countdowns and the sky for ${esc(nextPlan.spotName)}, your next plan.`) : ''}
       ${tool('id="toolNow"', 'Right now', 'The next 48 hours where you are, conditions at your spots, and rain radar.')}
       ${tool('id="toolCompass"', 'Compass', "Where the sun rises and sets today, and where the sun, moon and Milky Way are now.")}
+      ${tool('id="toolExposure"', 'Exposure', 'ND filter times with a countdown, the longest exposure for sharp stars, and hyperfocal distance.')}
       ${tool('id="toolDial"', 'Light dial', 'Drag around a 24-hour dial to see the light, the sun and the moon at any time.')}
       ${tool('data-lightning', 'Lightning distance', 'Time the gap between flash and thunder to see how far away a storm is.')}
       ${tool('id="toolScout"', 'Scout this spot', 'Save where you stand as a new spot, with the direction of your composition.')}
@@ -3148,6 +3379,7 @@ function renderTools(v) {
   $('#toolNow').onclick = () => openNow();
   $('#toolCompass').onclick = () => openCompassHere();
   $('#toolDial').onclick = () => openLightDialHere();
+  $('#toolExposure').onclick = () => openExposure();
   $('#toolScout').onclick = () => openScout();
   // Field mode needs the live forecast for the next plan: load it, then redraw once.
   if (!nextPlan && S().plans.some(p => p.t >= now - 3600) && S().spots.length) {
@@ -3220,7 +3452,7 @@ const youHead = (title, lede = '') => `<button class="link-btn back" id="youBack
 function renderYou(v, logLines = []) {
   const st = S(), s = st.settings;
   if (youPage) {
-    ({ profile: pageProfile, recreate: pageRecreate, account: pageAccount, alerts: pageAlerts, home: pageHome, kit: pageKit, display: pageDisplay, ai: pageAI, data: pageData })[youPage](v, logLines);
+    ({ profile: pageProfile, recreate: pageRecreate, account: pageAccount, alerts: pageAlerts, home: pageHome, kit: pageKit, display: pageDisplay, ai: pageAI, data: pageData, feedback: pageFeedback })[youPage](v, logLines);
     const back = $('#youBack', v);
     if (back) back.onclick = () => { youPage = null; renderYou(v); window.scrollTo(0, 0); };
     return;
@@ -3255,6 +3487,15 @@ function renderYou(v, logLines = []) {
       ${row('display', 'Display', `${TEXT_SIZES[s.textSize || 'standard']} text, ${(s.motion || 'full') === 'reduced' ? 'reduced' : 'full'} motion.`)}
       ${row('ai', 'AI coach', hasAI(s) ? 'On, using your Claude key.' : 'Off. Optional.')}
       ${row('data', 'Your data', 'Back up, restore or delete.')}
+    </div>
+
+    <h3 class="sec">Tidelight</h3>
+    <div class="you-list">
+      ${row('feedback', 'Send feedback', 'Found a bug, or have an idea? Tell Tyson directly.')}
+      <a class="you-row" href="https://tysonwaldron.com" target="_blank" rel="noopener">
+        <span class="you-text"><span class="you-title">Visit tysonwaldron.com</span><span class="you-status">Prints, workshops and the field journal.</span></span>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>
+      </a>
     </div>
     <p class="small muted you-foot">Tidelight version ${APP_VERSION}. Weather, tide and sea data from Open-Meteo (CC BY 4.0). Aurora forecast from NOAA. Maps from OpenStreetMap. Tide heights are modelled and can differ from official tide tables; check local warnings before heading out.</p>
     <button class="link-btn" id="replayWelcome">Show the welcome again</button>`;
@@ -3676,6 +3917,52 @@ function pageKit(v) {
   };
 }
 
+// Where the tester was before opening feedback, so the note says which screen it's about.
+let lastScreen = 'Forecast';
+function pageFeedback(v) {
+  const user = currentUser();
+  if (!user) {
+    v.innerHTML = `${youHead('Send feedback', 'Sign in first, so Tyson knows who it\'s from and can reply.')}
+      <button class="btn primary" id="fbSignIn">Go to Account and sync</button>`;
+    $('#fbSignIn').onclick = () => { youPage = 'account'; renderYou(v); };
+    return;
+  }
+  const kinds = [['bug', 'Something\'s wrong'], ['idea', 'An idea'], ['praise', 'Something I like'], ['other', 'Other']];
+  v.innerHTML = `
+    ${youHead('Send feedback', 'Goes straight to Tyson, with the app version and the screen you were on, so it\'s easy to follow up.')}
+    <form class="form" id="fbForm">
+      <div class="size-options fb-kinds" role="radiogroup" aria-label="What kind of feedback">
+        ${kinds.map(([k, label], i) => `<label class="size-opt fb-kind ${i === 0 ? 'on' : ''}"><input type="radio" name="kind" value="${k}" ${i === 0 ? 'checked' : ''}><span>${label}</span></label>`).join('')}
+      </div>
+      <label>What happened, or what would help?
+        <textarea name="message" rows="6" maxlength="4000" required placeholder="e.g. On the Pulpit Rock sunrise, the leave time looked an hour early."></textarea>
+      </label>
+      <label>Which screen is it about?<input name="screen" value="${esc(lastScreen)}" maxlength="80"></label>
+      <p class="small muted">Sent as ${esc(user.email || 'you')}, with Tidelight ${APP_VERSION} and your device type.</p>
+      <button class="btn primary" type="submit">Send feedback</button>
+    </form>
+    <div id="fbPast"></div>`;
+  $$('.fb-kind input', v).forEach(r => r.onchange = () => $$('.fb-kind', v).forEach(l => l.classList.toggle('on', l.querySelector('input').checked)));
+  $('#fbForm').onsubmit = async ev => {
+    ev.preventDefault();
+    const f = new FormData(ev.target), btn = ev.target.querySelector('button[type=submit]');
+    const message = String(f.get('message') || '').trim();
+    if (!message) return toast('Write a few words first');
+    btn.disabled = true; btn.textContent = 'Sending…';
+    try {
+      await sendFeedback({ kind: f.get('kind'), message, appVersion: APP_VERSION, screen: String(f.get('screen') || '').trim() });
+      toast('Thanks. Your feedback has been sent.', 4000);
+      youPage = null; renderYou(v);
+    } catch (e) { toast(e.message, 6000); btn.disabled = false; btn.textContent = 'Send feedback'; }
+  };
+  myFeedback().then(list => {
+    const box = $('#fbPast');
+    if (!box || !list.length) return;
+    const label = { bug: 'Something\'s wrong', idea: 'An idea', praise: 'Something I like', other: 'Other' };
+    box.innerHTML = `<h3 class="sec">You've sent</h3>${list.map(x => `<div class="hist-row"><span class="hist-name fb-past">${esc(x.message.length > 90 ? x.message.slice(0, 90) + '…' : x.message)}<small>${esc(label[x.kind] || '')}, ${esc(fmtDate(new Date(x.created_at).getTime()))}</small></span></div>`).join('')}`;
+  }).catch(() => {});
+}
+
 function pageDisplay(v) {
   const cur = S().settings.textSize || 'standard';
   v.innerHTML = `
@@ -3912,7 +4199,8 @@ function drawWelcome() {
         <li><strong>Rate sessions afterwards.</strong> Three keepers switch on a score that's personal to you.</li>
         ${currentUser() ? '<li><strong>Alerts</strong> tell you when a session is worth the alarm. Turn them on under You, in Alerts.</li>' : ''}
       </ul>
-      <div class="wl-actions"><button class="btn primary" id="wlFinish">${spot ? 'Show me the forecast' : 'Go to Spots'}</button></div>`;
+      <div class="wl-actions"><button class="btn primary" id="wlFinish">${spot ? 'Show me the forecast' : 'Go to Spots'}</button></div>
+      <p class="small muted">Made by Tyson Waldron. See his work at <a href="https://tysonwaldron.com" target="_blank" rel="noopener">tysonwaldron.com</a>, and send feedback any time from the You tab.</p>`;
   }
 
   // ----- wiring -----
@@ -4009,6 +4297,16 @@ document.addEventListener('click', ev => {
   if (evBtn) { openEvent(evBtn.dataset.ev); return; }
   if (ev.target.closest('[data-close]')) closeSheet();
 });
+// The logo takes you home: today's forecast, scrolled to the top.
+$('.brand')?.addEventListener('click', () => {
+  if (!$('#sheet').classList.contains('hidden')) closeSheet();
+  if (tab === 'forecast' && homeDay === 0) { window.scrollTo({ top: 0, behavior: motionOK() ? 'smooth' : 'auto' }); return; }
+  homeDay = 0; homeSel = null;
+  setTab('forecast');
+  window.scrollTo(0, 0);
+});
+
+$('.brand')?.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.currentTarget.click(); } });
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { if (!$('#sheet').classList.contains('hidden')) closeSheet(); else closeField(); } });
 $$('.tabbar button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
 $('#nowBtn').onclick = () => openNow();
