@@ -2,9 +2,9 @@
 // Local-first: the app always works from this device's copy. When signed in, it merges with your
 // private copy in Supabase record by record (newest change wins, deletions are remembered), then
 // uploads the result. Spot photos sync through a private storage bucket. The Claude key never syncs.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=6.2';
-import { getState, applyMerged, onLocalChange, COLLECTIONS, syncedSettings } from './storage.js?v=6.2';
-import { getPhotoBlob, putPhotoBlob, hasPhoto } from './photos.js?v=6.2';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=6.3';
+import { getState, applyMerged, onLocalChange, COLLECTIONS, syncedSettings } from './storage.js?v=6.3';
+import { getPhotoBlob, putPhotoBlob, hasPhoto } from './photos.js?v=6.3';
 
 const TABLE = 'user_state';
 const BUCKET = 'photos';

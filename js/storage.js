@@ -9,6 +9,7 @@ const DEFAULTS = {
     home: null,               // { lat, lon }
     driveSpeedKmh: 60,
     arriveBeforeMin: 30,      // minutes on location before sunrise/sunset
+    readyMin: 30,             // minutes between your alarm and leaving home
     claudeKey: '',
     claudeModel: 'claude-sonnet-5-5',
     gearAlways: [],           // You → My kit
@@ -25,7 +26,7 @@ const DEFAULTS = {
 
 export const COLLECTIONS = ['spots', 'plans', 'keepers'];
 // Settings that follow you between devices. The Claude key never leaves the device.
-export const syncedSettings = s => ({ home: s.home, driveSpeedKmh: s.driveSpeedKmh, arriveBeforeMin: s.arriveBeforeMin, claudeModel: s.claudeModel, alerts: s.alerts, gearAlways: s.gearAlways, crewAutoShare: s.crewAutoShare, exposure: s.exposure, tuning: s.tuning });
+export const syncedSettings = s => ({ home: s.home, driveSpeedKmh: s.driveSpeedKmh, arriveBeforeMin: s.arriveBeforeMin, readyMin: s.readyMin, claudeModel: s.claudeModel, alerts: s.alerts, gearAlways: s.gearAlways, crewAutoShare: s.crewAutoShare, exposure: s.exposure, tuning: s.tuning });
 
 const clone = o => JSON.parse(JSON.stringify(o));
 

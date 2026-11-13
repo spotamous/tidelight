@@ -6,6 +6,19 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 
 ## What it does
 
+**New in 6.3: decide, commit, go.** The app is now one path from "is it worth it?" to standing there.
+
+- **Forecast (decide).** A week strip across the top shows the next 7 days, each with its best score on a small swatch of that session's real sky (its light phase, greyed by its cloud). The page opens on the next light: today while a session is still worth leaving for, otherwise tomorrow. Below the day's heading, *the call* is one session painted in its own light: the verdict, the score (tap for *What if?*), the spot, then your alarm, leave and session times, why, and *Plan this shoot*. Tap the call for the full briefing. The light band sits under it; *Reading the band* opens its key. Other sessions that day are one line each. *Refresh* sits beside "Updated … ago".
+- **Commit.** Planning shows *You're set* with your alarm and leave time, *Add alarm to calendar* (the calendar alarm goes off at your alarm time), *See the plan* and *Undo*. Your alarm is the leave time less your *Get ready time* (You → Home and travel, 30 min by default).
+- **Plans.** Each plan shows its live score against the score when you planned it ("Now 61, down 21 since you planned it" with the reason), so you know at 4am whether it's still on.
+- **Go.** Field mode says whether the forecast has held since you planned, and reads the sky in words ("Cloud: low 10%, mid 40%, high 80%").
+- **Spots (where).** Every spot against the next 7 days in one grid (each square is that day's best session; tap it for the briefing), then your spot library. Add a spot by search, where you're standing, the map, or coordinates.
+- **Tools** holds field mode, compass, exposure, light dial and lightning distance. Radar and the hourly forecast are under *Now* in the header.
+- **Briefing.** Compass, light dial and *What if?* sit together under the verdict as tools for that session.
+- **Accessibility.** Pop-ups move focus in and back out, the page behind them is inert, countdowns no longer read themselves aloud every second, and every control is at least 44px.
+
+The notes below describe each feature in more detail; where they mention the day pills, *All spots* matrix or header refresh button, those have been replaced as described above.
+
 - **Home page: the light band.** Pick today, the next two days or *All spots* (the spot matrix). Each day opens with a plain-language headline for its best session, then a band showing that day's real light from 3am to 3am (dark, blue hour, golden hour, daylight, worked out from the sun's position where you live), with each session marked on it by score. Tap a marker, or any session in the list below, to see it in the detail panel: photo, score, leave time, why it scored that way (a bar for every factor, plus confidence and your style), what could change it, and *Plan this shoot*.
 - **Scrub the light band.** Drag along the band (or focus it and use the arrow keys) to see any hour's light phase, cloud layers, rain, wind and temperature, plus the selected session's score at that hour where an hourly score makes sense (colour, forest, waterfall, storms).
 - **Swipe.** Swipe the detail panel left or right to step through the day's sessions in time order (or use the arrows under it); swipe the day's headline to change day.

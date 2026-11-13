@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.2';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.2';
-import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.2';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.2';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.2';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.2';
-import { gearFor } from './gear.js?v=6.2';
-import { VAPID_PUBLIC_KEY } from './config.js?v=6.2';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.2';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.2';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.3';
+import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.3';
+import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.3';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.3';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.3';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.3';
+import { gearFor } from './gear.js?v=6.3';
+import { VAPID_PUBLIC_KEY } from './config.js?v=6.3';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.3';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.3';
 
-export const APP_VERSION = '6.2';
+export const APP_VERSION = '6.3';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -148,7 +148,7 @@ function briefing(e) {
       ? `Sea is calm (${h.wave.toFixed(1)} m): try 10–30 s with an ND filter for glassy water.`
       : `Waves around ${h.wave.toFixed(1)} m: try 0.3–2 s to keep texture in the water, and watch the sets.`);
   }
-  if ((h.high ?? 0) > 30 && e.type !== 'night') {
+  if ((h.high ?? 0) > 30 && (e.type === 'sunrise' || e.type === 'sunset')) {
     lines.push(e.type === 'sunset' ? 'Stay 15–20 min after sunset for afterglow on the high cloud.' : 'Arrive early: high cloud often lights up 15–20 min before sunrise.');
   }
   const H = e.hunts || {};
@@ -163,7 +163,8 @@ function briefing(e) {
   if (H.aurora && H.aurora.score >= 40) lines.push(`Aurora possible around ${fmtTime(H.aurora.peak, o)} (Kp ${H.aurora.kp.toFixed(1)}). Find a dark spot with a clear ${s.lat < 0 ? 'southern' : 'northern'} horizon; try ISO 1600–3200, f/2.8 and 5–15 s.`);
   if (H.forest && H.forest.score >= 40) {
     const x = H.forest.extra;
-    lines.push(`Rainforest: ${x.wet >= 0.7 ? 'wet, saturated greens' : x.wet >= 0.3 ? 'damp foliage' : 'dry foliage'} under ${Math.round(x.tc)}% cloud, best ${fmtTime(H.forest.from, o)}–${fmtTime(H.forest.to, o)}. A polariser cuts the glare off wet leaves; bring a lens cloth.`);
+    const win = H.forest.to > H.forest.from ? `best ${fmtTime(H.forest.from, o)}–${fmtTime(H.forest.to, o)}` : `best around ${fmtTime(H.forest.from ?? e.t, o)}`;
+    lines.push(`Rainforest: ${x.wet >= 0.7 ? 'wet, saturated greens' : x.wet >= 0.3 ? 'damp foliage' : 'dry foliage'} under ${Math.round(x.tc)}% cloud, ${win}. A polariser cuts the glare off wet leaves; bring a lens cloth.`);
   }
   if (H.waterfall && H.waterfall.score >= 40) {
     const x = H.waterfall.extra;
@@ -232,22 +233,40 @@ function runSheetClose() {
   const fn = onSheetClose; onSheetClose = null;
   if (fn) fn();
 }
+let sheetReturnFocus = null;   // what had focus before the sheet opened, so closing puts you back there
+const BEHIND_SHEET = ['.topbar', '#view', '.tabbar'];
 function openSheet(html) {
   runSheetClose();
-  $('#sheetBody').innerHTML = html;
+  const wasOpen = !$('#sheet').classList.contains('hidden');
+  if (!wasOpen) sheetReturnFocus = document.activeElement;
+  const body = $('#sheetBody');
+  body.innerHTML = html;
+  // Name the dialog after its first heading, and move focus into it.
+  const head = body.querySelector('h1, h2');
+  if (head) { head.id = head.id || 'sheetTitle'; head.tabIndex = -1; $('#sheet').setAttribute('aria-labelledby', head.id); }
+  else $('#sheet').removeAttribute('aria-labelledby');
   $('#sheet').classList.remove('hidden');
+  [...BEHIND_SHEET, '#field'].forEach(s => { const el = $(s); if (el) el.inert = true; });
   document.body.classList.add('noscroll');
-  $('#sheetBody').scrollTop = 0;
+  body.scrollTop = 0;
+  requestAnimationFrame(() => (head || $('.sheet-close')).focus({ preventScroll: true }));
 }
 function closeSheet() {
   runSheetClose();
+  const wasOpen = !$('#sheet').classList.contains('hidden');
   $('#sheet').classList.add('hidden');
-  if (!$('#field')) document.body.classList.remove('noscroll');
+  if ($('#field')) $('#field').inert = false;
+  if (!$('#field')) {
+    BEHIND_SHEET.forEach(s => { const el = $(s); if (el) el.inert = false; });
+    document.body.classList.remove('noscroll');
+  }
+  if (wasOpen && sheetReturnFocus?.isConnected) sheetReturnFocus.focus({ preventScroll: true });
+  sheetReturnFocus = null;
 }
 
 /* ================= router ================= */
 
-function setTab(t) { if (t !== tab && t === 'you' && tab !== 'you') lastScreen = { forecast: 'Forecast', spots: 'Spots', plans: 'Plans', tools: 'Tools' }[tab] || 'You'; if (t !== tab) { tabChanged = true; homeAnimate = true; } if (t === 'forecast' && tab !== 'forecast') { homeDay = 0; homeSel = null; } if (t === 'you') youPage = null; tab = t; closeSheet(); render(); window.scrollTo(0, 0); }
+function setTab(t) { if (t !== tab && t === 'you' && tab !== 'you') lastScreen = { forecast: 'Forecast', spots: 'Spots', plans: 'Plans', tools: 'Tools' }[tab] || 'You'; if (t !== tab) { tabChanged = true; homeAnimate = true; } if (t === 'forecast' && tab !== 'forecast') { homeDay = null; homeSel = null; } if (t === 'you') youPage = null; tab = t; closeSheet(); render(); window.scrollTo(0, 0); }
 
 function render() {
   if (map) { map.remove(); map = null; }
@@ -293,58 +312,48 @@ function savedAgo() {
 }
 
 const SUN_ICON = {
-  day: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 9.3 4.4 4.4 0 0 0 7 18z"/><path d="M9 21l1-1.5M13 21l1-1.5"/></svg>',
+  day: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></svg>',
   night: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
   sunrise: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 18h18M7 18a5 5 0 0 1 10 0M12 7v3M12 7l-2 2M12 7l2 2M5 12l1.5 1M19 12l-1.5 1"/></svg>',
   sunset: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 18h18M7 18a5 5 0 0 1 10 0M12 10V7M12 10l-2-2M12 10l2-2M5 12l1.5 1M19 12l-1.5 1"/></svg>',
 };
 
 
-let matrixSel = null;          // selected session key in the matrix
 
 // Sessions in the next 3 days (today, tomorrow, the day after), each tagged with its day index.
-function next3Days() {
+// Sessions in the next n days (today first), each tagged with its day index.
+function nextDays(n = 7) {
   const now = Date.now() / 1000;
   const out = [];
   for (const e of allEvents()) {
     const k = dayKey(e.dayT ?? e.t, e.offset);
-    for (let i = 0; i < 3; i++) if (dayKey(now + i * 86400, e.offset) === k) { out.push({ ...e, dayIdx: i }); break; }
+    for (let i = 0; i < n; i++) if (dayKey(now + i * 86400, e.offset) === k) { out.push({ ...e, dayIdx: i }); break; }
   }
   return out;
 }
+const next3Days = () => nextDays(3);
 
-function heroTitle(e) {
-  if (e.score >= 75) return e.topHunt === 'colour' ? 'Worth the <em>alarm.</em>' : `Go for <em>${HUNT_VERB[e.topHunt]}.</em>`;
-  if (e.score >= 50) return e.topHunt === 'colour' ? 'Worth a <em>look.</em>' : `Maybe <em>${HUNT_VERB[e.topHunt]}.</em>`;
-  return 'A quiet few <em>days.</em>';
+// The day the app should open on: today while one of its sessions is still worth leaving for, otherwise the next day with light.
+function nextLightDay(evs) {
+  const now = Date.now() / 1000;
+  if (evs.some(e => e.dayIdx === 0 && e.leave > now - 15 * 60)) return 0;
+  const later = evs.filter(e => e.dayIdx > 0).map(e => e.dayIdx);
+  return later.length ? Math.min(...later) : 0;
 }
+
 
 function forecastAlerts(st, failed) {
   return `${!navigator.onLine ? `<div class="alert info">You're offline. Showing the forecast saved ${savedAgo()}.</div>` : ''}
-    ${failed.length && navigator.onLine ? `<div class="alert danger">Couldn't load: ${esc(failed.join(', '))}. Check your connection and tap refresh.</div>` : ''}
+    ${failed.length && navigator.onLine ? `<div class="alert danger"><p>${failed.length === st.spots.length ? "Couldn't reach the weather service." : `Couldn't load ${failed.length} of your ${st.spots.length} spots.`} ${failed.some(f => /429|busy|too many|too long/i.test(f)) ? "It's busy right now; try again in a minute." : 'Check your connection, then refresh.'}</p>
+      <details><summary>Details</summary><p class="small">${esc(failed.join('; '))}</p></details></div>` : ''}
     ${!st.settings.home ? `<div class="alert info">Set your home under You, in Home and travel, to get leave times that include the drive.</div>` : ''}`;
 }
 
-let homeDay = 0;          // 0 today, 1 tomorrow, 2 the day after, or 'all' for the spot matrix
+let homeDay = null;       // which of the next 7 days the Forecast shows (0 today); null opens on the next light
 
 const SESSION_TYPES = ['sunrise', 'day', 'sunset', 'night'];
 const TYPE_NAME = { sunrise: 'Sunrise', day: 'Daytime', sunset: 'Sunset', night: 'Night' };
 
-function dayPills(offset) {
-  const now = Date.now() / 1000;
-  const label = i => (i === 0 ? 'Today' : fmtWeekday(now + i * 86400, offset).slice(0, 3));
-  return `<div class="day-pills" role="tablist" aria-label="Choose a day">
-    ${[0, 1, 2].map(i => `<button role="tab" aria-selected="${homeDay === i}" class="${homeDay === i ? 'on' : ''}" data-day="${i}">${label(i)}</button>`).join('')}
-    <button role="tab" aria-selected="${homeDay === 'all'}" class="${homeDay === 'all' ? 'on' : ''}" data-day="all">All spots</button>
-  </div>`;
-}
-function wirePills(v) {
-  $$('[data-day]', v).forEach(b => b.onclick = () => {
-    homeDay = b.dataset.day === 'all' ? 'all' : Number(b.dataset.day);
-    homeSel = null; homeAnimate = true;
-    renderForecast(v);
-  });
-}
 
 // One line on why: the strongest point in its favour, or the main thing against it.
 function whyLine(e) {
@@ -386,6 +395,8 @@ function partBar(p, cls = '') {
     <span class="part-note">${esc(p.note || '')}</span></div>`;
 }
 // "6:17am", "best 2:10am", or a daytime window "10:00am–2:00pm"
+// The same, tightened for small spaces: "10am–2pm".
+const shortWhen = e => sessionWhen(e).replace(/:00(?=[ap]m)/g, '');
 function sessionWhen(e) {
   const o = e.offset, H = e.hunts?.[e.topHunt];
   if (e.type === 'day' && H?.from) return H.from === H.to ? fmtTime(e.t, o) : `${fmtTime(H.from, o)}–${fmtTime(H.to, o)}`;
@@ -490,7 +501,7 @@ function bandSky(e, w0, marks) {
 
 /* ---------- the score gauge and the "What if?" lab ---------- */
 const G_R = 40, G_C = 2 * Math.PI * G_R, G_L = G_C * 240 / 360;   // a 240° arc
-const gaugeColor = sc => (sc >= 75 ? '#D9A066' : sc >= 50 ? '#B08A5E' : '#6E7474');
+const gaugeColor = sc => (sc >= 75 ? '#D9A066' : sc >= 50 ? '#B08A5E' : '#6E7480');
 function gauge(score, size = 92, cls = '') {
   const tick = val => {
     const a = (150 + 240 * val / 100) * Math.PI / 180;
@@ -619,8 +630,11 @@ function openLab(key) {
 // "Leave in 3 h 12 min", kept current while the page is open.
 function liveLine(e) {
   const now = Date.now() / 1000;
-  if (e.leave > now) return `Leave in ${untilText(e.leave - now)}`;
-  if (e.t > now) return `${TYPE_NAME[e.type]} in ${untilText(e.t - now)}`;
+  const H = e.hunts?.[e.topHunt];
+  if (e.leave - now > 36 * 3600) return `${hasDrive(e) ? 'Leave' : 'Be there'} ${fmtWeekday(e.leave, e.offset)} at ${fmtTime(e.leave, e.offset)}`;
+  if (e.leave > now) return `${hasDrive(e) ? 'Leave' : 'Be there'} in ${untilText(e.leave - now)}`;
+  if (e.t > now) return `Leave time has passed. ${TYPE_NAME[e.type]} in ${untilText(e.t - now)}`;
+  if (e.type === 'day' && H?.to > now) return `Good light now, for about ${untilText(H.to - now)} more`;
   return 'Under way or finished';
 }
 let homeTimer = null;      // keeps the Now line and the live line moving
@@ -632,7 +646,7 @@ let bandRevealed = false;   // the band's reveal plays once per app open
 
 // Light phases for a day, from the sun's real position at a reference place (home, or the first spot).
 // Window runs 3am to 3am so a pre-dawn start and a late night both fit.
-const BAND = { night: '#141A23', twilight: '#22304A', blue: '#3A5072', golden: '#B9824E', day: '#59605C' };
+const BAND = { night: '#10151F', twilight: '#1F2B45', blue: '#36507A', golden: '#C68A52', day: '#536A77' };
 function lightBand(w0, place) {
   const w1 = w0 + 86400;
   const pos = t => Math.max(0, Math.min(100, ((t - w0) / 86400) * 100));
@@ -668,7 +682,7 @@ function phaseColor(place, t, offset) {
   return PHASE_COLOR[phaseAt(lightBand(day3am(t, offset), place).marks, t)] || BAND.night;
 }
 
-const bandFill = s => (s >= 80 ? '#D9A066' : s >= 65 ? '#8F6B44' : s >= 50 ? '#3A342B' : '#1E2222');
+const bandFill = s => (s >= 80 ? '#D9A066' : s >= 65 ? '#8F6B44' : s >= 50 ? '#36322D' : '#1A1F28');
 const bandInk = s => (s >= 80 ? '#1A130B' : '#ECE8E1');
 
 function huntPhrase(e) {
@@ -678,49 +692,130 @@ function huntPhrase(e) {
   return 'Probably not worth it';
 }
 
-function sessionDetail(e, isBest = false, nav = null) {
-  const H = e.hunts?.[e.topHunt] || {};
-  const parts = [...(H.parts || [])];
-  if (e.topHunt === 'colour' && e.confidence) parts.push({ label: 'Models agree', value: Math.max(0, 100 - e.confidence.spread * 2), note: `${cap(e.confidence.level)} confidence: within ${e.confidence.spread} points`, alt: true });
-  if (e.personal) parts.push({ label: 'Your style', value: e.personal.score, note: `Compared with your ${e.personal.n} keepers`, alt: true });
+/* ---------- the session's sky: the real light at its moment, veiled by its cloud ---------- */
+// Zenith and horizon colours for each light phase.
+const SKY = {
+  dark: ['#090C13', '#161D2C'],
+  twilight: ['#0E1424', '#2B3757'],
+  'blue hour': ['#16223D', '#4C6893'],
+  'golden hour': ['#252C47', '#E0A066'],
+  daylight: ['#3F5866', '#A2B3B9'],
+};
+const hexMix = (a, b, k) => {
+  const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const A = p(a), B = p(b);
+  return '#' + A.map((x, i) => Math.round(x + (B[i] - x) * k).toString(16).padStart(2, '0')).join('');
+};
+// The moment that defines a session's light: just after sunrise, just before sunset, its best hour otherwise.
+const lightMoment = e => e.t + (e.type === 'sunrise' ? 600 : e.type === 'sunset' ? -600 : 0);
+function skyPhase(e) {
+  return phaseAt(lightBand(day3am(e.t, e.offset), e.spot).marks, lightMoment(e));
+}
+function skyOf(e) {
+  const [zen, hor] = SKY[skyPhase(e)] || SKY.dark;
+  const h = e.hour || {};
+  // Low and mid cloud grey the sky out; high cloud alone mostly doesn't.
+  const veil = Math.min(1, Math.max(h.low ?? 0, (h.mid ?? 0) * 0.8) / 100) * 0.62;
+  const grey = '#5E666C';
+  const z = hexMix(zen, grey, veil * 0.6), hz = hexMix(hor, grey, veil);
+  return `linear-gradient(to bottom, ${z} 0%, ${hexMix(z, hz, 0.42)} 52%, ${hz} 100%)`;
+}
+const scoreTone = sc => (sc >= 75 ? 'tone-go' : sc >= 50 ? 'tone-maybe' : 'tone-skip');
+const skyClass = e => (/dark|twilight/.test(skyPhase(e)) ? 'sky-night' : skyPhase(e) === 'daylight' ? 'sky-day' : 'sky-low');
+
+function weekStrip(evs, offset) {
+  const now = Date.now() / 1000;
+  const cells = [];
+  for (let i = 0; i < 7; i++) {
+    const t = now + i * 86400;
+    const best = evs.filter(e => e.dayIdx === i).sort((a, b) => b.score - a.score)[0];
+    const wd = fmtWeekday(t, offset);
+    const date = fmtDayDate(t, offset).split(' ')[1] || '';
+    const label = i === 0 ? 'Today' : i === 1 ? 'Tmrw' : wd.slice(0, 3);
+    const full = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : `${wd} ${date}`;
+    cells.push(`<button class="wk-d ${i === homeDay ? 'on' : ''}" data-day="${i}" aria-pressed="${i === homeDay}"
+        aria-label="${esc(full)}${S().plans.some(p => evs.some(e => e.dayIdx === i && e.key === p.key)) ? ', you have a plan' : ''}${best ? `: best is ${best.score}, ${TYPE_NAME[best.type].toLowerCase()} at ${esc(best.spot.name)}` : ': no sessions'}">
+      <span class="wk-l">${label}<small class="num">${esc(date)}</small></span>
+      <span class="wk-sky ${best ? `${skyClass(best)} ${scoreTone(best.score)}` : 'none'}" ${best ? `style="background:${skyOf(best)}"` : ''} aria-hidden="true"></span>
+      <span class="wk-s num ${best && best.score >= 75 ? 'go' : ''}" aria-hidden="true">${best ? best.score : '–'}</span>${S().plans.some(p => evs.some(e => e.dayIdx === i && e.key === p.key)) ? '<span class="wk-plan" aria-hidden="true"></span>' : ''}
+    </button>`);
+  }
+  return `<nav class="week" aria-label="Choose a day">${cells.join('')}</nav>`;
+}
+
+// When to set the alarm: the leave time, less the time you need to get ready.
+const alarmAt = e => e.leave - (S().settings.readyMin ?? 30) * 60;
+const hasDrive = e => !!S().settings.home && e.drive != null;
+// An alarm only makes sense for an early start: before 10am local.
+const alarmSensible = e => { const h = new Date((alarmAt(e) + e.offset) * 1000).getUTCHours(); return h < 10 || h >= 23; };
+
+// "You're set" after planning, or "Planned" when coming back to a planned session.
+function commitPanel(e, justNow = false) {
+  const o = e.offset;
+  const early = hasDrive(e) && alarmSensible(e);
+  const what = justNow
+    ? (early ? `Set an alarm for <b class="num">${fmtTime(alarmAt(e), o)}</b>: adding it to your calendar does that for you.` : `Leave by <b class="num">${fmtTime(e.leave, o)}</b>. Add it to your calendar for a reminder.`)
+    : (early ? `Alarm <b class="num">${fmtTime(alarmAt(e), o)}</b>, leave <b class="num">${fmtTime(e.leave, o)}</b>.` : `Leave by <b class="num">${fmtTime(e.leave, o)}</b>.`);
+  return `<div class="commit" ${justNow ? 'role="status"' : ''}>
+      <p class="commit-head"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Planned. ${what}</span></p>
+      <div class="commit-actions">
+        ${justNow
+          ? `<button class="btn primary" data-ics-ev="${esc(e.key)}">${early ? 'Add alarm to calendar' : 'Add to calendar'}</button><button class="btn" data-goplans="${esc(e.key)}">See the plan</button>`
+          : `<button class="btn primary" data-field="${esc(e.key)}">Field mode</button><button class="btn" data-ics-ev="${esc(e.key)}">Add to calendar</button>`}
+      </div>
+      ${justNow ? `<button class="link-btn" data-undo-plan="${esc(e.key)}">Undo</button>` : ''}
+    </div>`;
+}
+
+async function undoPlan(key) {
+  const p = S().plans.find(x => x.key === key);
+  if (!p) return;
+  update(s => { s.plans = s.plans.filter(x => x.key !== key); });
+  toast('Plan removed.');
+  if (p.sharedTo?.length && p.sessionKey) { for (const c of p.sharedTo) await unshareFromCrew(c, p.sessionKey).catch(() => {}); loadCrew(); }
+}
+
+// The call: one session, painted in its own light, with the times that matter and one thing to do.
+function callCard(e, nav = null) {
+  const photo = coverUrl(e.spot);
   const planned = S().plans.some(p => p.key === e.key);
   const going = crewGoing(e);
-  const photo = coverUrl(e.spot);
-  return `<article class="detail ${slideFrom ? `slide-${slideFrom}` : ''}" aria-live="polite">
-    ${photo || (nav && nav.total > 1) ? `<div class="detail-photo-wrap ${photo ? '' : 'no-photo'}">
-      ${photo ? `<img class="detail-photo" src="${photo}" alt="${esc(e.spot.name)}">` : ''}
-      ${nav && nav.total > 1 ? `<nav class="slide-nav" aria-label="Sessions this day, ${nav.index + 1} of ${nav.total}">
-        <button class="slide-arrow prev" data-step="-1" aria-label="Previous session" ${nav.index === 0 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg></button>
-        <span class="slide-dots" aria-hidden="true">${nav.total <= 9
-          ? Array.from({ length: nav.total }, (_, k) => `<i class="${k === nav.index ? 'on' : ''}"></i>`).join('')
-          : `<b class="num">${nav.index + 1} / ${nav.total}</b>`}</span>
-        <button class="slide-arrow next" data-step="1" aria-label="Next session" ${nav.index === nav.total - 1 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button>
-      </nav>` : ''}
-    </div>` : ''}
-    <div class="detail-head">
-      <div>
-        <h2 class="detail-name">${esc(e.spot.name)}</h2>
-        <p class="detail-when">${TYPE_NAME[e.type]} ${sessionWhen(e)}. Leave ${fmtTime(e.leave, e.offset)}${e.hike ? `, ${e.hike} min walk in` : ''}.</p>
+  const o = e.offset;
+  const lab = !!labModel(e);
+  const times = [];
+  const upcoming = e.leave > Date.now() / 1000;
+  if (upcoming && hasDrive(e)) { if (alarmSensible(e)) times.push(['Alarm', fmtTime(alarmAt(e), o)]); times.push(['Leave', fmtTime(e.leave, o)]); }
+  else if (upcoming && e.hike && e.walkStart) times.push(['Start walking', fmtTime(e.walkStart, o)]);
+  else if (upcoming) times.push(['Be there by', fmtTime(e.leave, o)]);
+  times.push([e.type === 'day' ? 'Good light' : TYPE_NAME[e.type], shortWhen(e)]);
+  const pk = e.hunts?.[e.topHunt]?.peak;
+  if (pk && Math.abs(pk - e.t) > 45 * 60) times.push([`${HUNT_LABEL[e.topHunt]} peak`, fmtTime(pk, o)]);
+  const score = `<span class="num" data-count="${e.score}">${e.score}</span>`;
+  return `<article class="call ${slideFrom ? `slide-${slideFrom}` : ''}" aria-labelledby="callVerdict">
+    <div class="call-sky ${skyClass(e)} ${photo ? 'has-photo' : ''}" data-ev="${esc(e.key)}" style="--sky:${skyOf(e)}${photo ? `; --photo:url('${photo}')` : ''}">
+      <div class="call-top">
+        <h2 class="call-verdict" id="callVerdict">${esc(huntPhrase(e))}.</h2>
+        ${lab
+          ? `<button class="call-score" data-lab="${esc(e.key)}" aria-label="Score ${e.score} out of 100. Open What if?">${score}<small>What if?</small></button>`
+          : `<p class="call-score" role="img" aria-label="Score ${e.score} out of 100">${score}</p>`}
       </div>
-      ${labModel(e)
-        ? `<button class="gauge-btn" data-lab="${esc(e.key)}" aria-label="Score ${e.score} out of 100. Open What if?">${gauge(e.score)}<span class="gauge-hint">What if?</span></button>`
-        : `<span class="gauge-btn static" role="img" aria-label="Score ${e.score} out of 100">${gauge(e.score)}</span>`}
+      <div class="call-foot">
+        <p class="call-spot">${esc(e.spot.name)}</p>
+        <p class="call-when">${esc(cap(sessionName(e)))}${planned ? ' · <span class="your-plan">your plan</span>' : ''}</p>
+      </div>
     </div>
-    <p class="detail-live num" id="liveLeave">${esc(liveLine(e))}</p>
-    <p class="detail-verdict">${isBest ? '' : `${esc(huntPhrase(e))}. `}${esc(whySentence(e))}</p>
-    ${e.topHunt === 'colour' && e.confidence ? `<p class="detail-conf conf-${e.confidence.level}">${{ high: 'The weather models agree.', medium: 'The weather models roughly agree.', low: 'The weather models disagree, so treat this as a maybe.' }[e.confidence.level]}</p>` : ''}
-    ${e.access && !e.access.inside ? '<p class="detail-warn">The tide blocks access for this session.</p>' : ''}
-    ${going.length ? `<p class="crew-going">${esc(goingText(going))}.</p>` : ''}
-    <div class="parts">${parts.map(p => partBar(p, p.alt ? 'alt' : '')).join('')}</div>
-    ${couldChange(e) ? `<p class="could">${esc(couldChange(e))}</p>` : ''}
-    <div class="row">
-      <button class="btn primary" data-plan="${esc(e.key)}" ${planned ? 'disabled' : ''}>${planned ? 'Planned' : 'Plan this shoot'}</button>
-      <button class="btn" data-ev="${esc(e.key)}">Full briefing</button>
-      <button class="btn" data-compass="${esc(e.key)}">Compass</button>
-      <button class="btn" data-field="${esc(e.key)}">Field mode</button>
+    <div class="call-body">
+      <dl class="call-times">${times.map(([k, val]) => `<div><dt>${k}</dt><dd class="num">${val}</dd></div>`).join('')}</dl>
+      <p class="call-live num" id="liveLeave">${esc(liveLine(e))}</p>
+      <p class="call-why">${esc(whySentence(e))}</p>
+      ${e.topHunt === 'colour' && e.confidence ? `<p class="note conf-${e.confidence.level}">${{ high: 'The weather models agree.', medium: 'The weather models roughly agree.', low: 'The weather models disagree, so treat this as a maybe.' }[e.confidence.level]}</p>` : ''}
+      ${e.access && !e.access.inside ? '<p class="note conf-low">The tide blocks access for this session.</p>' : ''}
+      ${going.length ? `<p class="note crew">${esc(goingText(going))}.</p>` : ''}
+      <div class="call-actions">${planned ? commitPanel(e) : `<button class="btn primary" data-plan="${esc(e.key)}">Plan this shoot</button><button class="btn" data-ev="${esc(e.key)}">Briefing</button>`}</div>
     </div>
   </article>`;
 }
+
 
 /* ---------- scrubbing the light band ---------- */
 function phaseAt(marks, t) {
@@ -861,20 +956,27 @@ window.addEventListener('resize', () => { if (tab === 'forecast') layoutBandMark
 async function renderForecast(v) {
   const st = S();
   if (!st.spots.length) return emptySpots(v);
-  v.innerHTML = `${dayPills(0)}${skeleton('home', `Reading the sky for ${st.spots.length} spot${st.spots.length > 1 ? 's' : ''}…`)}`;
+  if (st.spots.some(s => !forecasts[s.id])) v.innerHTML = skeleton('home', `Reading the sky for ${st.spots.length} spot${st.spots.length > 1 ? 's' : ''}…`);
   const slowNote = setTimeout(() => { const el = $('.sk-status'); if (el) el.textContent = 'Taking longer than usual. The weather service is slow to answer; saved forecasts are used where it doesn\'t.'; }, 6000);
   const failed = await ensureForecasts().finally(() => clearTimeout(slowNote));
   if (tab !== 'forecast') return;
-  const evs = next3Days();
+  const evs = nextDays(7);
   indexEvents(evs);
-  const offset = evs[0]?.offset ?? 0;
-  if (homeDay === 'all') return renderMatrix(v, evs, st, failed);
+  const offset = evs[0]?.offset ?? -new Date().getTimezoneOffset() * 60;
+  if (homeDay == null || homeDay > 6) homeDay = nextLightDay(evs);
 
   const now = Date.now() / 1000;
   const dayEvs = evs.filter(e => e.dayIdx === homeDay).sort((a, b) => b.score - a.score);
   const best = dayEvs[0];
-  if (!homeSel || !dayEvs.some(e => e.key === homeSel)) homeSel = best?.key || null;
+  // A plan you've made on this day leads; otherwise the day's best session.
+  const plannedKeys = new Set(st.plans.map(p => p.key));
+  const myPlan = dayEvs.filter(e => plannedKeys.has(e.key)).sort((a, b) => a.t - b.t)[0];
+  if (!homeSel || !dayEvs.some(e => e.key === homeSel)) homeSel = (myPlan || best)?.key || null;
   const sel = dayEvs.find(e => e.key === homeSel);
+  const noData = st.spots.every(sp => !forecasts[sp.id]);
+  const lastFetch = Number(localStorage.getItem('tidelight:lastFetch') || 0);
+  const stale = navigator.onLine && lastFetch && Date.now() - lastFetch > 3 * 3600 * 1000;
+  if (stale && !renderForecast.autoRefreshed) { renderForecast.autoRefreshed = true; setTimeout(() => refreshForecasts(null, true), 50); }
 
   // The day's 3am-to-3am window in local time.
   const dayRef = now + homeDay * 86400;
@@ -885,56 +987,63 @@ async function renderForecast(v) {
   const band = lightBand(w0, place);
   const dateLine = fmtDayDate(dayRef, offset).split(' ').slice(1).join(' ');   // "11 Nov", in the spots' time zone
   const weekday = fmtWeekday(dayRef, offset);
+  const dayName = homeDay === 0 ? 'Today' : homeDay === 1 ? 'Tomorrow' : weekday;
 
   // One marker per session type: the best spot for it. Daytime sessions also draw their window.
   const perType = SESSION_TYPES.map(type => dayEvs.find(e => e.type === type)).filter(Boolean);
   const counts = Object.fromEntries(SESSION_TYPES.map(t => [t, dayEvs.filter(e => e.type === t).length]));
-  let spanTimes = '';   // the good-light window's times, for the legend
+  let spanTimes = '';
   const markers = perType.map((e, mi) => {
     const H = e.hunts?.[e.topHunt];
-    if (e.type === 'day' && H?.from && H.to > H.from) spanTimes = `${fmtTime(H.from, e.offset).replace(':00', '')}–${fmtTime(H.to, e.offset).replace(':00', '')}`;
-    const span = e.type === 'day' && H?.from && H.to > H.from
-      ? `<span class="band-span" style="left:${band.pos(H.from)}%; width:${Math.max(1, band.pos(H.to) - band.pos(H.from))}%"><b class="span-label">Good light ${fmtTime(H.from, e.offset).replace(':00', '')}–${fmtTime(H.to, e.offset).replace(':00', '')}</b></span>` : '';
-    const more = counts[e.type] > 1 ? `<span class="band-more">+${counts[e.type] - 1}</span>` : '';
-    return `${span}<span class="band-pin" style="left:${band.pos(e.t)}%" aria-hidden="true"></span><button class="band-mark ${e.key === homeSel ? 'on' : ''}" data-pos="${band.pos(e.t)}" style="left:${band.pos(e.t)}%; --i:${mi}; --fill:${bandFill(e.score)}; --ink:${bandInk(e.score)}" data-sel="${esc(e.key)}"
-      aria-label="${TYPE_NAME[e.type]} at ${esc(e.spot.name)}, ${sessionWhen(e)}, score ${e.score}">${e.score}${more}</button>`;
+    const hasSpan = e.type === 'day' && H?.from && H.to > H.from;
+    if (hasSpan) spanTimes = `${fmtTime(H.from, e.offset).replace(':00', '')}–${fmtTime(H.to, e.offset).replace(':00', '')}`;
+    const span = hasSpan ? `<span class="band-span" style="left:${band.pos(H.from)}%; width:${Math.max(1, band.pos(H.to) - band.pos(H.from))}%"><b class="span-label">Good light ${spanTimes}</b></span>` : '';
+    const more = counts[e.type] > 1 ? `<span class="band-more" aria-hidden="true">+${counts[e.type] - 1}</span>` : '';
+    return `${span}<span class="band-pin" style="left:${band.pos(e.t)}%" aria-hidden="true"></span><button class="band-mark ${e.key === homeSel ? 'on' : ''} ${plannedKeys.has(e.key) ? 'planned' : ''}" data-pos="${band.pos(e.t)}" style="left:${band.pos(e.t)}%; --i:${mi}; --fill:${bandFill(e.score)}; --ink:${bandInk(e.score)}" data-sel="${esc(e.key)}"
+      aria-label="${TYPE_NAME[e.type]} at ${esc(e.spot.name)}, ${sessionWhen(e)}, score ${e.score}${counts[e.type] > 1 ? `, best of ${counts[e.type]} spots` : ''}${plannedKeys.has(e.key) ? ', planned' : ''}">${e.score}${more}</button>`;
   }).join('');
   const ticks = [[w0 + 3 * 3600, '6am'], [w0 + 9 * 3600, 'Noon'], [w0 + 15 * 3600, '6pm'], [w0 + 21 * 3600, 'Midnight']]
     .map(([t, l]) => `<span class="band-tick" style="left:${band.pos(t)}%">${l}</span>`).join('');
   const nowLine = now > w0 && now < w0 + 86400 ? `<span class="band-now" style="left:${band.pos(now)}%" aria-hidden="true"></span>` : '';
 
   const others = dayEvs.filter(e => e.key !== homeSel).sort((a, b) => a.t - b.t);
-  const order = [...dayEvs].sort((a, b) => a.t - b.t || b.score - a.score);   // swipe order: through the day
+  const order = [...dayEvs].sort((a, b) => a.t - b.t || b.score - a.score);   // stepping order: through the day
+  const nextWithLight = [1, 2, 3, 4, 5, 6].map(d => homeDay + d).find(d => d <= 6 && evs.some(e => e.dayIdx === d));
 
   v.innerHTML = `
-    ${dayPills(offset)}
     ${forecastAlerts(st, failed)}
+    ${weekStrip(evs, offset)}
     <div class="home-grid ${homeAnimate ? 'enter' : ''}">
     <header class="day-head-v2">
-      <h1 class="day-title">${homeDay === 0 ? 'Today' : homeDay === 1 ? 'Tomorrow' : esc(weekday)}<span>, ${esc(homeDay > 1 ? dateLine : `${weekday} ${dateLine}`)}</span></h1>
-      <p class="day-lede">${best ? `${esc(huntPhrase(best))} at ${esc(best.spot.name)}, ${TYPE_NAME[best.type].toLowerCase()} ${sessionWhen(best)}.` : 'No sessions left for this day. Try another day.'}</p>
+      <h1 class="day-title">${esc(dayName)}<span>${esc(homeDay > 1 ? dateLine : `${weekday} ${dateLine}`)}</span></h1>
+      <p class="updated ${stale ? 'stale' : ''}">${navigator.onLine ? `${stale ? 'Refreshing a forecast from' : 'Updated'} ${savedAgo()}` : `Offline, saved ${savedAgo()}`}<button class="link-btn" id="refreshLink">Refresh</button></p>
     </header>
+    ${sel ? callCard(sel)
+      : noData ? `<section class="call-empty"><p>No forecast to show yet.</p><p class="small muted">Tidelight shows nothing rather than guess. Try again in a minute.</p><button class="btn primary" id="retryEmpty">Try again</button></section>`
+      : `<section class="call-empty"><p>${homeDay === 0 ? "Today's light is done." : 'No sessions on this day.'}</p>${nextWithLight != null ? `<button class="btn" data-day="${nextWithLight}">Show ${nextWithLight === 1 ? 'tomorrow' : esc(fmtWeekday(now + nextWithLight * 86400, offset))}</button>` : ''}</section>`}
     <figure class="band-wrap">
       <div class="band ${bandRevealed ? '' : 'reveal'}" style="background:${band.gradient}" tabindex="0" role="slider"
-        aria-label="The day's light, 3am to 3am. Drag, or use the arrow keys, to see conditions at any time." aria-valuemin="0" aria-valuemax="1440" aria-valuenow="0">
+        aria-label="${esc(dayName)}'s light, 3am to 3am. Drag, or use the arrow keys, to see conditions at any time." aria-valuemin="0" aria-valuemax="1440" aria-valuenow="0">
         ${bandSky(sel, w0, band.marks)}
         ${nowLine}${markers}
         <span class="scrub-line" id="scrubLine" hidden></span>
         <div class="scrub" id="scrub" hidden></div>
       </div>
       <div class="band-ticks" aria-hidden="true">${ticks}</div>
-      <figcaption class="band-key">
-        <span><i style="background:${BAND.blue}"></i>Blue hour</span><span><i style="background:${BAND.golden}"></i>Golden hour</span><span><i style="background:${BAND.day}"></i>Daylight</span>${spanTimes ? `<span class="key-icon-wrap"><b class="key-span" aria-hidden="true"></b>Good light window, ${spanTimes}</span>` : ''}${bandSky.last?.cloud ? '<span class="key-icon-wrap"><b class="key-icon sky-key-cloud" aria-hidden="true"></b>Cloud</span>' : ''}${bandSky.last?.rain ? '<span class="key-icon-wrap"><b class="key-icon sky-key-rain" aria-hidden="true"></b>Rain likely</span>' : ''}<span><i style="background:${BAND.night}; outline:1px solid var(--line)"></i>Dark</span>
-      </figcaption>
-      ${sel && forecasts[sel.spot.id] ? `<p class="band-sky-note">Cloud, rain and clear night sky shown for ${esc(sel.spot.name)}.${spanTimes ? ' The white bar is the good-light window for the daytime session: the hours its score stays close to its best.' : ''} Drag along the band to see any hour.</p>` : ''}
+      <details class="band-help">
+        <summary>Reading the band</summary>
+        <div class="band-key">
+          <span><i style="background:${BAND.blue}"></i>Blue hour</span><span><i style="background:${BAND.golden}"></i>Golden hour</span><span><i style="background:${BAND.day}"></i>Daylight</span><span><i style="background:${BAND.night}"></i>Dark</span>${bandSky.last?.cloud ? '<span><b class="key-icon sky-key-cloud" aria-hidden="true"></b>Cloud</span>' : ''}${bandSky.last?.rain ? '<span><b class="key-icon sky-key-rain" aria-hidden="true"></b>Rain likely</span>' : ''}${spanTimes ? `<span><b class="key-span" aria-hidden="true"></b>Good light, ${spanTimes}</span>` : ''}
+        </div>
+        <p>The band is the day's real light, 3am to 3am. Each circle is the best spot for that session, with its score; +2 means two more spots are scored for it below.${sel ? ` Cloud and rain are drawn for ${esc(sel.spot.name)}.` : ''} Drag along the band to see any hour.</p>
+      </details>
     </figure>
-    ${sel ? sessionDetail(sel, sel.key === best?.key, { index: order.findIndex(e => e.key === sel.key), total: order.length }) : ''}
-    ${others.length ? `<section class="others">
-      <h3 class="others-title">Other sessions ${homeDay === 0 ? 'today' : homeDay === 1 ? 'tomorrow' : `on ${esc(weekday)}`}</h3>
+    ${others.length ? `<section class="others" aria-labelledby="othersTitle">
+      <h2 class="others-title" id="othersTitle">Also ${homeDay === 0 ? 'today' : homeDay === 1 ? 'tomorrow' : `on ${esc(weekday)}`}</h2>
       ${others.map((e, oi) => `<button class="other-row" style="--i:${oi}" data-sel="${esc(e.key)}">
-        <span class="other-time num">${sessionWhen(e)}</span>
-        <span class="other-name">${esc(e.spot.name)}<small>${TYPE_NAME[e.type]}${e.topHunt !== 'colour' ? `, ${HUNT_LABEL[e.topHunt].toLowerCase()}` : ''}${unsure(e) ? ', models disagree' : ''}</small></span>
-        <span class="other-score num" style="--fill:${bandFill(e.score)}; --ink:${bandInk(e.score)}">${e.score}</span>
+        <span class="other-sky ${skyClass(e)} ${scoreTone(e.score)}" style="background:${skyOf(e)}"><b class="num">${e.score}</b></span>
+        <span class="other-name">${esc(e.spot.name)}<small>${TYPE_NAME[e.type]} ${shortWhen(e)}${e.topHunt !== 'colour' ? `, ${HUNT_LABEL[e.topHunt].toLowerCase()}` : ''}${unsure(e) ? ', models disagree' : ''}</small></span>
+        <span class="other-verdict ${plannedKeys.has(e.key) ? 'planned' : e.score >= 75 ? 'go' : ''}">${plannedKeys.has(e.key) ? 'Planned' : e.score >= 75 ? 'Go' : e.score >= 50 ? 'Maybe' : 'Skip'}</span>
       </button>`).join('')}
     </section>` : ''}
     <p class="small muted foot-note">Scores are estimates from forecast data. Check official warnings before heading out.</p>
@@ -949,97 +1058,45 @@ async function renderForecast(v) {
     if (tab !== 'forecast' || !$('.band')) { clearInterval(homeTimer); return; }
     const n = Date.now() / 1000, nl = $('.band-now'), lv = $('#liveLeave');
     if (nl) nl.style.left = `${band.pos(n)}%`;
-    if (lv && sel) lv.textContent = liveLine(sel);
-  }, 1000);
+    if (lv && sel) { const txt = liveLine(sel); if (lv.textContent !== txt) lv.textContent = txt; }
+  }, 15000);
   layoutBandMarks();
-  wirePills(v);
   wireScrub(v, w0, band.marks, sel);
+  const pickDay = d => {
+    if (d < 0 || d > 6 || d === homeDay) return;
+    slideFrom = d > homeDay ? 'right' : 'left';
+    homeDay = d; homeSel = null; homeAnimate = true;
+    renderForecast(v);
+  };
+  $$('[data-day]', v).forEach(b => b.onclick = () => pickDay(Number(b.dataset.day)));
   const step = d => {
     const i = order.findIndex(e => e.key === homeSel) + d;
     if (i < 0 || i >= order.length) return;
     homeSel = order[i].key; slideFrom = d > 0 ? 'right' : 'left';
     renderForecast(v);
   };
-  const goDay = d => {
-    const next = Math.max(0, Math.min(2, homeDay + d));
-    if (next === homeDay) return;
-    homeDay = next; homeSel = null; homeAnimate = true; slideFrom = d > 0 ? 'right' : 'left';
-    renderForecast(v);
-  };
-  onSwipe($('.detail', v), () => step(1), () => step(-1));
-  onSwipe($('.day-head-v2', v), () => goDay(1), () => goDay(-1));
+  onSwipe($('.call', v), () => step(1), () => step(-1));
+  onSwipe($('.day-head-v2', v), () => pickDay(homeDay + 1), () => pickDay(homeDay - 1));
   $$('[data-step]', v).forEach(b => b.onclick = () => step(Number(b.dataset.step)));
   $$('[data-sel]', v).forEach(b => b.onclick = () => {
     homeSel = b.dataset.sel;
-    renderForecast(v).then(() => { const d = $('.detail'); if (d && b.classList.contains('other-row') && !matchMedia('(min-width: 1000px)').matches) d.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); });
+    renderForecast(v).then(() => { const d = $('.call'); if (d && b.classList.contains('other-row') && !matchMedia('(min-width: 1000px)').matches) d.scrollIntoView({ behavior: motionOK() ? 'smooth' : 'auto', block: 'start' }); });
   });
-  $$('[data-plan]', v).forEach(b => b.onclick = () => {
-    const e = eventIndex.get(b.dataset.plan);
-    if (!e) return;
-    addPlan(e);
-    b.textContent = 'Planned'; b.disabled = true;
-    afterPlanned(e.key);
-  });
+  $('#refreshLink', v).onclick = () => refreshForecasts($('#refreshLink', v));
+  const re = $('#retryEmpty', v); if (re) re.onclick = () => refreshForecasts(re);
 }
 
-const band = s => (s >= 80 ? 'b4' : s >= 65 ? 'b3' : s >= 50 ? 'b2' : 'b1');
-
-function renderMatrix(v, evs, st, failed) {
-  const now = Date.now() / 1000;
-  const offset = evs[0]?.offset ?? 0;
-  const types = ['sunrise', 'day', 'sunset', 'night'];
-  const cols = [];
-  for (let i = 0; i < 3; i++) for (const type of types) if (evs.some(e => e.dayIdx === i && e.type === type)) cols.push({ i, type });
-  const cell = new Map(evs.map(e => [`${e.spot.id}|${e.dayIdx}|${e.type}`, e]));
-  const spotBest = sp => Math.max(-1, ...evs.filter(e => e.spot.id === sp.id).map(e => e.score));
-  const spots = [...st.spots].sort((a, b) => spotBest(b) - spotBest(a));
-  if (!matrixSel || !eventIndex.has(matrixSel) || !evs.some(e => e.key === matrixSel)) matrixSel = [...evs].sort((a, b) => b.score - a.score)[0]?.key || null;
-  const sel = evs.find(e => e.key === matrixSel);
-  const groups = [0, 1, 2].map(i => ({ i, n: cols.filter(c => c.i === i).length })).filter(g => g.n);
-  const dayLabel = i => fmtDayDate(now + i * 86400, offset).split(' ')[0].toUpperCase();
-  const typeName = { sunrise: 'Sunrise', day: 'Daytime', sunset: 'Sunset', night: 'Night' };
-
-  v.innerHTML = `
-    ${dayPills(offset)}
-    <h1 class="page-title">All spots</h1>
-    <p class="page-lede">Every spot against every session for the next 3 days. Tap a score for its summary.</p>
-    ${forecastAlerts(st, failed)}
-    <div class="mx-wrap">
-      <div class="mx" style="grid-template-columns: 116px repeat(${cols.length}, 42px)">
-        <span class="mx-corner"></span>
-        ${groups.map(g => `<span class="mx-day" style="grid-column: span ${g.n}">${dayLabel(g.i)}</span>`).join('')}
-        <span class="mx-corner"></span>
-        ${cols.map(c => `<span class="mx-type" title="${typeName[c.type]}" aria-label="${typeName[c.type]}">${SUN_ICON[c.type]}</span>`).join('')}
-        ${spots.map(sp => `
-          <span class="mx-spot">${coverUrl(sp) ? `<img src="${coverUrl(sp)}" alt="">` : `<span class="mx-ph" aria-hidden="true">${esc(sp.name.charAt(0))}</span>`}<span>${esc(sp.name)}</span></span>
-          ${cols.map(c => {
-            const e = cell.get(`${sp.id}|${c.i}|${c.type}`);
-            if (!e) return '<span class="mx-none" aria-hidden="true">–</span>';
-            return `<button class="mx-cell ${band(e.score)} ${e.key === matrixSel ? 'sel' : ''} ${unsure(e) ? 'unsure' : ''}" data-mx="${esc(e.key)}" aria-label="${esc(sp.name)}, ${esc(sessionName(e))}, score ${e.score}">${e.score}${e.access && !e.access.inside ? '<i class="mx-tide" aria-hidden="true"></i>' : ''}</button>`;
-          }).join('')}`).join('')}
-      </div>
-    </div>
-    <div class="mx-legend">
-      <span><i class="b4"></i>80+</span><span><i class="b3"></i>65–79</span><span><i class="b2"></i>50–64</span><span><i class="b1"></i>Under 50</span><span><i class="unsure-key"></i>Models disagree</span>
-    </div>
-    ${sel ? `<section class="mx-detail">
-      ${coverUrl(sel.spot) ? `<img src="${coverUrl(sel.spot)}" alt="">` : `<span class="mx-detail-ph" aria-hidden="true"></span>`}
-      <div>
-        <p class="mx-detail-when">${esc(fmtDayDate(sel.dayT ?? sel.t, sel.offset))}, ${typeName[sel.type].toLowerCase()} ${sessionWhen(sel)}</p>
-        <div class="mx-detail-name">${esc(sel.spot.name)}</div>
-        <div class="small"><strong class="caramel">${esc(verdict(sel))}, ${sel.score}.</strong> <span class="muted">Leave ${fmtTime(sel.leave, sel.offset)}.${sel.access && !sel.access.inside ? ' Tide blocks access.' : ''}</span></div>
-      </div>
-    </section>
-    <div class="row"><button class="btn primary block" data-ev="${esc(sel.key)}">Open the briefing</button></div>` : '<p class="muted">No sessions in the next 3 days.</p>'}
-  `;
-  wirePills(v);
-  $$('[data-mx]', v).forEach(b => b.onclick = () => {
-    const keepScroll = $('.mx-wrap').scrollLeft;
-    matrixSel = b.dataset.mx;
-    renderMatrix(v, evs, st, failed);
-    $('.mx-wrap').scrollLeft = keepScroll;
-  });
+// Fetch every spot's forecast again (the Refresh link on the Forecast page).
+async function refreshForecasts(btn, quiet = false) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Refreshing…'; }
+  const failed = await loadForecasts(true);
+  syncNow();
+  if (!quiet || failed.length) toast(failed.length ? `${failed.length} spot${failed.length === 1 ? '' : 's'} didn't load. Try again in a minute.` : 'Forecasts updated.');
+  if (tab === 'forecast' || tab === 'spots') render();
 }
+
+const band = s => (s >= 75 ? 'b4' : s >= 50 ? 'b3' : 'b1');   // go, maybe, skip: the same cut-offs as the verdict
+
 
 /* ================= event detail ================= */
 
@@ -1087,11 +1144,11 @@ function openEvent(key) {
   const gear = gearFor(e, S().settings);
 
   openSheet(`
-    ${coverUrl(e.spot) ? `<img class="banner" src="${coverUrl(e.spot)}" alt="${esc(e.spot.name)}">` : ''}
+    <div class="bf-sky ${skyClass(e)} ${coverUrl(e.spot) ? 'has-photo' : ''}" style="--sky:${skyOf(e)}${coverUrl(e.spot) ? `; --photo:url('${coverUrl(e.spot)}')` : ''}" aria-hidden="true"></div>
     <header class="bf-head">
       <div>
         <h2 class="bf-name">${esc(e.spot.name)}</h2>
-        <p class="bf-when">${esc(cap(sessionName(e)))}, ${sessionWhen(e)}</p>
+        <p class="bf-when">${esc(cap(sessionName(e)))}, ${sessionWhen(e)}${(() => { const pk = e.hunts?.[e.topHunt]?.peak; return pk && Math.abs(pk - e.t) > 45 * 60 ? `. ${HUNT_LABEL[e.topHunt]} peaks around ${fmtTime(pk, o)}` : ''; })()}</p>
       </div>
       <p class="bf-score num" aria-label="Score ${e.score} out of 100" data-count="${e.score}">${e.score}</p>
     </header>
@@ -1099,12 +1156,11 @@ function openEvent(key) {
     ${e.topHunt === 'colour' && e.confidence ? `<p class="bf-note conf-${e.confidence.level}">${{ high: 'The weather models agree.', medium: 'The weather models roughly agree.', low: 'The weather models disagree, so treat this as a maybe.' }[e.confidence.level]}</p>` : ''}
     ${e.access && !e.access.inside ? `<p class="bf-note conf-low">${e.access.none ? 'The tide stays above your access level around this session.' : `Tide access runs ${fmtTime(e.access.start, o)} to ${fmtTime(e.access.backBy, o)}, which doesn't cover this session.`}</p>` : ''}
     ${going.length ? `<p class="bf-note crew">${esc(goingText(going))}.</p>` : ''}
-    <div class="bf-quiet">
-      ${currentUser() && crewState.crews.length ? '<button class="link-btn" id="shareBtn">Share with crew</button>' : ''}
-      <button class="link-btn" id="icsBtn">Add to calendar</button>
-      <button class="link-btn" data-compass="${esc(e.key)}">Open compass</button>
-      ${labModel(e) ? `<button class="link-btn" data-lab="${esc(e.key)}">What if?</button>` : ''}
-      <button class="link-btn" data-dial="${esc(e.key)}">Light dial</button>
+    <div class="bf-tools" role="group" aria-label="Tools for this session">
+      <button class="tool-chip" data-compass="${esc(e.key)}">Compass</button>
+      <button class="tool-chip" data-dial="${esc(e.key)}">Light dial</button>
+      ${labModel(e) ? `<button class="tool-chip" data-lab="${esc(e.key)}">What if?</button>` : ''}
+      ${currentUser() && crewState.crews.length ? '<button class="tool-chip" id="shareBtn">Share with crew</button>' : ''}
     </div>
 
     <h3 class="sec">The plan</h3>
@@ -1132,10 +1188,7 @@ function openEvent(key) {
     <ul class="gear-preview">${gear.map(g => `<li><strong>${esc(g.label)}</strong><span>${esc(g.why)}</span></li>`).join('')}</ul>
     <p class="small muted">Plan the shoot to tick these off as you pack. Your always-bring items live under You, in My kit.</p>
 
-    <div class="sheet-actions">
-      <button class="btn primary" id="planBtn" ${planned ? 'disabled' : ''}>${planned ? 'Planned' : 'Plan this shoot'}</button>
-      <button class="btn" data-field="${esc(e.key)}">Open field mode</button>
-    </div>
+    <div class="sheet-actions">${planned ? commitPanel(e) : `<button class="btn primary" data-plan="${esc(e.key)}">Plan this shoot</button>`}</div>
   `);
   runCounts($('#sheetBody'));
   wireTide(e);
@@ -1145,13 +1198,6 @@ function openEvent(key) {
     openShareSheet(S().plans.find(p => p.key === e.key).id);
   };
 
-  $('#planBtn').onclick = () => {
-    addPlan(e);
-    $('#planBtn').textContent = 'Planned';
-    $('#planBtn').disabled = true;
-    afterPlanned(e.key);
-  };
-  $('#icsBtn').onclick = () => downloadIcs(e);
   $('#aiBriefBtn').onclick = async () => {
     const st = S();
     if (!hasAI(st.settings)) { toast('Add your Claude key under You, in AI coach, to use this.', 5000); return; }
@@ -1235,7 +1281,7 @@ async function autoShare(planKey) {
 async function afterPlanned(planKey) {
   const shared = await autoShare(planKey);
   const names = crewState.crews.map(c => c.name);
-  toast(shared ? `Planned and shared with ${names.length === 1 ? names[0] : 'your crews'}.` : crewState.crews.length ? 'Planned. Share it with your crew from Plans.' : 'Planned. Rate it afterwards so your personal score learns.', 4500);
+  if (shared) toast(`Shared with ${names.length === 1 ? names[0] : 'your crews'}.`, 4000);
 }
 
 // Crewmates heading to roughly the same place and session (within ~1.5 km and 2 hours).
@@ -1529,7 +1575,7 @@ function addPlan(e) {
   });
 }
 
-function icsText({ id, title, start, end, desc, lat, lon }) {
+function icsText({ id, title, start, end, desc, lat, lon, alarmMin = 15 }) {
   const fmt = t => new Date(t * 1000).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   const escI = s => String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
   return [
@@ -1537,7 +1583,7 @@ function icsText({ id, title, start, end, desc, lat, lon }) {
     'BEGIN:VEVENT', `UID:${id}@tidelight`, `DTSTAMP:${fmt(Date.now() / 1000)}`,
     `DTSTART:${fmt(start)}`, `DTEND:${fmt(end)}`, `SUMMARY:${escI(title)}`,
     `DESCRIPTION:${escI(desc)}`, `GEO:${lat};${lon}`, `LOCATION:${lat.toFixed(5)}\\, ${lon.toFixed(5)}`,
-    'BEGIN:VALARM', 'TRIGGER:-PT15M', 'ACTION:DISPLAY', `DESCRIPTION:${escI(title)}`, 'END:VALARM',
+    'BEGIN:VALARM', `TRIGGER:-PT${Math.max(0, Math.round(alarmMin))}M`, 'ACTION:DISPLAY', `DESCRIPTION:${escI(title)}`, 'END:VALARM',
     'END:VEVENT', 'END:VCALENDAR',
   ].join('\r\n');
 }
@@ -1545,7 +1591,7 @@ function icsText({ id, title, start, end, desc, lat, lon }) {
 function downloadIcs(e) {
   const txt = icsText({
     id: e.key.replace(/[^a-z0-9]/gi, ''), title: `Leave for ${e.spot.name} ${e.type} (${e.score})`,
-    start: e.leave, end: e.t + 30 * 60, desc: briefing(e), lat: e.spot.lat, lon: e.spot.lon,
+    start: e.leave, end: e.t + 30 * 60, desc: briefing(e), lat: e.spot.lat, lon: e.spot.lon, alarmMin: S().settings.readyMin ?? 30,
   });
   downloadFile(`tidelight-${e.type}.ics`, txt, 'text/calendar');
 }
@@ -1588,6 +1634,7 @@ function hitPanel(st) {
 const openGear = new Set();   // which plans have their gear list open
 let plansView = 'upcoming';   // upcoming | crew | history
 let plansTimer = null;        // keeps the "leave in…" line current
+let focusPlanKey = null;      // a plan to bring into view when Plans opens (from "See the plan")
 
 // "tomorrow sunrise, 6:17am" (callers capitalise it when it starts a sentence)
 function planWhen(p) {
@@ -1596,10 +1643,23 @@ function planWhen(p) {
 }
 function leaveText(p) {
   const now = Date.now() / 1000;
-  if (p.leave > now) return `in ${untilText(p.leave - now)}`;
-  if (p.t > now) return `now: the session starts in ${untilText(p.t - now)}`;
-  return 'the session has started';
+  if (p.leave - now > 36 * 3600) return `${S().settings.home ? 'Leave' : 'Be there'} ${fmtWeekday(p.leave, p.offset)} at ${fmtTime(p.leave, p.offset)}`;
+  if (p.leave > now) return `${S().settings.home ? 'Leave' : 'Be there'} in ${untilText(p.leave - now)}`;
+  if (p.t > now) return `Time to go: the session starts in ${untilText(p.t - now)}`;
+  return 'The session has started';
 }
+// How the plan's score has moved since you planned it.
+function planDrift(p) {
+  const e = eventIndex.get(p.key);
+  if (!e || p.score == null) return '';
+  const d = e.score - p.score;
+  if (Math.abs(d) < 5) return `<p class="drift">Still ${e.score}. Steady since you planned it.</p>`;
+  if (d > 0) return `<p class="drift up">Now ${e.score}, up ${d} since you planned it.</p>`;
+  const why = whyLine(e);
+  return `<p class="drift down">Now ${e.score}, down ${-d} since you planned it (${p.score}).${why ? ` ${esc(why)}.` : ''}${e.score < 50 ? ' Worth checking another spot.' : ''}</p>`;
+}
+const planAlarm = p => p.leave - (S().settings.readyMin ?? 30) * 60;
+
 function gearChecklist(p, open) {
   const gear = p.gear || [];
   if (!gear.length) return '';
@@ -1613,7 +1673,7 @@ function planActions(p, lead) {
   const shared = (p.sharedTo || []).length;
   return `<div class="plan-actions">
       ${eventIndex.has(p.key) ? `<button class="btn ${lead ? 'primary' : ''}" data-field="${esc(p.key)}">Open field mode</button>` : ''}
-      ${eventIndex.has(p.key) ? `<button class="btn" data-ev="${esc(p.key)}">Full briefing</button>` : ''}
+      ${eventIndex.has(p.key) ? `<button class="btn" data-ev="${esc(p.key)}">Briefing</button>` : ''}
       ${currentUser() ? `<button class="btn" data-share="${p.id}">${shared ? 'Shared with crew' : 'Share with crew'}</button>` : ''}
     </div>
     <div class="bf-quiet">
@@ -1649,9 +1709,13 @@ async function renderPlans(v, refreshed = false) {
     </section>` : ''}
     ${next ? `<section class="next-up">
       <h2 class="nu-name">${esc(next.spotName)}</h2>
-      <p class="nu-when">${esc(cap(planWhen(next)))}${next.score != null ? `. Scored ${next.score} when you planned it.` : '.'}</p>
-      <p class="nu-leave">Leave at ${fmtTime(next.leave, next.offset)}</p>
-      <p class="nu-in" id="leaveIn" aria-live="off">${esc(cap(leaveText(next)))}</p>
+      <p class="nu-when">${esc(cap(planWhen(next)))}.</p>
+      ${planDrift(next)}
+      <dl class="call-times nu-times">
+        ${S().settings.home ? `<div><dt>Alarm</dt><dd class="num">${fmtTime(planAlarm(next), next.offset)}</dd></div>` : ''}
+        <div><dt>${S().settings.home ? 'Leave' : 'Be there by'}</dt><dd class="num">${fmtTime(next.leave, next.offset)}</dd></div>
+      </dl>
+      <p class="nu-in num" id="leaveIn">${esc(cap(leaveText(next)))}</p>
       ${gearChecklist(next, true)}
       ${planActions(next, true)}
     </section>` : `<section class="empty-plans">
@@ -1661,7 +1725,8 @@ async function renderPlans(v, refreshed = false) {
     ${later.length ? `<section class="later">
       <h3 class="sec">After that</h3>
       ${later.map(p => `<details class="plan-item" ${openGear.has('item:' + p.id) ? 'open' : ''} data-item="${p.id}">
-        <summary><span class="pi-name">${esc(p.spotName)}</span><span class="pi-when">${esc(cap(planWhen(p)))}</span><span class="pi-leave num">Leave ${fmtTime(p.leave, p.offset)}</span></summary>
+        <summary><span class="pi-name">${esc(p.spotName)}</span><span class="pi-when">${esc(cap(planWhen(p)))}${eventIndex.get(p.key) ? `, now ${eventIndex.get(p.key).score}` : ''}</span><span class="pi-leave num">Leave ${fmtTime(p.leave, p.offset)}</span></summary>
+        ${planDrift(p)}
         ${gearChecklist(p, false)}
         ${planActions(p, false)}
       </details>`).join('')}
@@ -1691,15 +1756,20 @@ async function renderPlans(v, refreshed = false) {
     <div class="plans-view">${plansView === 'upcoming' ? upcomingView() : plansView === 'crew' ? crewPanel() : historyView()}</div>`;
 
   $$('[data-pview]', v).forEach(b => b.onclick = () => { plansView = b.dataset.pview; renderPlans(v); });
+  if (focusPlanKey) {
+    const fp = S().plans.find(p => p.key === focusPlanKey); focusPlanKey = null;
+    const el = fp && ($(`[data-item="${fp.id}"]`, v) || $('.next-up', v));
+    if (el) requestAnimationFrame(() => el.scrollIntoView({ block: 'center' }));
+  }
   const tf = $('#toForecast', v);
   if (tf) tf.onclick = () => setTab('forecast');
-  if (next && $('#leaveIn', v)) plansTimer = setInterval(() => { const el = $('#leaveIn'); if (el && tab === 'plans') el.textContent = cap(leaveText(next)); else clearInterval(plansTimer); }, 1000);
+  if (next && $('#leaveIn', v)) plansTimer = setInterval(() => { const el = $('#leaveIn'); if (el && tab === 'plans') { const t = cap(leaveText(next)); if (el.textContent !== t) el.textContent = t; } else clearInterval(plansTimer); }, 15000);
 
   $$('[data-ics]', v).forEach(b => b.onclick = () => {
     const p = S().plans.find(x => x.id === b.dataset.ics);
     downloadFile(`tidelight-${p.type}.ics`, icsText({
       id: p.id, title: `Leave for ${p.spotName} ${p.type}${p.score != null ? ` (${p.score})` : ''}`, start: p.leave, end: p.t + 1800,
-      desc: p.brief || '', lat: p.lat, lon: p.lon,
+      desc: p.brief || '', lat: p.lat, lon: p.lon, alarmMin: S().settings.readyMin ?? 30,
     }), 'text/calendar');
   });
   $$('[data-del]', v).forEach(b => b.onclick = async () => {
@@ -1836,34 +1906,41 @@ async function ratePlan(id, score10, tags, btn) {
 
 /* ================= spots ================= */
 
-let spotFilter = 'all';     // all | sunrise | day | sunset | night
 let spotsShowMap = false;
 
-function spotChips(sp, e) {
-  const c = [];
-  if (e) c.push(`<span class="tag-chip">${esc(HUNT_LABEL[e.topHunt])}</span>`);
-  const hk = hikeSummary(sp);
-  if (hk) c.push(`<span class="tag-chip">${esc(hk.replace('Hike: ', 'Hike '))}</span>`);
-  if (e?.access && !e.access.none) c.push(e.access.inside
-    ? `<span class="tag-chip">Tide open ${fmtTime(e.access.start, e.offset)}–${fmtTime(e.access.backBy, e.offset)}</span>`
-    : '<span class="tag-chip warn">Tide blocks access</span>');
-  if (e && unsure(e)) c.push('<span class="tag-chip unsure">Models disagree</span>');
-  else if (e?.confidence?.level === 'high' && e.topHunt === 'colour') c.push('<span class="tag-chip">Models agree</span>');
-  const going = e ? crewGoing(e) : [];
-  if (going.length) c.push(`<span class="tag-chip crew">${esc(goingText(going))}</span>`);
-  return c.join('');
+
+
+// Spots: where to go. Every spot against the next 7 days (best session per day), then your spot library.
+function spotGrid(evs, st, offset) {
+  const now = Date.now() / 1000;
+  const bestOf = (spId, i) => evs.filter(e => e.spot.id === spId && e.dayIdx === i).sort((a, b) => b.score - a.score)[0];
+  const weekBest = sp => Math.max(-1, ...evs.filter(e => e.spot.id === sp.id).map(e => e.score));
+  const spots = [...st.spots].sort((a, b) => weekBest(b) - weekBest(a));
+  const days = [0, 1, 2, 3, 4, 5, 6].map(i => {
+    const t = now + i * 86400;
+    return { i, label: i === 0 ? 'Today' : i === 1 ? 'Tmrw' : fmtWeekday(t, offset).slice(0, 3), date: fmtDayDate(t, offset).split(' ')[1] || '' };
+  });
+  return `<div class="sg-wrap"><table class="sg">
+    <caption class="sr-only">Best session score for each spot over the next 7 days</caption>
+    <thead><tr>${days.map(d => `<th scope="col"><span>${d.label}</span><small class="num">${esc(d.date)}</small></th>`).join('')}</tr></thead>
+    <tbody>${spots.map(sp => `<tr class="sg-name-row"><th colspan="7" scope="colgroup"><button class="sg-spot" data-spot="${sp.id}">${esc(sp.name)}</button></th></tr>
+      <tr>${days.map(d => {
+        const e = bestOf(sp.id, d.i);
+        if (!e) return '<td><span class="sg-none" aria-label="No session">–</span></td>';
+        return `<td><button class="sg-cell ${band(e.score)} ${unsure(e) ? 'unsure' : ''} ${S().plans.some(p => p.key === e.key) ? 'planned' : ''}" data-ev="${esc(e.key)}" aria-label="${esc(sp.name)}, ${esc(sessionName(e))}, score ${e.score}${unsure(e) ? ', models disagree' : ''}${e.access && !e.access.inside ? ', tide blocks access' : ''}${S().plans.some(p => p.key === e.key) ? ', planned' : ''}">
+          <b class="num">${e.score}</b><span class="sg-type" aria-hidden="true">${SUN_ICON[e.type]}</span>${e.access && !e.access.inside ? '<i class="mx-tide" aria-hidden="true"></i>' : ''}</button></td>`;
+      }).join('')}
+    </tr>`).join('')}</tbody>
+  </table></div>
+  <p class="sg-legend"><span><i class="b4"></i>75+ go</span><span><i class="b3"></i>50–74 maybe</span><span><i class="b1"></i>Under 50 skip</span><span><i class="plan-key"></i>Planned</span>${evs.some(unsure) ? '<span><i class="unsure-key"></i>Models disagree</span>' : ''}${evs.some(e => e.access && !e.access.inside) ? '<span><i class="tide-key"></i>Tide blocks access</span>' : ''}</p>`;
 }
 
-function spotCard(sp, e) {
-  return `<button class="spot-card" data-spot="${sp.id}">
-    ${coverUrl(sp) ? `<img class="spot-card-img" src="${coverUrl(sp)}" alt="">` : `<span class="spot-card-img empty" aria-hidden="true">${esc(sp.name.charAt(0))}</span>`}
-    <span class="spot-card-body">
-      <span class="spot-card-head"><span class="spot-card-name">${esc(sp.name)}</span>${e ? `<span class="spot-card-score num" data-count="${e.score}">${e.score}</span>` : ''}</span>
-      ${e ? `<span class="spot-card-when">${esc(cap(sessionName(e)))}, ${sessionWhen(e)}</span>
-             <span class="spot-card-why">${esc(whyLine(e))}</span>`
-          : `<span class="spot-card-why">${spotFilter === 'all' ? 'No sessions in the next 3 days. Check its sessions and hunts.' : `No ${TYPE_NAME[spotFilter].toLowerCase()} sessions here.`}</span>`}
-      <span class="spot-card-chips">${spotChips(sp, e)}</span>
-    </span>
+function spotRow(sp) {
+  const hk = hikeSummary(sp);
+  return `<button class="lib-row" data-spot="${sp.id}">
+    ${coverUrl(sp) ? `<img class="lib-img" src="${coverUrl(sp)}" alt="">` : `<span class="lib-img empty" aria-hidden="true">${esc(sp.name.charAt(0))}</span>`}
+    <span class="lib-text"><span class="lib-name">${esc(sp.name)}</span><span class="lib-sub">${esc([huntsOf(sp).map(k => HUNT_LABEL[k]).filter(Boolean).join(', '), sp.coastal ? 'coastal' : '', hk.replace('Hike: ', 'hike ')].filter(Boolean).join(' · '))}</span></span>
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
   </button>`;
 }
 
@@ -1872,44 +1949,38 @@ async function renderSpots(v) {
   const st = S();
   v.innerHTML = `
     <h1 class="page-title">Spots</h1>
-    <p class="page-lede">Ranked by each spot's best session in the next 3 days.</p>
+    ${st.spots.length ? `<p class="page-lede">Your spots against the next 7 days. Each square is that day's best session; tap it for the briefing.</p>
+    <section id="spotGrid" aria-live="off">${skeleton('week', 'Scoring your spots…')}</section>` : '<p class="page-lede">Add the places you shoot. Tidelight scores every session there for the next 7 days.</p>'}
+    <h2 class="sec-title">${st.spots.length ? 'Your spots' : 'Add a spot'}</h2>
     <form class="search" id="placeSearch" role="search">
-      <input type="search" id="placeQ" placeholder="Search to add a beach, falls or lookout" autocomplete="off" enterkeyhint="search" aria-label="Search for a place to add">
+      <input type="search" id="placeQ" placeholder="Beach, falls or lookout" autocomplete="off" enterkeyhint="search" aria-label="Search for a place to add as a spot">
       <button class="btn primary" type="submit">Search</button>
     </form>
     <div id="placeResults" class="results" hidden></div>
-    <div class="row spot-actions">
-      <button class="btn" id="addSpot">Add spot</button>
-      <button class="btn" id="scoutBtn">Scout this spot</button>
-      <button class="btn ${spotsShowMap ? 'primary' : 'ghost'}" id="mapToggle" aria-pressed="${spotsShowMap}">${spotsShowMap ? 'Hide map' : 'Map'}</button>
+    <div class="spot-actions">
+      <button class="btn" id="scoutBtn">Add where I'm standing</button>
+      <button class="btn ${spotsShowMap ? 'primary' : ''}" id="mapToggle" aria-pressed="${spotsShowMap}">${spotsShowMap ? 'Hide map' : 'Pick on a map'}</button>
     </div>
     ${spotsShowMap ? `<div id="map" role="application" aria-label="Map of your spots. Tap to add a spot."></div>
-      <p class="small muted" style="margin-top:8px">Tap anywhere on the map to add a spot there.</p>` : ''}
-    <div class="day-pills filter" role="tablist" aria-label="Filter by session">
-      ${['all', ...SESSION_TYPES].map(f => `<button role="tab" aria-selected="${spotFilter === f}" class="${spotFilter === f ? 'on' : ''}" data-filter="${f}">${f === 'all' ? 'All' : TYPE_NAME[f]}</button>`).join('')}
-    </div>
-    <section id="spotCards">${st.spots.length ? skeleton('cards', 'Scoring your spots…') : '<p class="muted">No spots yet. Search above, tap the map, or add where you are.</p>'}</section>`;
+      <p class="small muted map-hint">Tap anywhere on the map to add a spot there.</p>` : ''}
+    <div class="lib">${st.spots.map(spotRow).join('')}</div>
+    <button class="link-btn" id="addSpot">Enter coordinates instead</button>`;
 
   $('#addSpot').onclick = () => openSpotForm();
   found = null;
   $('#placeSearch').onsubmit = ev => { ev.preventDefault(); runPlaceSearch(); };
   $('#scoutBtn').onclick = () => openScout();
   $('#mapToggle').onclick = () => { spotsShowMap = !spotsShowMap; renderSpots(v); };
-  $$('[data-filter]', v).forEach(b => b.onclick = () => { spotFilter = b.dataset.filter; renderSpots(v); });
+  $$('.lib [data-spot]', v).forEach(b => b.onclick = () => openSpotDetail(b.dataset.spot));
   if (spotsShowMap) initSpotsMap(st);
 
   if (!st.spots.length) return;
   await ensureForecasts();
-  if (tab !== 'spots' || !$('#spotCards')) return;
-  const evs = next3Days();
+  if (tab !== 'spots' || !$('#spotGrid')) return;
+  const evs = nextDays(7);
   indexEvents(evs);
-  const bestFor = sp => evs.filter(e => e.spot.id === sp.id && (spotFilter === 'all' || e.type === spotFilter)).sort((a, b) => b.score - a.score)[0];
-  const rows = st.spots.map(sp => ({ sp, e: bestFor(sp) }))
-    .filter(r => spotFilter === 'all' || r.e)
-    .sort((a, b) => (b.e?.score ?? -1) - (a.e?.score ?? -1));
-  $('#spotCards').innerHTML = rows.length ? rows.map(r => spotCard(r.sp, r.e)).join('') : `<p class="muted">None of your spots have ${TYPE_NAME[spotFilter].toLowerCase()} sessions in the next 3 days.</p>`;
-  $$('#spotCards [data-spot]').forEach(b => b.onclick = () => openSpotDetail(b.dataset.spot));
-  runCounts($('#spotCards'));
+  $('#spotGrid').innerHTML = spotGrid(evs, st, evs[0]?.offset ?? -new Date().getTimezoneOffset() * 60);
+  $$('#spotGrid [data-spot]').forEach(b => b.onclick = () => openSpotDetail(b.dataset.spot));
 }
 
 function initSpotsMap(st) {
@@ -2216,7 +2287,7 @@ async function openSpotDetail(id) {
       <span></span>${days.map(d => `<span class="wk-day">${d.label}<small>${d.date}</small></span>`).join('')}
       ${types.map((type, ti) => `<span class="wk-type">${TYPE_NAME[type]}</span>${days.map((d, di) => {
         const e = cellFor(d.k, type);
-        return e ? `<button class="mx-cell ${band(e.score)} ${unsure(e) ? 'unsure' : ''}" style="--n:${ti + di}" data-ev=""${esc(e.key)}" aria-label="${TYPE_NAME[type]} ${d.label} ${d.date}, score ${e.score}">${e.score}${e.access && !e.access.inside ? '<i class="mx-tide" aria-hidden="true"></i>' : ''}</button>` : '<span class="mx-none" aria-hidden="true">–</span>';
+        return e ? `<button class="mx-cell ${band(e.score)} ${unsure(e) ? 'unsure' : ''}" style="--n:${ti + di}" data-ev="${esc(e.key)}" aria-label="${TYPE_NAME[type]} ${d.label} ${d.date}, score ${e.score}">${e.score}${e.access && !e.access.inside ? '<i class="mx-tide" aria-hidden="true"></i>' : ''}</button>` : '<span class="mx-none" aria-hidden="true">–</span>';
       }).join('')}`).join('')}
     </div></div>
     <p class="small muted">Tap a score for its briefing.${evs.some(e => e.access && !e.access.inside) ? ' A red dot means the tide blocks access.' : ''}</p>` : '<p class="muted">No sessions in the next 7 days. Check this spot\'s sessions and hunts under Edit spot.</p>';
@@ -2748,12 +2819,17 @@ function fieldMoments(e) {
   return out.sort((a, b) => a.t - b.t);
 }
 
-const untilText = secs => {
-  if (secs < 60) return `${Math.max(0, Math.round(secs))} s`;
-  if (secs < 3600) { const m = Math.floor(secs / 60), s2 = Math.floor(secs % 60); return `${m}:${String(s2).padStart(2, '0')}`; }
-  const h = Math.floor(secs / 3600), m = Math.round((secs % 3600) / 60);
-  return `${h} h ${m} min`;
-};
+// "3 h 12 min", "25 min", "40 s". With precise (field mode's big countdown), minutes carry seconds: "4 min 07 s".
+function untilText(secs, precise = false) {
+  secs = Math.max(0, secs);
+  if (secs < 60) return `${Math.round(secs)} s`;
+  if (secs < 3600) {
+    const m = Math.floor(secs / 60), s2 = Math.floor(secs % 60);
+    return precise && m < 10 ? `${m} min ${String(s2).padStart(2, '0')} s` : `${precise ? m : Math.round(secs / 60)} min`;
+  }
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+  return m ? `${h} h ${m} min` : `${h} h`;
+}
 
 function fieldConditions(e) {
   const data = forecasts[e.spot.id];
@@ -2763,9 +2839,8 @@ function fieldConditions(e) {
   if (i < 0) return '<p class="small muted">The saved forecast doesn\'t cover right now. Refresh when you have reception.</p>';
   const rows = [0, 1, 2].map(k => data.hours[i + k]).filter(Boolean).map((h, k) => `<div class="fc-row">
       <span class="fc-time num">${k === 0 ? 'Now' : fmtTime(h.t, data.offset).replace(':00', '')}</span>
-      <span>Cloud ${Math.round(h.low ?? 0)}/${Math.round(h.mid ?? 0)}/${Math.round(h.high ?? 0)}%</span>
-      <span>Rain ${Math.round(h.pp ?? 0)}%</span>
-      <span>${Math.round(h.wind ?? 0)} km/h</span>
+      <span>Cloud: low ${Math.round(h.low ?? 0)}%, mid ${Math.round(h.mid ?? 0)}%, high ${Math.round(h.high ?? 0)}%</span>
+      <span>Rain ${Math.round(h.pp ?? 0)}%, wind ${Math.round(h.wind ?? 0)} km/h</span>
     </div>`).join('');
   let tide = '';
   if (e.spot.coastal) {
@@ -2773,7 +2848,7 @@ function fieldConditions(e) {
     if (td) tide = `<p class="fc-tide">Tide ${Math.round(td.pos * 100)}% of its range and ${td.rising ? 'rising' : 'falling'}.</p>`;
   }
   const saved = Number(localStorage.getItem('tidelight:lastFetch') || 0);
-  return `${rows}${tide}<p class="small muted">From the forecast saved ${saved ? syncAgo(saved) : 'earlier'}. Low, mid and high cloud shown.</p>`;
+  return `${rows}${tide}<p class="small muted">From the forecast saved ${saved ? syncAgo(saved) : 'earlier'}.</p>`;
 }
 
 function drawField() {
@@ -2786,9 +2861,13 @@ function drawField() {
   const moments = fieldMoments(e);
   const next = moments.find(m => m.t > now);
   const nextHtml = next
-    ? `<p class="fm-next-label">${esc(next.label)} in</p><p class="fm-count num ${next.cls}">${untilText(next.t - now)}</p><p class="fm-at">at ${fmtTime(next.t, e.offset)}</p>`
+    ? `<p class="fm-next-label">${esc(next.label)} in</p><p class="fm-count num ${next.cls}">${untilText(next.t - now, true)}</p><p class="fm-at">at ${fmtTime(next.t, e.offset)}</p>`
     : `<p class="fm-next-label">That's the session done.</p><p class="fm-at">Rate it later in Plans so your personal score learns.</p>`;
   el.querySelector('#fmNext').innerHTML = nextHtml;
+  // Announce only when the next moment changes, never every second.
+  const said = next ? `Next: ${next.label} at ${fmtTime(next.t, e.offset)}.` : "That's the session done.";
+  const sr = el.querySelector('#fmSay');
+  if (sr && sr.textContent !== said) sr.textContent = said;
   el.querySelector('#fmList').innerHTML = moments.map(m => `<li class="${m.t <= now ? 'past' : ''} ${m.cls}">
       <time class="num">${fmtTime(m.t, e.offset)}</time><span>${esc(m.label)}</span><em class="num">${m.t > now ? `in ${untilText(m.t - now)}` : 'done'}</em></li>`).join('');
 }
@@ -2805,10 +2884,12 @@ async function openField(key) {
   el.setAttribute('aria-label', `Field mode for ${e.spot.name}`);
   el.innerHTML = `
     <div class="fm-top">
-      <div><p class="fm-spot">${esc(e.spot.name)}</p><p class="fm-sub">${esc(cap(sessionName(e)))}, score ${e.score}${e.topHunt !== 'colour' ? ` for ${HUNT_LABEL[e.topHunt].toLowerCase()}` : ''}</p></div>
+      <div><p class="fm-spot">${esc(e.spot.name)}</p><p class="fm-sub">${esc(cap(sessionName(e)))}, score ${e.score}${e.topHunt !== 'colour' ? ` for ${HUNT_LABEL[e.topHunt].toLowerCase()}` : ''}</p>
+        ${(() => { const p = S().plans.find(x => x.key === e.key); if (!p || p.score == null) return ''; const d = e.score - p.score; return `<p class="fm-still ${d <= -10 ? 'down' : ''}">${Math.abs(d) < 5 ? 'Still on: the forecast has held since you planned it.' : d > 0 ? `Better than planned: up ${d} to ${e.score}.` : `Down ${-d} since you planned it, to ${e.score}.${e.score < 50 ? ' Check the radar before you commit.' : ''}`}</p>`; })()}</div>
       <button class="icon-btn" id="fmClose" aria-label="Close field mode"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
-    <section class="fm-next" id="fmNext" aria-live="polite"></section>
+    <section class="fm-next" id="fmNext"></section>
+    <p class="sr-only" id="fmSay" aria-live="polite"></p>
     <ol class="fm-list" id="fmList"></ol>
     <h3 class="fm-h">The sky</h3>
     <div class="fm-cond">${fieldConditions(e)}</div>
@@ -2819,9 +2900,13 @@ async function openField(key) {
       <button class="btn" id="fmNight" aria-pressed="false">Night vision</button>
     </div>
     <p class="small muted fm-wake" id="fmWake"></p>`;
+  el.setAttribute('aria-modal', 'true');
   document.body.appendChild(el);
   document.body.classList.add('noscroll');
-  fieldState = { key, timer: setInterval(drawField, 1000), wake: null, night: false };
+  const returnTo = document.activeElement;
+  BEHIND_SHEET.forEach(s => { const x = $(s); if (x) x.inert = true; });
+  fieldState = { key, timer: setInterval(drawField, 1000), wake: null, night: false, returnTo };
+  requestAnimationFrame(() => $('#fmClose')?.focus({ preventScroll: true }));
   drawField();
 
   // Keep the screen on while field mode is open (re-acquired if the app comes back to the front).
@@ -2843,7 +2928,6 @@ async function openField(key) {
     el.classList.toggle('nightvision', fieldState.night);
     document.body.classList.toggle('nv-sheets', fieldState.night);   // pop-ups opened from field mode go red too
     $('#fmNight').setAttribute('aria-pressed', String(fieldState.night));
-    $('#fmNight').textContent = fieldState.night ? 'Normal colours' : 'Night vision';
   };
 }
 function closeField() {
@@ -2857,7 +2941,11 @@ function closeField() {
   document.body.classList.remove('nv-sheets');
   const el = $('#field');
   if (el) el.remove();
-  if ($('#sheet').classList.contains('hidden')) document.body.classList.remove('noscroll');
+  if ($('#sheet').classList.contains('hidden')) {
+    document.body.classList.remove('noscroll');
+    BEHIND_SHEET.forEach(s => { const x = $(s); if (x) x.inert = false; });
+  }
+  if (el && st?.returnTo?.isConnected) st.returnTo.focus({ preventScroll: true });
 }
 
 /* ================= scout a spot ================= */
@@ -2869,7 +2957,7 @@ function openScout() {
     <div class="scout-step"><strong>1. Location</strong><p id="scLoc" class="small muted">Finding you…</p></div>
     <div class="scout-step"><strong>2. Which way you're shooting</strong>
       <p class="small muted">Point the top of the phone at your composition, then tap Capture.</p>
-      <p class="scout-heading num" id="scHeading" aria-live="polite">–</p>
+      <p class="scout-heading num" id="scHeading">–</p>
       <div class="row"><button class="btn" id="scPoint">Use the phone's compass</button><button class="btn primary" id="scCapture" disabled>Capture direction</button></div>
       <label class="small">Or type a bearing (°)<input id="scManual" inputmode="numeric" placeholder="e.g. 270 for west"></label>
       <p class="small" id="scAlign"></p>
@@ -3209,7 +3297,7 @@ function wireTide(e) {
     h.style.left = `${(fx * 100).toFixed(2)}%`;
     h.firstElementChild.style.top = `${(8 + (1 - pos) * (110 - 16)) / 110 * 100}%`;
     const acc = e.spot.tideAccess && e.access && !e.access.none ? (tt >= e.access.start && tt <= e.access.backBy ? ' Access is open.' : ' Access is closed.') : '';
-    $('#tideRead').textContent = `${fmtTime(tt, e.offset)}: tide at ${Math.round(Math.max(0, Math.min(1, pos)) * 100)}% of its range and ${sea.rising ? 'rising' : 'falling'}.${acc}`;
+    $('#tideRead').textContent = `${fmtTime(tt, e.offset)}: sea level ${sea.v.toFixed(1)} m and ${sea.rising ? 'rising' : 'falling'}.${acc}`;
     el.setAttribute('aria-valuenow', String(Math.round(fx * 100)));
     el.setAttribute('aria-valuetext', $('#tideRead').textContent);
     el.dataset.cur = String(tt);
@@ -3461,22 +3549,18 @@ function renderTools(v) {
     </button>`;
   v.innerHTML = `
     <h1 class="page-title">Tools</h1>
-    <p class="page-lede">For when you're out there. Most of these work without reception.</p>
+    <p class="page-lede">For when you're out there. These work without reception. Radar and the hourly forecast are under Now, at the top.</p>
     <div class="tool-list">
       ${nextPlan ? tool(`data-field="${esc(nextPlan.key)}"`, 'Field mode', `Countdowns and the sky for ${esc(nextPlan.spotName)}, your next plan.`) : ''}
-      ${tool('id="toolNow"', 'Right now', 'The next 48 hours where you are, conditions at your spots, and rain radar.')}
       ${tool('id="toolCompass"', 'Compass', "Where the sun rises and sets today, and where the sun, moon and Milky Way are now.")}
       ${tool('id="toolExposure"', 'Exposure', 'ND filter times with a countdown, the longest exposure for sharp stars, and hyperfocal distance.')}
       ${tool('id="toolDial"', 'Light dial', 'Drag around a 24-hour dial to see the light, the sun and the moon at any time.')}
       ${tool('data-lightning', 'Lightning distance', 'Time the gap between flash and thunder to see how far away a storm is.')}
-      ${tool('id="toolScout"', 'Scout this spot', 'Save where you stand as a new spot, with the direction of your composition.')}
     </div>
     ${!nextPlan ? '<p class="small muted tool-note">Field mode opens from any session. Plan a shoot and it appears here for the next one.</p>' : ''}`;
-  $('#toolNow').onclick = () => openNow();
   $('#toolCompass').onclick = () => openCompassHere();
   $('#toolDial').onclick = () => openLightDialHere();
   $('#toolExposure').onclick = () => openExposure();
-  $('#toolScout').onclick = () => openScout();
   // Field mode needs the live forecast for the next plan: load it, then redraw once.
   if (!nextPlan && S().plans.some(p => p.t >= now - 3600) && S().spots.length) {
     ensureForecasts().then(() => { allEvents({ includePast: true }); if (tab === 'tools' && S().plans.some(p => p.t >= now - 3600 && eventIndex.has(p.key))) renderTools(v); });
@@ -3564,20 +3648,20 @@ function renderYou(v, logLines = []) {
     <h1 class="page-title">You</h1>
     <p class="page-lede">${sync.email ? `Signed in as ${esc(sync.email)}.` : 'Your light profile, account and setup.'}</p>
 
-    <h3 class="sec">Your light</h3>
+    <h2 class="sec">Your light</h2>
     <div class="you-list">
       ${row('profile', 'Light profile and keepers', good >= MIN_KEEPERS ? `${good} keepers. Your personal score is on.` : `${good} keeper${good === 1 ? '' : 's'}. Add ${MIN_KEEPERS - good} more to switch on your personal score.`)}
       ${row('tuning', 'Score tuning', s.tuning === false ? 'Off. Scores use the standard rules.' : (() => { const n = st.spots.filter(sp => spotFloor(sp, st.keepers, s).floor > 0.35).length; return n ? `Learning from your ratings. ${n} spot${n === 1 ? '' : 's'} adjusted.` : 'Learning from your ratings.'; })())}
       ${row('recreate', 'Recreate a shot', 'Find upcoming sessions that match a photo.')}
     </div>
 
-    <h3 class="sec">Account</h3>
+    <h2 class="sec">Account</h2>
     <div class="you-list">
       ${row('account', 'Account and sync', !sync.configured ? 'Not set up yet.' : sync.email ? (sync.state === 'error' ? 'Sync needs attention.' : `Synced ${syncAgo(sync.lastSync)}.`) : 'Not signed in. Sign in to sync across devices.')}
       ${row('alerts', 'Alerts', !sync.email ? 'Sign in to turn on alerts.' : s.alerts.go ? `Sessions scoring ${s.alerts.threshold}+${s.alerts.digest ? `, plus a ${DAYS[s.alerts.digestDay]} digest` : ''}.` : 'Go alerts are off.')}
     </div>
 
-    <h3 class="sec">Setup</h3>
+    <h2 class="sec">Setup</h2>
     <div class="you-list">
       ${row('home', 'Home and travel', s.home ? `Home set. Arrive ${s.arriveBeforeMin} min before each session.` : 'Home not set. Needed for leave times.')}
       ${row('kit', 'My kit', kit ? `${kit} item${kit === 1 ? '' : 's'} you always bring.` : 'Nothing added yet.')}
@@ -3586,7 +3670,7 @@ function renderYou(v, logLines = []) {
       ${row('data', 'Your data', 'Back up, restore or delete.')}
     </div>
 
-    <h3 class="sec">Tidelight</h3>
+    <h2 class="sec">Tidelight</h2>
     <div class="you-list">
       ${row('feedback', 'Send feedback', 'Found a bug, or have an idea? Tell Tyson directly.')}
       <a class="you-row" href="https://tysonwaldron.com" target="_blank" rel="noopener">
@@ -3959,6 +4043,11 @@ function pageHome(v) {
         <input type="range" name="arrive" id="arriveRange" min="0" max="90" step="5" value="${s.arriveBeforeMin}" style="--val:${(s.arriveBeforeMin / 90 * 100).toFixed(0)}%">
       </label>
       <label class="slider">
+        <span class="slider-head"><span>Get ready time</span><output class="num" id="readyOut">${s.readyMin ?? 30} min</output></span>
+        <input type="range" name="ready" id="readyRange" min="0" max="90" step="5" value="${s.readyMin ?? 30}" style="--val:${((s.readyMin ?? 30) / 90 * 100).toFixed(0)}%">
+        <span class="slider-foot">Time from your alarm to walking out the door. Sets the alarm time on each session.</span>
+      </label>
+      <label class="slider">
         <span class="slider-head"><span>Average drive speed</span><output class="num" id="speedOut">${s.driveSpeedKmh} km/h</output></span>
         <input type="range" name="speed" id="speedRange" min="30" max="110" step="5" value="${s.driveSpeedKmh}" style="--val:${((s.driveSpeedKmh - 30) / 80 * 100).toFixed(0)}%">
         <span class="slider-foot" id="travelExample"></span>
@@ -3976,6 +4065,8 @@ function pageHome(v) {
     $('#travelExample').textContent = `Example: for a 6:00am sunrise 40 km away, that's a ${mins} min drive, leaving at ${hh}:${mm}am.`;
   };
   ar.oninput = example; sr.oninput = example; example();
+  const rr = $('#readyRange');
+  rr.oninput = () => { $('#readyOut').textContent = `${rr.value} min`; rr.style.setProperty('--val', `${(rr.value / 90 * 100).toFixed(0)}%`); };
   $('#homeHere').onclick = async () => {
     try {
       const p = await getPosition();
@@ -3994,6 +4085,7 @@ function pageHome(v) {
       st2.settings.home = hasHome ? { lat, lon } : null;
       st2.settings.driveSpeedKmh = parseFloat(f.get('speed')) || 60;
       st2.settings.arriveBeforeMin = parseInt(f.get('arrive'), 10) || 0;
+      st2.settings.readyMin = parseInt(f.get('ready'), 10) || 0;
     });
     toast('Home and travel saved.');
   };
@@ -4439,6 +4531,31 @@ function drawWelcome() {
 /* ================= boot ================= */
 
 document.addEventListener('click', ev => {
+  const planBtn = ev.target.closest('[data-plan]');
+  if (planBtn) {
+    const e = eventIndex.get(planBtn.dataset.plan);
+    if (!e) return;
+    const clash = S().plans.find(p => p.key !== e.key && Math.abs(p.t - e.t) < 4 * 3600 && (p.spotId === e.spot.id || Math.abs(p.leave - e.leave) < 2 * 3600));
+    addPlan(e);
+    if (clash) toast(`Heads up: you also have ${clash.spotName} ${(TYPE_NAME[clash.type] || clash.type).toLowerCase()} planned at ${fmtTime(clash.t, clash.offset)}.`, 6000);
+    const box = planBtn.closest('.call-actions, .sheet-actions');
+    if (box) { box.innerHTML = commitPanel(e, true); $('[data-ics-ev]', box)?.focus({ preventScroll: true }); }
+    afterPlanned(e.key);
+    return;
+  }
+  const undoBtn = ev.target.closest('[data-undo-plan]');
+  if (undoBtn) {
+    const key = undoBtn.dataset.undoPlan, e = eventIndex.get(key);
+    undoPlan(key).then(() => {
+      const box = undoBtn.closest('.call-actions, .sheet-actions');
+      if (box && e) { box.innerHTML = box.classList.contains('call-actions') ? `<button class="btn primary" data-plan="${esc(e.key)}">Plan this shoot</button><button class="btn" data-ev="${esc(e.key)}">Briefing</button>` : `<button class="btn primary" data-plan="${esc(e.key)}">Plan this shoot</button>`; $('[data-plan]', box)?.focus({ preventScroll: true }); }
+    });
+    return;
+  }
+  const icsBtn = ev.target.closest('[data-ics-ev]');
+  if (icsBtn) { const e = eventIndex.get(icsBtn.dataset.icsEv); if (e) downloadIcs(e); return; }
+  const goPl = ev.target.closest('[data-goplans]');
+  if (goPl) { plansView = 'upcoming'; focusPlanKey = goPl.dataset.goplans || null; const pl = S().plans.find(p => p.key === focusPlanKey); if (pl) openGear.add('item:' + pl.id); setTab('plans'); return; }
   if (ev.target.closest('[data-lightning]')) { openLightningTimer(); return; }
   const labBtn = ev.target.closest('[data-lab]');
   if (labBtn) { openLab(labBtn.dataset.lab); return; }
@@ -4456,8 +4573,8 @@ document.addEventListener('click', ev => {
 // The logo takes you home: today's forecast, scrolled to the top.
 $('.brand')?.addEventListener('click', () => {
   if (!$('#sheet').classList.contains('hidden')) closeSheet();
-  if (tab === 'forecast' && homeDay === 0) { window.scrollTo({ top: 0, behavior: motionOK() ? 'smooth' : 'auto' }); return; }
-  homeDay = 0; homeSel = null;
+  if (tab === 'forecast') { homeDay = null; homeSel = null; render(); window.scrollTo({ top: 0, behavior: motionOK() ? 'smooth' : 'auto' }); return; }
+  homeDay = null; homeSel = null;
   setTab('forecast');
   window.scrollTo(0, 0);
 });
@@ -4472,15 +4589,6 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 
-$('#refreshBtn').onclick = async () => {
-  const b = $('#refreshBtn');
-  b.classList.add('spin');
-  const failed = await loadForecasts(true);
-  syncNow();
-  b.classList.remove('spin');
-  toast(failed.length ? `Some spots failed: ${failed.join(', ')}` : 'Forecasts updated');
-  if (tab === 'forecast' || tab === 'spots') render();
-};
 
 // Opened from a password-reset email: choose a new password.
 function openRecoverySheet() {
