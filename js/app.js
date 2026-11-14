@@ -631,6 +631,7 @@ function openLab(key) {
 function liveLine(e) {
   const now = Date.now() / 1000;
   const H = e.hunts?.[e.topHunt];
+  if (e.type === 'day' && H?.from <= now && H?.to > now) return `Good light now, until ${fmtTime(H.to, e.offset)}`;
   if (e.leave - now > 36 * 3600) return `${hasDrive(e) ? 'Leave' : 'Be there'} ${fmtWeekday(e.leave, e.offset)} at ${fmtTime(e.leave, e.offset)}`;
   if (e.leave > now) return `${hasDrive(e) ? 'Leave' : 'Be there'} in ${untilText(e.leave - now)}`;
   if (e.t > now) return `Leave time has passed. ${TYPE_NAME[e.type]} in ${untilText(e.t - now)}`;
@@ -792,16 +793,23 @@ function callCard(e, nav = null) {
   if (pk && Math.abs(pk - e.t) > 45 * 60) times.push([`${HUNT_LABEL[e.topHunt]} peak`, fmtTime(pk, o)]);
   const score = `<span class="num" data-count="${e.score}">${e.score}</span>`;
   return `<article class="call ${slideFrom ? `slide-${slideFrom}` : ''}" aria-labelledby="callVerdict">
-    <div class="call-sky ${skyClass(e)} ${photo ? 'has-photo' : ''}" data-ev="${esc(e.key)}" style="--sky:${skyOf(e)}${photo ? `; --photo:url('${photo}')` : ''}">
+    <div class="call-sky ${photo ? 'has-photo' : skyClass(e)}" data-ev="${esc(e.key)}" style="${photo ? `background-image:url('${photo}')` : `--sky:${skyOf(e)}`}">
       <div class="call-top">
         <h2 class="call-verdict" id="callVerdict">${esc(huntPhrase(e))}.</h2>
         ${lab
           ? `<button class="call-score" data-lab="${esc(e.key)}" aria-label="Score ${e.score} out of 100. Open What if?">${score}<small>What if?</small></button>`
           : `<p class="call-score" role="img" aria-label="Score ${e.score} out of 100">${score}</p>`}
       </div>
-      <div class="call-foot">
-        <p class="call-spot">${esc(e.spot.name)}</p>
-        <p class="call-when">${esc(cap(sessionName(e)))}${planned ? ' · <span class="your-plan">your plan</span>' : ''}</p>
+      <div class="call-bottom">
+        <div class="call-foot">
+          <p class="call-spot">${esc(e.spot.name)}</p>
+          <p class="call-when">${esc(cap(sessionName(e)))}${planned ? ' · <span class="your-plan">your plan</span>' : ''}</p>
+        </div>
+        ${nav && nav.total > 1 ? `<nav class="call-slide" aria-label="Sessions on this day, best first">
+          <button class="slide-btn" data-step="-1" aria-label="Previous session" ${nav.index === 0 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg></button>
+          <span class="slide-count num">${nav.index + 1}/${nav.total}</span>
+          <button class="slide-btn" data-step="1" aria-label="Next session" ${nav.index === nav.total - 1 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button>
+        </nav>` : ''}
       </div>
     </div>
     <div class="call-body">
@@ -1007,7 +1015,7 @@ async function renderForecast(v) {
   const nowLine = now > w0 && now < w0 + 86400 ? `<span class="band-now" style="left:${band.pos(now)}%" aria-hidden="true"></span>` : '';
 
   const others = dayEvs.filter(e => e.key !== homeSel).sort((a, b) => a.t - b.t);
-  const order = [...dayEvs].sort((a, b) => a.t - b.t || b.score - a.score);   // stepping order: through the day
+  const order = [...dayEvs].sort((a, b) => b.score - a.score || a.t - b.t);   // slide order: best first
   const nextWithLight = [1, 2, 3, 4, 5, 6].map(d => homeDay + d).find(d => d <= 6 && evs.some(e => e.dayIdx === d));
 
   v.innerHTML = `
@@ -1018,7 +1026,7 @@ async function renderForecast(v) {
       <h1 class="day-title">${esc(dayName)}<span>${esc(homeDay > 1 ? dateLine : `${weekday} ${dateLine}`)}</span></h1>
       <p class="updated ${stale ? 'stale' : ''}">${navigator.onLine ? `${stale ? 'Refreshing a forecast from' : 'Updated'} ${savedAgo()}` : `Offline, saved ${savedAgo()}`}<button class="link-btn" id="refreshLink">Refresh</button></p>
     </header>
-    ${sel ? callCard(sel)
+    ${sel ? callCard(sel, { index: order.findIndex(e => e.key === sel.key), total: order.length })
       : noData ? `<section class="call-empty"><p>No forecast to show yet.</p><p class="small muted">Tidelight shows nothing rather than guess. Try again in a minute.</p><button class="btn primary" id="retryEmpty">Try again</button></section>`
       : `<section class="call-empty"><p>${homeDay === 0 ? "Today's light is done." : 'No sessions on this day.'}</p>${nextWithLight != null ? `<button class="btn" data-day="${nextWithLight}">Show ${nextWithLight === 1 ? 'tomorrow' : esc(fmtWeekday(now + nextWithLight * 86400, offset))}</button>` : ''}</section>`}
     <figure class="band-wrap">
@@ -1041,7 +1049,9 @@ async function renderForecast(v) {
     ${others.length ? `<section class="others" aria-labelledby="othersTitle">
       <h2 class="others-title" id="othersTitle">Also ${homeDay === 0 ? 'today' : homeDay === 1 ? 'tomorrow' : `on ${esc(weekday)}`}</h2>
       ${others.map((e, oi) => `<button class="other-row" style="--i:${oi}" data-sel="${esc(e.key)}">
-        <span class="other-sky ${skyClass(e)} ${scoreTone(e.score)}" style="background:${skyOf(e)}"><b class="num">${e.score}</b></span>
+        ${coverUrl(e.spot)
+          ? `<span class="other-sky has-photo ${scoreTone(e.score)}" style="background-image:url('${coverUrl(e.spot)}')"><b class="num">${e.score}</b></span>`
+          : `<span class="other-sky ${skyClass(e)} ${scoreTone(e.score)}" style="background:${skyOf(e)}"><b class="num">${e.score}</b></span>`}
         <span class="other-name">${esc(e.spot.name)}<small>${TYPE_NAME[e.type]} ${shortWhen(e)}${e.topHunt !== 'colour' ? `, ${HUNT_LABEL[e.topHunt].toLowerCase()}` : ''}${unsure(e) ? ', models disagree' : ''}</small></span>
         <span class="other-verdict ${plannedKeys.has(e.key) ? 'planned' : e.score >= 75 ? 'go' : ''}">${plannedKeys.has(e.key) ? 'Planned' : e.score >= 75 ? 'Go' : e.score >= 50 ? 'Maybe' : 'Skip'}</span>
       </button>`).join('')}
@@ -4566,6 +4576,7 @@ document.addEventListener('click', ev => {
   const cpBtn = ev.target.closest('[data-compass]');
   if (cpBtn) { openCompass(cpBtn.dataset.compass); return; }
   if (ev.target.closest('[data-add-here]') && found) { openSpotForm({ lat: found.lat, lon: found.lon, name: found.name }); return; }
+  if (ev.target.closest('[data-step], .call-slide')) return;   // the call's slide arrows sit inside its tappable photo
   const evBtn = ev.target.closest('[data-ev]');
   if (evBtn) { openEvent(evBtn.dataset.ev); return; }
   if (ev.target.closest('[data-close]')) closeSheet();
