@@ -245,16 +245,24 @@ function openSheet(html) {
   const head = body.querySelector('h1, h2');
   if (head) { head.id = head.id || 'sheetTitle'; head.tabIndex = -1; $('#sheet').setAttribute('aria-labelledby', head.id); }
   else $('#sheet').removeAttribute('aria-labelledby');
-  $('#sheet').classList.remove('hidden');
+  clearTimeout(sheetCloseTimer);
+  $('#sheet').classList.remove('hidden', 'closing');
+  $('.sheet-panel').style.transform = '';
   [...BEHIND_SHEET, '#field'].forEach(s => { const el = $(s); if (el) el.inert = true; });
   document.body.classList.add('noscroll');
   body.scrollTop = 0;
   requestAnimationFrame(() => (head || $('.sheet-close')).focus({ preventScroll: true }));
 }
+let sheetCloseTimer = null;
 function closeSheet() {
   runSheetClose();
-  const wasOpen = !$('#sheet').classList.contains('hidden');
-  $('#sheet').classList.add('hidden');
+  const sheet = $('#sheet');
+  const wasOpen = !sheet.classList.contains('hidden') && !sheet.classList.contains('closing');
+  if (wasOpen) {
+    sheet.classList.add('closing');
+    clearTimeout(sheetCloseTimer);
+    sheetCloseTimer = setTimeout(() => { sheet.classList.add('hidden'); sheet.classList.remove('closing'); $('.sheet-panel').style.transform = ''; }, 190);
+  }
   if ($('#field')) $('#field').inert = false;
   if (!$('#field')) {
     BEHIND_SHEET.forEach(s => { const el = $(s); if (el) el.inert = false; });
@@ -264,6 +272,36 @@ function closeSheet() {
   sheetReturnFocus = null;
 }
 
+(() => {
+  const panel = $('.sheet-panel'), body = $('#sheetBody');
+  if (!panel) return;
+  let y0 = null, x0 = 0, dy = 0, dragging = false;
+  panel.addEventListener('touchstart', ev => {
+    const t = ev.touches[0];
+    const r = panel.getBoundingClientRect();
+    if (body.scrollTop > 0 && t.clientY - r.top > 56) { y0 = null; return; }
+    if (ev.target.closest('input, textarea, select, .band, .dial, .tide, [type=range]')) { y0 = null; return; }
+    y0 = t.clientY; x0 = t.clientX; dy = 0; dragging = false;
+  }, { passive: true });
+  panel.addEventListener('touchmove', ev => {
+    if (y0 == null) return;
+    const t = ev.touches[0];
+    dy = t.clientY - y0;
+    if (!dragging && (dy < 8 || Math.abs(t.clientX - x0) > dy)) { if (dy < 0) y0 = null; return; }
+    dragging = true;
+    panel.style.transition = 'none';
+    panel.style.transform = `translateY(${Math.max(0, dy)}px)`;
+  }, { passive: true });
+  panel.addEventListener('touchend', () => {
+    if (y0 == null) return;
+    y0 = null;
+    panel.style.transition = '';
+    if (dragging && dy > Math.min(140, panel.offsetHeight * 0.25)) closeSheet();
+    else panel.style.transform = '';
+    dragging = false;
+  }, { passive: true });
+})();
+
 /* ================= router ================= */
 
 function setTab(t) { if (t !== tab && t === 'you' && tab !== 'you') lastScreen = { forecast: 'Forecast', spots: 'Spots', plans: 'Plans', tools: 'Tools' }[tab] || 'You'; if (t !== tab) { tabChanged = true; homeAnimate = true; } if (t === 'forecast' && tab !== 'forecast') { homeDay = null; homeSel = null; } if (t === 'you') youPage = null; tab = t; closeSheet(); render(); window.scrollTo(0, 0); }
@@ -271,7 +309,7 @@ function setTab(t) { if (t !== tab && t === 'you' && tab !== 'you') lastScreen =
 function render() {
   if (map) { map.remove(); map = null; }
   clearInterval(plansTimer);
-  $$('.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  $$('.tabbar button').forEach((b, i) => { b.classList.toggle('active', b.dataset.tab === tab); if (b.dataset.tab === tab) $('.tabbar').style.setProperty('--tab', i); });
   const v = $('#view');
   v.dataset.view = tab;   // lets wide screens size each page appropriately
   clearInterval(homeTimer);
@@ -736,7 +774,7 @@ function weekStrip(evs, offset) {
     const full = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : `${wd} ${date}`;
     cells.push(`<button class="wk-d ${i === homeDay ? 'on' : ''}" data-day="${i}" aria-pressed="${i === homeDay}"
         aria-label="${esc(full)}${S().plans.some(p => evs.some(e => e.dayIdx === i && e.key === p.key)) ? ', you have a plan' : ''}${best ? `: best is ${best.score}, ${TYPE_NAME[best.type].toLowerCase()} at ${esc(best.spot.name)}` : ': no sessions'}">
-      <span class="wk-l">${label}<small class="num">${esc(date)}</small></span>
+      ${i === homeDay ? '<span class="wk-hl" aria-hidden="true"></span>' : ''}<span class="wk-l">${label}<small class="num">${esc(date)}</small></span>
       <span class="wk-sky ${best ? `${skyClass(best)} ${scoreTone(best.score)}` : 'none'}" ${best ? `style="background:${skyOf(best)}"` : ''} aria-hidden="true"></span>
       <span class="wk-s num ${best && best.score >= 75 ? 'go' : ''}" aria-hidden="true">${best ? best.score : '–'}</span>${S().plans.some(p => evs.some(e => e.dayIdx === i && e.key === p.key)) ? '<span class="wk-plan" aria-hidden="true"></span>' : ''}
     </button>`);
@@ -1074,16 +1112,16 @@ async function renderForecast(v) {
   wireScrub(v, w0, band.marks, sel);
   const pickDay = d => {
     if (d < 0 || d > 6 || d === homeDay) return;
-    slideFrom = d > homeDay ? 'right' : 'left';
-    homeDay = d; homeSel = null; homeAnimate = true;
-    renderForecast(v);
+    const dir = d > homeDay ? 'right' : 'left';
+    homeDay = d; homeSel = null;
+    transitionHome(v, dir);
   };
   $$('[data-day]', v).forEach(b => b.onclick = () => pickDay(Number(b.dataset.day)));
   const step = d => {
     const i = order.findIndex(e => e.key === homeSel) + d;
     if (i < 0 || i >= order.length) return;
-    homeSel = order[i].key; slideFrom = d > 0 ? 'right' : 'left';
-    renderForecast(v);
+    homeSel = order[i].key;
+    transitionHome(v, d > 0 ? 'right' : 'left');
   };
   onSwipe($('.call', v), () => step(1), () => step(-1));
   onSwipe($('.day-head-v2', v), () => pickDay(homeDay + 1), () => pickDay(homeDay - 1));
@@ -1094,6 +1132,17 @@ async function renderForecast(v) {
   });
   $('#refreshLink', v).onclick = () => refreshForecasts($('#refreshLink', v));
   const re = $('#retryEmpty', v); if (re) re.onclick = () => refreshForecasts(re);
+}
+
+// Redraw the Forecast after a day or session change. Where View Transitions exist, the call slides
+// the way you moved and the week's highlight glides to the new day; elsewhere the call slides in by CSS.
+function transitionHome(v, dir) {
+  const vt = document.startViewTransition && motionOK();
+  if (!vt) { slideFrom = dir; homeAnimate = false; return renderForecast(v); }
+  document.documentElement.dataset.dir = dir === 'right' ? 'next' : 'prev';
+  homeAnimate = false; slideFrom = '';
+  const t = document.startViewTransition(() => renderForecast(v));
+  t.finished.finally(() => { delete document.documentElement.dataset.dir; });
 }
 
 // Fetch every spot's forecast again (the Refresh link on the Forecast page).

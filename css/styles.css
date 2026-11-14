@@ -789,9 +789,7 @@ html[data-text="larger"] { font-size: 125%; }
 
 /* ---- Loading placeholders ---- */
 .sk-wrap { display: grid; gap: 14px; margin-top: 6px; }
-.sk { border-radius: 10px; background: var(--surface); animation: sk-pulse 1.4s ease-in-out infinite; }
 @keyframes sk-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
-@media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
 .sk-title { height: 44px; width: 68%; }
 .sk-line { height: 18px; width: 88%; }
 .sk-band { height: 76px; border-radius: 14px; }
@@ -841,7 +839,6 @@ html[data-text="larger"] { font-size: 125%; }
   #toast { top: 84px; }
 }
 /* Polish follow-ups */
-.sk { background: #1B1F1F; }
 .touch-only { display: none; }
 @media (hover: none) { .touch-only { display: inline; } }
 .brand { gap: 10px; }
@@ -890,7 +887,6 @@ html[data-text="larger"] .day-title span { font-size: 1.15rem; }
 @keyframes bar-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
 /* ---- Pages and lists ease in after a tab change ---- */
-#view.view-in { animation: view-in .3s cubic-bezier(.2, .7, .2, 1); }
 @keyframes view-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 #view.view-in .spot-card, #view.view-in .tool-row, #view.view-in .you-row, #view.view-in .plan-item, #view.view-in .next-up, #view.view-in .rate-row { animation: rise .4s cubic-bezier(.2, .7, .2, 1) backwards; }
 #view.view-in :is(.spot-card, .tool-row, .you-row, .plan-item, .rate-row):nth-child(1) { animation-delay: .06s; }
@@ -904,8 +900,6 @@ html[data-text="larger"] .day-title span { font-size: 1.15rem; }
 .day-pills button { transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
 
 /* ---- Pop-ups rise; the week grid fills in; ticks pop ---- */
-.sheet:not(.hidden) .sheet-panel { animation: sheet-up .32s cubic-bezier(.2, .8, .2, 1); }
-.sheet:not(.hidden) .sheet-backdrop { animation: fade-in .25s ease-out; }
 @keyframes sheet-up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 .wk .mx-cell { animation: cell-in .3s var(--ease-out) backwards; animation-delay: calc(.1s + var(--n, 0) * .035s); }
 .check input:checked { animation: pop .25s var(--ease-out); }
@@ -914,10 +908,10 @@ html[data-text="larger"] .day-title span { font-size: 1.15rem; }
 
 /* ---- Reduced motion: your phone's setting, or You → Display ---- */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  *:not(#view, .sheet-panel, .sheet-backdrop, #toast, .commit, .commit-head path, .sk), *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .sky-clouds i, .sky-rain i, .star, .live-dot::after, .band-mark.on::before, .band-now::before, .detail-photo { animation: none !important; }
 }
-html[data-motion="reduced"] *, html[data-motion="reduced"] *::before, html[data-motion="reduced"] *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+html[data-motion="reduced"] *:not(#view, .sheet-panel, .sheet-backdrop, #toast, .commit, .commit-head path, .sk), html[data-motion="reduced"] *::before, html[data-motion="reduced"] *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 html[data-motion="reduced"] :is(.sky-clouds i, .sky-rain i, .star, .detail-photo), html[data-motion="reduced"] :is(.live-dot, .band-mark.on, .band-now)::before, html[data-motion="reduced"] .live-dot::after { animation: none !important; }
 /* Stronger cloud so overcast hours read clearly against daylight */
 
@@ -1544,3 +1538,175 @@ h2.sec { font: 600 1rem/1.3 var(--sans); letter-spacing: 0; text-transform: none
 .other-sky.has-photo { position: relative; overflow: hidden; background-size: cover; background-position: center; filter: none; }
 .other-sky.has-photo::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(6, 8, 13, .55), rgba(6, 8, 13, .05) 70%); }
 .other-sky.has-photo b { z-index: 1; text-shadow: 0 1px 6px rgba(0, 0, 0, .8); }
+
+/* =================================================================================
+   v6.3 motion: light arrives.
+   One authored moment (the call is revealed from the horizon up as the page opens),
+   continuity for day and session changes (the call slides the way you moved, the
+   day highlight glides), and quick, quiet feedback everywhere else.
+   Timing: 120ms feedback, 200-300ms state, 350ms+ only for the focal reveal.
+   ================================================================================= */
+:root { --ease-in: cubic-bezier(.4, 0, 1, 1); --t-press: 120ms; --t-state: 220ms; }
+
+/* ---- Focal moment: first light on the call ---- */
+.home-grid.enter .call-sky,
+.home-grid.enter .call-sky.has-photo { animation: horizon-up .75s var(--ease-out) both; }
+@keyframes horizon-up {
+  from { clip-path: inset(100% 0 0 0); transform: scale(1.04); }
+  to { clip-path: inset(0 0 0 0); transform: none; }
+}
+.home-grid.enter .call-sky:not(.has-photo) { animation: horizon-up .75s var(--ease-out) both, sky-dawn 1.1s var(--ease-out) both; }
+.home-grid.enter .call-verdict, .home-grid.enter .call-score { animation: lift-in .5s var(--ease-out) .28s both; }
+.home-grid.enter .call-foot, .home-grid.enter .call-slide { animation: lift-in .5s var(--ease-out) .38s both; }
+.home-grid.enter .call-body > * { animation: lift-in .45s var(--ease-out) both; animation-delay: calc(.42s + var(--k, 0) * 40ms); }
+.call-body > :nth-child(2) { --k: 1; } .call-body > :nth-child(3) { --k: 2; } .call-body > :nth-child(n+4) { --k: 3; }
+@keyframes lift-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* the day's other sessions follow, as a list (stagger capped) */
+.home-grid.enter .other-row { animation: lift-in .4s var(--ease-out) both; animation-delay: calc(.5s + min(var(--i, 0), 6) * 40ms); }
+
+/* ---- Continuity: day and session changes (View Transitions) ---- */
+.call { view-transition-name: call; }
+.day-title { view-transition-name: day-title; }
+.wk-hl { position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); view-transition-name: wk-sel; }
+.wk-d { isolation: isolate; }
+.wk-d.on { background: none; box-shadow: none; }
+::view-transition-group(*) { animation-duration: .32s; animation-timing-function: cubic-bezier(.16, 1, .3, 1); }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .2s; }
+::view-transition-old(call) { animation: call-out .16s var(--ease-in) both; }
+::view-transition-new(call) { animation: call-in .34s var(--ease-out) both; }
+::view-transition-old(day-title) { animation: fade-out .12s linear both; }
+::view-transition-new(day-title) { animation: lift-in .3s var(--ease-out) both; }
+:root[data-dir="prev"]::view-transition-old(call) { animation-name: call-out-r; }
+:root[data-dir="prev"]::view-transition-new(call) { animation-name: call-in-l2; }
+@keyframes call-out { to { opacity: 0; transform: translateX(-24px); } }
+@keyframes call-out-r { to { opacity: 0; transform: translateX(24px); } }
+@keyframes call-in { from { opacity: 0; transform: translateX(32px); } }
+@keyframes call-in-l2 { from { opacity: 0; transform: translateX(-32px); } }
+@keyframes fade-out { to { opacity: 0; } }
+
+/* ---- Tab bar: the indicator glides to the active tab ---- */
+.tabbar { --tab: 0; }
+.tab-ind {
+  position: absolute; top: -1px; left: 0; width: 20%; height: 2px; pointer-events: none;
+  transform: translateX(calc(var(--tab) * 100%)); transition: transform .38s var(--ease-out);
+}
+.tab-ind::before { content: ''; display: block; width: 28px; height: 2px; margin: 0 auto; border-radius: 0 0 2px 2px; background: var(--caramel); }
+.tabbar button { transition: color var(--t-state) var(--ease-out); }
+.tabbar button svg { transition: transform var(--t-state) var(--ease-out); }
+.tabbar button.active svg { transform: translateY(-1px); }
+@media (min-width: 1000px) { .tab-ind { display: none; } .tabbar button.active { background: var(--surface); } }
+
+/* ---- Pages: a short settle on tab change; lists follow as lists ---- */
+#view.view-in { animation: page-in .24s var(--ease-out); }
+@keyframes page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+#view.view-in :is(.lib-row, .tool-row, .you-row, .plan-item, .rate-row, .sg tbody tr) { animation: lift-in .36s var(--ease-out) backwards; animation-delay: calc(.04s + min(var(--n, 0), 6) * 35ms); }
+:is(.lib-row, .tool-row, .you-row, .plan-item, .rate-row):nth-child(2) { --n: 1; }
+:is(.lib-row, .tool-row, .you-row, .plan-item, .rate-row):nth-child(3) { --n: 2; }
+:is(.lib-row, .tool-row, .you-row, .plan-item, .rate-row):nth-child(4) { --n: 3; }
+:is(.lib-row, .tool-row, .you-row, .plan-item, .rate-row):nth-child(5) { --n: 4; }
+:is(.lib-row, .tool-row, .you-row, .plan-item, .rate-row):nth-child(n+6) { --n: 6; }
+/* the spots grid fills in day by day once its scores arrive */
+.sg-cell { animation: cell-fill .35s var(--ease-out) backwards; }
+.sg td:nth-child(2) .sg-cell { animation-delay: 30ms; } .sg td:nth-child(3) .sg-cell { animation-delay: 60ms; }
+.sg td:nth-child(4) .sg-cell { animation-delay: 90ms; } .sg td:nth-child(5) .sg-cell { animation-delay: 120ms; }
+.sg td:nth-child(6) .sg-cell { animation-delay: 150ms; } .sg td:nth-child(7) .sg-cell { animation-delay: 180ms; }
+@keyframes cell-fill { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
+
+/* ---- Sheets: rise in, drop out faster, follow your finger down ---- */
+.sheet-panel { transition: transform .28s var(--ease-out); }
+.sheet:not(.hidden):not(.closing) .sheet-panel { animation: sheet-rise .36s var(--ease-out) backwards; }
+.sheet:not(.hidden):not(.closing) .sheet-backdrop { animation: backdrop-in .3s var(--ease-out) both; }
+.sheet.closing .sheet-panel { animation: sheet-drop .19s var(--ease-in) both; }
+.sheet.closing .sheet-backdrop { animation: backdrop-out .19s linear both; }
+.sheet.closing { pointer-events: none; }
+@keyframes sheet-rise { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes sheet-drop { to { transform: translateY(100%); } }
+@keyframes backdrop-in { from { opacity: 0; backdrop-filter: blur(0); } to { opacity: 1; } }
+@keyframes backdrop-out { to { opacity: 0; } }
+.sheet-backdrop { background: rgba(4, 6, 10, .62); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+/* a grab handle says "this can be pulled down" */
+.sheet-panel::before { content: ''; position: absolute; top: 8px; left: 50%; z-index: 6; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: rgba(238, 233, 224, .32); pointer-events: none; }
+@media (min-width: 1000px) {
+  .sheet-panel::before { content: none; }
+  @keyframes sheet-rise { from { transform: translateY(16px) scale(.98); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes sheet-drop { to { transform: translateY(8px) scale(.98); opacity: 0; } }
+}
+
+/* ---- Feedback: every press answers within a frame ---- */
+:is(.btn, .tool-chip, .chip-btn, .day-pills button, .icon-btn, .now-btn, .link-btn, .slide-btn, .call-score) {
+  transition: transform var(--t-press) var(--ease-out), background-color var(--t-state) var(--ease-out), border-color var(--t-state) var(--ease-out), color var(--t-state) var(--ease-out), opacity var(--t-state);
+}
+:is(.btn, .tool-chip, .chip-btn, .day-pills button, .icon-btn, .now-btn):active:not(:disabled) { transform: scale(.97); }
+:is(.wk-d, .other-row, .lib-row, .you-row, .tool-row, .hist-btn, .sg-cell, .mx-cell, .sg-spot) { transition: transform var(--t-press) var(--ease-out), background-color var(--t-state) var(--ease-out); }
+:is(.wk-d, .sg-cell, .mx-cell):active { transform: scale(.95); }
+:is(.other-row, .lib-row, .you-row, .tool-row, .hist-btn):active { transform: scale(.99); }
+.call-sky { transition: transform .2s var(--ease-out); }
+.call-sky:active { transform: scale(.995); }
+.link-btn:active { opacity: .7; }
+@media (hover: hover) {
+  .btn:not(.primary):hover:not(:disabled) { border-color: color-mix(in srgb, var(--text) 55%, transparent); background: rgba(238, 233, 224, .04); }
+  .btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--caramel) 88%, #fff); }
+  :is(.other-row, .lib-row, .you-row, .tool-row):hover { background: linear-gradient(to right, transparent, rgba(238, 233, 224, .03), transparent); }
+  .sg-cell:hover, .mx-cell:hover { transform: translateY(-1px); }
+  .link-btn:hover { text-decoration: underline; text-underline-offset: .22em; }
+}
+
+/* ---- Buttons: crisper edges ---- */
+.btn { border-color: color-mix(in srgb, var(--text) 30%, transparent); letter-spacing: .005em; }
+.btn.primary { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 6px 18px -10px rgba(217, 160, 102, .55); }
+:focus-visible { outline: 2px solid var(--caramel); outline-offset: 3px; }
+
+/* ---- Committing: the panel opens and the tick draws itself ---- */
+.commit[role="status"] { animation: commit-in .38s var(--ease-out) both; }
+@keyframes commit-in { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+.commit[role="status"] .commit-head path { stroke-dasharray: 22; stroke-dashoffset: 22; animation: tick-draw .42s var(--ease-out) .14s forwards; }
+@keyframes tick-draw { to { stroke-dashoffset: 0; } }
+
+/* ---- Toast: a quiet note that drops in from the top ---- */
+#toast {
+  display: flex; align-items: center; gap: 10px; text-align: left;
+  background: color-mix(in srgb, var(--surface-2) 92%, transparent); color: var(--text);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 1px solid var(--line); box-shadow: 0 12px 30px -12px rgba(0, 0, 0, .7);
+  transform: translateX(-50%) translateY(-14px) scale(.98);
+  transition: opacity .15s linear, transform .15s var(--ease-in);
+}
+#toast::before { content: ''; flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--caramel); }
+#toast.show { transform: translateX(-50%) translateY(0) scale(1); transition: opacity .2s linear, transform .3s var(--ease-out); }
+
+/* ---- Loading: a slow band of light passes over the placeholders ---- */
+.sk { position: relative; overflow: hidden; border-radius: 12px; background: var(--surface); }
+.sk::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(100deg, transparent 20%, rgba(217, 160, 102, .07) 45%, rgba(238, 233, 224, .07) 55%, transparent 80%);
+  animation: light-pass 1.8s cubic-bezier(.45, 0, .2, 1) 6;
+}
+@keyframes light-pass { to { transform: translateX(100%); } }
+
+/* ---- Field mode: night vision fades in rather than snapping ---- */
+.field, .field :is(p, span, time, em, li, h3, .btn, .icon-btn) { transition: color .45s var(--ease-out), background-color .45s var(--ease-out), border-color .45s var(--ease-out); }
+
+/* ---- Reduced motion: things still appear and confirm, they just don't travel ---- */
+@media (prefers-reduced-motion: reduce) {
+  .sheet:not(.hidden):not(.closing) .sheet-panel { animation: fade-in .2s linear both; }
+  .sheet.closing .sheet-panel { animation: fade-out .15s linear both; }
+  #view.view-in { animation: fade-in .2s linear; }
+  #toast, #toast.show { transform: translateX(-50%); }
+  .commit[role="status"] { animation: fade-in .25s linear both; }
+  .commit[role="status"] .commit-head path { animation: none; stroke-dashoffset: 0; }
+  .sk::after { animation: none; }
+  .sheet-panel { transition: none; }
+}
+html[data-motion="reduced"] .sheet:not(.hidden):not(.closing) .sheet-panel { animation: fade-in .2s linear both; }
+html[data-motion="reduced"] .sheet.closing .sheet-panel { animation: fade-out .15s linear both; }
+html[data-motion="reduced"] #view.view-in { animation: fade-in .2s linear; }
+html[data-motion="reduced"] #toast { transform: translateX(-50%); }
+html[data-motion="reduced"] .commit[role="status"] { animation: fade-in .25s linear both; }
+html[data-motion="reduced"] .commit[role="status"] .commit-head path { animation: none; stroke-dashoffset: 0; }
+html[data-motion="reduced"] .sk::after { animation: none; }
+
+/* the week row sits above its gliding highlight during a transition, so labels stay readable */
+.week { view-transition-name: week; }
+::view-transition-group(wk-sel) { z-index: 1; }
+::view-transition-group(week) { z-index: 2; }
+::view-transition-old(week), ::view-transition-new(week) { animation-duration: .2s; }
