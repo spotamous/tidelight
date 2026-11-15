@@ -1,6 +1,6 @@
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
-import { nearestIndex, tideInfo } from './scoring.js?v=6.3';
-import { huntsOf, DAY_HUNTS } from './hunts.js?v=6.3';
+import { nearestIndex, tideInfo } from './scoring.js?v=6.4';
+import { huntsOf, DAY_HUNTS } from './hunts.js?v=6.4';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
@@ -29,22 +29,73 @@ const qs = o => new URLSearchParams(o).toString();
 
 export function clearCache() { cache.clear(); }
 
+const BASE = 'cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,precipitation_probability,precipitation,visibility,wind_speed_10m,temperature_2m';
+const FOG_STORM = 'relative_humidity_2m,dew_point_2m,cape,lifted_index,convective_inhibition,wind_gusts_10m,weather_code';
+const HOURLY_SETS = [`${BASE},${FOG_STORM}`, `${BASE},relative_humidity_2m,dew_point_2m,cape,wind_gusts_10m,weather_code`, BASE];
+const MODEL_SETS = [['ecmwf_ifs025', 'gfs_seamless', 'bom_access_global'], ['ecmwf_ifs025', 'gfs_seamless']];
+const isDayHunter = spot => huntsOf(spot).some(k => DAY_HUNTS.includes(k));
+const wantsColourOf = spot => huntsOf(spot).includes('colour') && (spot.events || []).length > 0;
+const keyOf = spot => `${spot.lat.toFixed(3)},${spot.lon.toFixed(3)},${isDayHunter(spot) ? 'd' : ''}`;
+
+/* ---------- forecasts kept on the device, so the app opens with the last ones straight away ---------- */
+const IDB_NAME = 'tidelight-forecasts', IDB_STORE = 'f';
+let idb = null;
+function openStore() {
+  if (typeof indexedDB === 'undefined') return Promise.resolve(null);
+  if (!idb) idb = new Promise(resolve => {
+    try {
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = req.onblocked = () => resolve(null);
+    } catch { resolve(null); }
+  });
+  return idb;
+}
+// Load the saved forecasts into memory. Call once at start-up; never throws.
+export async function restoreForecasts() {
+  const db = await openStore();
+  if (!db) return 0;
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readonly'), st = tx.objectStore(IDB_STORE);
+      const keys = st.getAllKeys(), vals = st.getAll();
+      tx.oncomplete = () => {
+        let n = 0;
+        keys.result.forEach((k, i) => { const v = vals.result[i]; if (v?.data && !cache.has(k)) { cache.set(k, v); n++; } });
+        resolve(n);
+      };
+      tx.onerror = tx.onabort = () => resolve(0);
+    } catch { resolve(0); }
+  });
+}
+async function persist(entries, keep) {
+  const db = await openStore();
+  if (!db) return;
+  try {
+    const tx = db.transaction(IDB_STORE, 'readwrite'), st = tx.objectStore(IDB_STORE);
+    for (const [k, v] of entries) st.put(v, k);
+    if (keep) { const req = st.getAllKeys(); req.onsuccess = () => req.result.forEach(k => { if (!keep.has(k)) st.delete(k); }); }
+  } catch {}
+}
+// The last forecast for a spot, however old it is: { at, data } or null.
+export function savedForecast(spot) { return cache.get(keyOf(spot)) || null; }
+export const FORECAST_TTL = TTL;
+
 export async function fetchSpotForecast(spot) {
-  const key = `${spot.lat.toFixed(3)},${spot.lon.toFixed(3)},${huntsOf(spot).some(k => DAY_HUNTS.includes(k)) ? 'd' : ''}`;
+  const key = keyOf(spot);
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL) return hit.data;
 
   const common = { latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime', forecast_days: 7, past_days: 2 };
-  const BASE = 'cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,precipitation_probability,precipitation,visibility,wind_speed_10m,temperature_2m';
-  const FOG_STORM = 'relative_humidity_2m,dew_point_2m,cape,lifted_index,convective_inhibition,wind_gusts_10m,weather_code';
   let wx;
   try {
-    wx = await getJSON(`${FORECAST}?${qs({ ...common, hourly: `${BASE},${FOG_STORM}`, daily: 'sunrise,sunset' })}`);
+    wx = await getJSON(`${FORECAST}?${qs({ ...common, hourly: HOURLY_SETS[0], daily: 'sunrise,sunset' })}`);
   } catch (e) {
     if (e instanceof SlowError || /connection/i.test(e.message)) throw e;   // only retry with fewer variables if the service refused them
     // Some variables aren't offered for every region/model; fall back to the core set.
-    wx = await getJSON(`${FORECAST}?${qs({ ...common, hourly: `${BASE},relative_humidity_2m,dew_point_2m,cape,wind_gusts_10m,weather_code`, daily: 'sunrise,sunset' })}`)
-      .catch(() => getJSON(`${FORECAST}?${qs({ ...common, hourly: BASE, daily: 'sunrise,sunset' })}`));
+    wx = await getJSON(`${FORECAST}?${qs({ ...common, hourly: HOURLY_SETS[1], daily: 'sunrise,sunset' })}`)
+      .catch(() => getJSON(`${FORECAST}?${qs({ ...common, hourly: HOURLY_SETS[2], daily: 'sunrise,sunset' })}`));
   }
 
   const getMarine = async () => {
@@ -56,12 +107,12 @@ export async function fetchSpotForecast(spot) {
   };
   // Rainforest and waterfall spots also need the last two weeks of rain.
   const getRainDaily = async () => {
-    if (!huntsOf(spot).some(k => DAY_HUNTS.includes(k))) return null;
+    if (!isDayHunter(spot)) return null;
     const j = await getJSON(`${FORECAST}?${qs({ latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime', daily: 'precipitation_sum', past_days: 14, forecast_days: 7 })}`);
     return (j.daily?.time || []).map((t, i) => ({ t, mm: j.daily.precipitation_sum?.[i] ?? 0 }));
   };
   // The horizon and model-agreement checks only matter for sunrise and sunset colour.
-  const wantsColour = huntsOf(spot).includes('colour') && (spot.events || []).length > 0;
+  const wantsColour = wantsColourOf(spot);
   const [mr, hz, md, rd] = await Promise.allSettled([getMarine(), wantsColour ? fetchHorizon(spot) : null, wantsColour ? fetchModels(spot) : null, getRainDaily()]);
   const marine = mr.status === 'fulfilled' ? mr.value : null;
 
@@ -69,7 +120,8 @@ export async function fetchSpotForecast(spot) {
   data.horizon = hz.status === 'fulfilled' ? hz.value : null;   // cloud towards sunrise/sunset
   data.models = md.status === 'fulfilled' ? md.value : null;    // per-model cloud, for confidence
   data.rainDaily = rd.status === 'fulfilled' ? rd.value : null; // daily rain, 14 days back
-  cache.set(key, { at: Date.now(), data });
+  const entry = { at: Date.now(), data };
+  cache.set(key, entry); persist([[key, entry]]);
   return data;
 }
 
@@ -81,7 +133,7 @@ function destPoint(lat, lon, bearing, km) {
   return { lat: p2 * 180 / Math.PI, lon: ((l2 * 180 / Math.PI + 540) % 360) - 180 };
 }
 
-async function fetchHorizon(spot) {
+function horizonPoints(spot) {
   if (!window.SunCalc) return null;
   const now = new Date();
   const times = window.SunCalc.getTimes(now, spot.lat, spot.lon);
@@ -90,11 +142,9 @@ async function fetchHorizon(spot) {
   const dirs = { sunrise: ok(times.sunrise) ? azAt(times.sunrise) : 90, sunset: ok(times.sunset) ? azAt(times.sunset) : 270 };
   const pts = [];
   for (const [kind, az] of Object.entries(dirs)) for (const km of [60, 120]) pts.push({ kind, km, az, ...destPoint(spot.lat, spot.lon, az, km) });
-  const j = await getJSON(`${FORECAST}?${qs({
-    latitude: pts.map(p => p.lat.toFixed(3)).join(','), longitude: pts.map(p => p.lon.toFixed(3)).join(','),
-    hourly: 'cloud_cover_low,cloud_cover_mid,cloud_cover_high', timezone: 'auto', timeformat: 'unixtime', forecast_days: 7, past_days: 2,
-  })}`, 10000);
-  const arr = Array.isArray(j) ? j : [j];
+  return { dirs, pts };
+}
+function horizonFrom({ dirs, pts }, arr) {
   const out = { sunrise: { az: dirs.sunrise, points: [] }, sunset: { az: dirs.sunset, points: [] } };
   arr.forEach((r, i) => {
     const H = r?.hourly;
@@ -103,23 +153,124 @@ async function fetchHorizon(spot) {
   });
   return out.sunrise.points.length || out.sunset.points.length ? out : null;
 }
+const HZ_PARAMS = { hourly: 'cloud_cover_low,cloud_cover_mid,cloud_cover_high', timezone: 'auto', timeformat: 'unixtime', forecast_days: 7, past_days: 2 };
+async function fetchHorizon(spot) {
+  const hp = horizonPoints(spot);
+  if (!hp) return null;
+  const j = await getJSON(`${FORECAST}?${qs({ latitude: hp.pts.map(p => p.lat.toFixed(3)).join(','), longitude: hp.pts.map(p => p.lon.toFixed(3)).join(','), ...HZ_PARAMS })}`, 10000);
+  return horizonFrom(hp, Array.isArray(j) ? j : [j]);
+}
 
 /* ---------- the same cloud from several weather models, for confidence ---------- */
+function modelsFrom(j, ms) {
+  const H = j?.hourly || {};
+  const models = ms.map(m => ({ model: m, low: H[`cloud_cover_low_${m}`], mid: H[`cloud_cover_mid_${m}`], high: H[`cloud_cover_high_${m}`] }))
+    .filter(x => Array.isArray(x.low) && x.low.some(v => v != null));
+  return models.length >= 2 ? { times: H.time, models } : null;
+}
 async function fetchModels(spot) {
-  const sets = [['ecmwf_ifs025', 'gfs_seamless', 'bom_access_global'], ['ecmwf_ifs025', 'gfs_seamless']];
-  for (const ms of sets) {
+  for (const ms of MODEL_SETS) {
     try {
-      const j = await getJSON(`${FORECAST}?${qs({
-        latitude: spot.lat, longitude: spot.lon, models: ms.join(','), hourly: 'cloud_cover_low,cloud_cover_mid,cloud_cover_high',
-        timezone: 'auto', timeformat: 'unixtime', forecast_days: 7, past_days: 2,
-      })}`, 10000);
-      const H = j.hourly || {};
-      const models = ms.map(m => ({ model: m, low: H[`cloud_cover_low_${m}`], mid: H[`cloud_cover_mid_${m}`], high: H[`cloud_cover_high_${m}`] }))
-        .filter(x => Array.isArray(x.low) && x.low.some(v => v != null));
-      if (models.length >= 2) return { times: H.time, models };
+      const j = await getJSON(`${FORECAST}?${qs({ latitude: spot.lat, longitude: spot.lon, models: ms.join(','), ...HZ_PARAMS })}`, 10000);
+      const r = modelsFrom(j, ms);
+      if (r) return r;
     } catch (e) { if (e instanceof SlowError) return null; /* refused: try the smaller set */ }
   }
   return null;
+}
+
+/* ---------- every spot at once: a handful of requests instead of three or four per spot ---------- */
+// Open-Meteo takes comma-separated coordinates and answers with one result per place, in order.
+const coords = list => ({ latitude: list.map(p => p.lat).join(','), longitude: list.map(p => p.lon).join(',') });
+const asList = (j, n) => { const a = Array.isArray(j) ? j : [j]; if (a.length !== n) throw new Error('Unexpected answer from the weather service'); return a; };
+const chunks = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
+async function many(list, size, fn) {   // run fn on chunks of the list, keeping order
+  const parts = await Promise.all(chunks(list, size).map(fn));
+  return parts.flat();
+}
+
+// Returns { [spot.id]: data } for the spots that loaded, plus { failed: [{ spot, error }] }.
+// Spots fetched less than 30 minutes ago come from memory unless `force`. `all`: every spot you have,
+// so saved forecasts for deleted spots can be cleared out.
+export async function fetchForecasts(spots, { force = false, all = spots } = {}) {
+  const out = {}, failed = [];
+  const todo = [];
+  for (const sp of spots) {
+    const hit = cache.get(keyOf(sp));
+    if (!force && hit && Date.now() - hit.at < TTL) out[sp.id] = hit.data; else todo.push(sp);
+  }
+  if (!todo.length) return { out, failed };
+  const common = { timezone: 'auto', timeformat: 'unixtime', forecast_days: 7, past_days: 2 };
+
+  const wxAll = async () => {
+    let lastErr;
+    for (const hourly of HOURLY_SETS) {
+      try { return await many(todo, 40, part => getJSON(`${FORECAST}?${qs({ ...coords(part), ...common, hourly, daily: 'sunrise,sunset' })}`, 20000).then(j => asList(j, part.length))); }
+      catch (e) { lastErr = e; if (e instanceof SlowError || /connection/i.test(e.message)) throw e; }
+    }
+    throw lastErr;
+  };
+  const coastal = todo.filter(sp => sp.coastal);
+  const marineAll = async () => {
+    if (!coastal.length) return [];
+    const res = await many(coastal, 40, part => getJSON(`${MARINE}?${qs({ ...coords(part), ...common, hourly: 'wave_height,swell_wave_height,sea_level_height_msl' })}`, 12000).then(j => asList(j, part.length)));
+    return res.map(mr => {
+      const m = mr?.hourly || {};
+      const hasAny = (m.wave_height || []).some(v => v != null) || (m.sea_level_height_msl || []).some(v => v != null);
+      return hasAny ? mr : null;
+    });
+  };
+  const dayHunters = todo.filter(isDayHunter);
+  const rainAll = async () => {
+    if (!dayHunters.length) return [];
+    const res = await many(dayHunters, 40, part => getJSON(`${FORECAST}?${qs({ ...coords(part), timezone: 'auto', timeformat: 'unixtime', daily: 'precipitation_sum', past_days: 14, forecast_days: 7 })}`, 12000).then(j => asList(j, part.length)));
+    return res.map(j => (j.daily?.time || []).map((t, i) => ({ t, mm: j.daily.precipitation_sum?.[i] ?? 0 })));
+  };
+  const colour = todo.filter(wantsColourOf);
+  const hzAll = async () => {
+    const hps = colour.map(horizonPoints);
+    const pts = hps.flatMap(hp => (hp ? hp.pts : []));
+    if (!pts.length) return colour.map(() => null);
+    const arr = await many(pts, 100, part => getJSON(`${FORECAST}?${qs({ ...coords(part), ...HZ_PARAMS })}`, 12000).then(j => asList(j, part.length)));
+    let i = 0;
+    return hps.map(hp => { if (!hp) return null; const mine = arr.slice(i, i + hp.pts.length); i += hp.pts.length; return horizonFrom(hp, mine); });
+  };
+  const modelsAll = async () => {
+    if (!colour.length) return [];
+    for (const ms of MODEL_SETS) {
+      try { return (await many(colour, 30, part => getJSON(`${FORECAST}?${qs({ ...coords(part), models: ms.join(','), ...HZ_PARAMS })}`, 12000).then(j => asList(j, part.length)))).map(j => modelsFrom(j, ms)); }
+      catch (e) { if (e instanceof SlowError) return colour.map(() => null); }
+    }
+    return colour.map(() => null);
+  };
+
+  const [wx, mr, rd, hz, md] = await Promise.allSettled([wxAll(), marineAll(), rainAll(), hzAll(), modelsAll()]);
+  if (wx.status !== 'fulfilled') {
+    // The combined request didn't work (for example one place the service won't forecast): fall back to one spot at a time.
+    if (wx.reason instanceof SlowError || /connection/i.test(wx.reason?.message || '')) {
+      for (const sp of todo) failed.push({ spot: sp, error: wx.reason });
+      return { out, failed };
+    }
+    const res = await Promise.allSettled(todo.map(sp => fetchSpotForecast(sp)));
+    res.forEach((r, i) => { if (r.status === 'fulfilled') out[todo[i].id] = r.value; else failed.push({ spot: todo[i], error: r.reason }); });
+    return { out, failed };
+  }
+  const pick = (res, list, sp) => (res.status === 'fulfilled' ? res.value[list.indexOf(sp)] ?? null : null);
+  const now = Date.now(), entries = [];
+  todo.forEach((sp, i) => {
+    try {
+      const data = normalize(wx.value[i], pick(mr, coastal, sp));
+      data.horizon = wantsColourOf(sp) ? pick(hz, colour, sp) : null;
+      data.models = wantsColourOf(sp) ? pick(md, colour, sp) : null;
+      data.rainDaily = isDayHunter(sp) ? pick(rd, dayHunters, sp) : null;
+      const entry = { at: now, data };
+      cache.set(keyOf(sp), entry); entries.push([keyOf(sp), entry]);
+      out[sp.id] = data;
+    } catch (e) { failed.push({ spot: sp, error: e }); }
+  });
+  // Keep only the forecasts for the spots you have now.
+  persist(entries, new Set(all.map(keyOf)));
+  return { out, failed };
 }
 
 function normalize(wx, marine) {

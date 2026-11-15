@@ -3,7 +3,7 @@
 // - Forecast, tide and aurora data: network first, falling back to the last saved copy.
 // - Map tiles you've viewed are kept for offline use; live radar is never cached.
 // Bump VERSION with each release (matches APP_VERSION in js/app.js).
-const VERSION = '6.3';
+const VERSION = '6.4';
 const SHELL = `tidelight-shell-${VERSION}`;
 const DATA = 'tidelight-data';
 const TILES = 'tidelight-tiles';
@@ -68,7 +68,8 @@ self.addEventListener('fetch', event => {
 
   if (url.origin === self.location.origin) {
     if (req.mode === 'navigate') {
-      event.respondWith(networkFirst(req, SHELL).catch(() => caches.match('./index.html')));
+      // Never let a weak signal hold up opening the app: after 2.5 s, open the saved copy (the fresh one is saved for next time).
+      event.respondWith(networkFirst(req, SHELL, 2500).catch(() => caches.match('./index.html')));
     } else {
       // JS/CSS carry a ?v= version tag, so a cached copy is always the right one for that version.
       event.respondWith(cacheFirst(req, SHELL));

@@ -6,7 +6,9 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 
 ## What it does
 
-**New in 6.3: decide, commit, go.** The app is now one path from "is it worth it?" to standing there.
+**New in 6.4: opens fast.** The app saves the last forecast for each spot on your device and shows it the moment you open the app, then fetches fresh forecasts in the background ("Updating…" under the day title) and redraws when they land. All your spots are fetched together in about five requests instead of three or four per spot, so adding spots no longer slows it down. On a weak signal the app opens from its saved copy after 2.5 s instead of waiting, and Refresh keeps the saved forecast for any spot that doesn't load.
+
+**6.3: decide, commit, go.** The app is now one path from "is it worth it?" to standing there.
 
 - **Forecast (decide).** A week strip across the top shows the next 7 days, each with its best score on a small swatch of that session's real sky (its light phase, greyed by its cloud). The page opens on the next light: today while a session is still worth leaving for, otherwise tomorrow. Below the day's heading, *the call* is one session painted in its own light: the verdict, the score (tap for *What if?*), the spot, then your alarm, leave and session times, why, and *Plan this shoot*. Tap the call for the full briefing. The light band sits under it; *Reading the band* opens its key. Other sessions that day are one line each. *Refresh* sits beside "Updated … ago".
 - **Commit.** Planning shows *You're set* with your alarm and leave time, *Add alarm to calendar* (the calendar alarm goes off at your alarm time), *See the plan* and *Undo*. Your alarm is the leave time less your *Get ready time* (You → Home and travel, 30 min by default).
@@ -156,7 +158,7 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=6.2`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=6.4`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:

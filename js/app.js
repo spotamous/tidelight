@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.3';
-import { fetchSpotForecast, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.3';
-import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.3';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.3';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.3';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.3';
-import { gearFor } from './gear.js?v=6.3';
-import { VAPID_PUBLIC_KEY } from './config.js?v=6.3';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.3';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.3';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.4';
+import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.4';
+import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.4';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.4';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.4';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.4';
+import { gearFor } from './gear.js?v=6.4';
+import { VAPID_PUBLIC_KEY } from './config.js?v=6.4';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.4';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.4';
 
-export const APP_VERSION = '6.3';
+export const APP_VERSION = '6.4';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -23,21 +23,54 @@ const eventIndex = new Map();  // event key -> event
 
 /* ================= data ================= */
 
+// Opening the app: show the forecasts saved on this device straight away, then fetch fresh ones in
+// the background and redraw when they arrive. Only spots with nothing saved make you wait.
 async function loadForecasts(force = false) {
   if (force) { clearCache(); for (const k in forecasts) delete forecasts[k]; }
   const spots = S().spots;
   const needKp = spots.some(sp => huntsOf(sp).includes('aurora'));
-  const [res] = await Promise.all([
-    Promise.allSettled(spots.map(s => fetchSpotForecast(s))),
-    needKp ? fetchKp().then(setKp).catch(() => {}) : Promise.resolve(),
-  ]);
-  const failed = [];
-  if (res.some(r => r.status === 'fulfilled')) { try { localStorage.setItem('tidelight:lastFetch', String(Date.now())); } catch {} }
-  res.forEach((r, i) => {
-    if (r.status === 'fulfilled') forecasts[spots[i].id] = r.value;
-    else failed.push(`${spots[i].name} (${r.reason?.message || 'error'})`);
-  });
+  const old = [];
+  if (!force) for (const sp of spots) {
+    if (forecasts[sp.id]) continue;
+    const saved = savedForecast(sp);
+    if (!saved) continue;
+    forecasts[sp.id] = saved.data;
+    if (Date.now() - saved.at >= FORECAST_TTL) old.push(sp);
+  }
+  const missing = spots.filter(sp => !forecasts[sp.id]);
+  const kp = needKp ? fetchKp().then(setKp).catch(() => {}) : Promise.resolve();
+  let failed = [];
+  if (missing.length) {
+    const [{ out, failed: bad }] = await Promise.all([fetchForecasts(missing, { force, all: spots }), kp]);
+    Object.assign(forecasts, out);
+    if (Object.keys(out).length) { try { localStorage.setItem('tidelight:lastFetch', String(Date.now())); } catch {} }
+    failed = bad.map(f => `${f.spot.name} (${f.error?.message || 'error'})`);
+  }
+  if (old.length) refreshInBackground(old);
   return failed;
+}
+
+// Fresh forecasts for spots that are showing saved ones. Redraws the page you're on when they land,
+// unless you're in the middle of something (a sheet or field mode is open).
+let bgRefresh = null;
+function refreshInBackground(spots) {
+  if (bgRefresh || !navigator.onLine) return bgRefresh;
+  document.body.classList.add('refreshing');
+  const el = $('.updated'); if (el && tab === 'forecast') el.firstChild.textContent = `Updating, saved ${savedAgo()} `;
+  bgRefresh = fetchForecasts(spots, { force: true, all: S().spots })
+    .then(({ out }) => {
+      if (!Object.keys(out).length) return;
+      Object.assign(forecasts, out);
+      try { localStorage.setItem('tidelight:lastFetch', String(Date.now())); } catch {}
+      const busy = !$('#sheet').classList.contains('hidden') || fieldState;
+      if (!busy && (tab === 'forecast' || tab === 'spots')) render();
+    })
+    .catch(() => {})
+    .finally(() => {
+      bgRefresh = null; document.body.classList.remove('refreshing');
+      const el2 = $('.updated'); if (el2 && tab === 'forecast' && /^Updating/.test(el2.firstChild?.textContent || '')) el2.firstChild.textContent = `Updated ${savedAgo()} `;
+    });
+  return bgRefresh;
 }
 
 // One load at a time: anything that asks while forecasts are already loading waits for that same load.
@@ -1020,9 +1053,7 @@ async function renderForecast(v) {
   if (!homeSel || !dayEvs.some(e => e.key === homeSel)) homeSel = (myPlan || best)?.key || null;
   const sel = dayEvs.find(e => e.key === homeSel);
   const noData = st.spots.every(sp => !forecasts[sp.id]);
-  const lastFetch = Number(localStorage.getItem('tidelight:lastFetch') || 0);
-  const stale = navigator.onLine && lastFetch && Date.now() - lastFetch > 3 * 3600 * 1000;
-  if (stale && !renderForecast.autoRefreshed) { renderForecast.autoRefreshed = true; setTimeout(() => refreshForecasts(null, true), 50); }
+  const stale = !!bgRefresh;
 
   // The day's 3am-to-3am window in local time.
   const dayRef = now + homeDay * 86400;
@@ -1062,7 +1093,7 @@ async function renderForecast(v) {
     <div class="home-grid ${homeAnimate ? 'enter' : ''}">
     <header class="day-head-v2">
       <h1 class="day-title">${esc(dayName)}<span>${esc(homeDay > 1 ? dateLine : `${weekday} ${dateLine}`)}</span></h1>
-      <p class="updated ${stale ? 'stale' : ''}">${navigator.onLine ? `${stale ? 'Refreshing a forecast from' : 'Updated'} ${savedAgo()}` : `Offline, saved ${savedAgo()}`}<button class="link-btn" id="refreshLink">Refresh</button></p>
+      <p class="updated ${stale ? 'stale' : ''}">${navigator.onLine ? `${stale ? `Updating, saved ${savedAgo()}` : `Updated ${savedAgo()}`} ` : `Offline, saved ${savedAgo()} `}<button class="link-btn" id="refreshLink">Refresh</button></p>
     </header>
     ${sel ? callCard(sel, { index: order.findIndex(e => e.key === sel.key), total: order.length })
       : noData ? `<section class="call-empty"><p>No forecast to show yet.</p><p class="small muted">Tidelight shows nothing rather than guess. Try again in a minute.</p><button class="btn primary" id="retryEmpty">Try again</button></section>`
@@ -1148,9 +1179,16 @@ function transitionHome(v, dir) {
 // Fetch every spot's forecast again (the Refresh link on the Forecast page).
 async function refreshForecasts(btn, quiet = false) {
   if (btn) { btn.disabled = true; btn.textContent = 'Refreshing…'; }
-  const failed = await loadForecasts(true);
+  // Fetch everything fresh, but keep showing the saved forecast for any spot that doesn't load.
+  const spots = S().spots;
+  const { out, failed } = await fetchForecasts(spots, { force: true, all: spots });
+  Object.assign(forecasts, out);
+  if (Object.keys(out).length) { try { localStorage.setItem('tidelight:lastFetch', String(Date.now())); } catch {} }
+  if (spots.some(sp => huntsOf(sp).includes('aurora'))) fetchKp().then(setKp).catch(() => {});
   syncNow();
-  if (!quiet || failed.length) toast(failed.length ? `${failed.length} spot${failed.length === 1 ? '' : 's'} didn't load. Try again in a minute.` : 'Forecasts updated.');
+  if (!quiet || failed.length) toast(!failed.length ? 'Forecasts updated.'
+    : !Object.keys(out).length ? `Couldn't reach the weather service. Showing the forecast saved ${savedAgo()}.`
+    : `${failed.length} spot${failed.length === 1 ? '' : 's'} didn't load, so ${failed.length === 1 ? 'it shows its' : 'they show their'} saved forecast. Try again in a minute.`, 4000);
   if (tab === 'forecast' || tab === 'spots') render();
 }
 
@@ -4643,7 +4681,7 @@ $('.brand')?.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.ke
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { if (!$('#sheet').classList.contains('hidden')) closeSheet(); else closeField(); } });
 $$('.tabbar button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
 $('#nowBtn').onclick = () => openNow();
-window.addEventListener('online', () => { toast('Back online'); if (tab === 'forecast') loadForecasts(true).then(render); });
+window.addEventListener('online', () => { toast('Back online'); refreshInBackground(S().spots); });
 window.addEventListener('offline', () => toast("You're offline. Showing saved forecasts."));
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
@@ -4700,7 +4738,7 @@ function backfillRatings() {
 
 applyTextSize();
 applyMotion();
-loadAllPhotos().finally(() => {
+Promise.allSettled([loadAllPhotos(), restoreForecasts()]).finally(() => {
   backfillRatings();
   render();
   maybeWelcome();
