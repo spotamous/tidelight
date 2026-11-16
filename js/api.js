@@ -1,6 +1,6 @@
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
-import { nearestIndex, tideInfo } from './scoring.js?v=6.4';
-import { huntsOf, DAY_HUNTS } from './hunts.js?v=6.4';
+import { nearestIndex, tideInfo } from './scoring.js?v=6.5';
+import { huntsOf, DAY_HUNTS } from './hunts.js?v=6.5';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
@@ -455,6 +455,14 @@ export async function fetchHourly(lat, lon) {
     if (j.daily.sunset?.[i]) suns.push({ t: j.daily.sunset[i], kind: 'Sunset' });
   });
   return { offset: j.utc_offset_seconds || 0, hours, suns };
+}
+
+// Is this point on the coast? The marine model has wave data over water and nothing over land.
+export async function coastalCheck(lat, lon) {
+  try {
+    const j = await getJSON(`${MARINE}?${qs({ latitude: lat, longitude: lon, hourly: 'wave_height', forecast_days: 1, timezone: 'auto' })}`, 8000);
+    return (j.hourly?.wave_height || []).some(v => v != null);
+  } catch { return false; }
 }
 
 // A short place name for a coordinate ("Cowes"), or null.

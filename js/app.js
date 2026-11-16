@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.4';
-import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.4';
-import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.4';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.4';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.4';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.4';
-import { gearFor } from './gear.js?v=6.4';
-import { VAPID_PUBLIC_KEY } from './config.js?v=6.4';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.4';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.4';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.5';
+import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, coastalCheck, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.5';
+import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.5';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.5';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, DAY_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.5';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.5';
+import { gearFor } from './gear.js?v=6.5';
+import { VAPID_PUBLIC_KEY } from './config.js?v=6.5';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.5';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.5';
 
-export const APP_VERSION = '6.4';
+export const APP_VERSION = '6.5';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -480,6 +480,7 @@ function skeleton(kind, status) {
     home: '<div class="sk sk-title"></div><div class="sk sk-line"></div><div class="sk sk-band"></div><div class="sk sk-panel"></div><div class="sk sk-row"></div><div class="sk sk-row"></div>',
     cards: '<div class="sk sk-card"></div><div class="sk sk-card"></div><div class="sk sk-card"></div>',
     week: '<div class="sk sk-line"></div><div class="sk sk-grid"></div>',
+    here: '<div class="sk sk-panel"></div><div class="sk sk-line"></div><div class="sk sk-row"></div><div class="sk sk-row"></div>',
   }[kind];
   return `<div class="sk-wrap" aria-hidden="true">${shapes}</div><p class="sk-status" role="status">${esc(status)}</p>`;
 }
@@ -1093,6 +1094,7 @@ async function renderForecast(v) {
     <div class="home-grid ${homeAnimate ? 'enter' : ''}">
     <header class="day-head-v2">
       <h1 class="day-title">${esc(dayName)}<span>${esc(homeDay > 1 ? dateLine : `${weekday} ${dateLine}`)}</span></h1>
+      <button class="here-pill" id="hereBtn" aria-label="Forecast right where you are, without saving a spot">${PIN_ICON}Right here</button>
       <p class="updated ${stale ? 'stale' : ''}">${navigator.onLine ? `${stale ? `Updating, saved ${savedAgo()}` : `Updated ${savedAgo()}`} ` : `Offline, saved ${savedAgo()} `}<button class="link-btn" id="refreshLink">Refresh</button></p>
     </header>
     ${sel ? callCard(sel, { index: order.findIndex(e => e.key === sel.key), total: order.length })
@@ -1162,6 +1164,7 @@ async function renderForecast(v) {
     renderForecast(v).then(() => { const d = $('.call'); if (d && b.classList.contains('other-row') && !matchMedia('(min-width: 1000px)').matches) d.scrollIntoView({ behavior: motionOK() ? 'smooth' : 'auto', block: 'start' }); });
   });
   $('#refreshLink', v).onclick = () => refreshForecasts($('#refreshLink', v));
+  $('#hereBtn', v).onclick = () => openHere();
   const re = $('#retryEmpty', v); if (re) re.onclick = () => refreshForecasts(re);
 }
 
@@ -1257,8 +1260,9 @@ function openEvent(key) {
       <button class="tool-chip" data-compass="${esc(e.key)}">Compass</button>
       <button class="tool-chip" data-dial="${esc(e.key)}">Light dial</button>
       ${labModel(e) ? `<button class="tool-chip" data-lab="${esc(e.key)}">What if?</button>` : ''}
-      ${currentUser() && crewState.crews.length ? '<button class="tool-chip" id="shareBtn">Share with crew</button>' : ''}
+      ${currentUser() && crewState.crews.length && !e.spot.here ? '<button class="tool-chip" id="shareBtn">Share with crew</button>' : ''}
     </div>
+    ${e.spot.here ? '<p class="bf-note">Right here, not a saved spot. Times assume you\'re already here.</p>' : ''}
 
     <h3 class="sec">The plan</h3>
     <ol class="tline" style="--strip: linear-gradient(to bottom, ${stripStops})">
@@ -1283,12 +1287,14 @@ function openEvent(key) {
 
     <h3 class="sec">What to bring</h3>
     <ul class="gear-preview">${gear.map(g => `<li><strong>${esc(g.label)}</strong><span>${esc(g.why)}</span></li>`).join('')}</ul>
-    <p class="small muted">Plan the shoot to tick these off as you pack. Your always-bring items live under You, in My kit.</p>
+    <p class="small muted">${e.spot.here ? 'Your always-bring items live under You, in My kit.' : 'Plan the shoot to tick these off as you pack. Your always-bring items live under You, in My kit.'}</p>
 
-    <div class="sheet-actions">${planned ? commitPanel(e) : `<button class="btn primary" data-plan="${esc(e.key)}">Plan this shoot</button>`}</div>
+    <div class="sheet-actions">${e.spot.here ? '<div class="row"><button class="btn primary" id="hereSave">Save as a spot</button><button class="btn" id="hereBack">Back to Right here</button></div>'
+      : planned ? commitPanel(e) : `<button class="btn primary" data-plan="${esc(e.key)}">Plan this shoot</button>`}</div>
   `);
   runCounts($('#sheetBody'));
   wireTide(e);
+  if (e.spot.here) { $('#hereBack').onclick = () => drawHere(); $('#hereSave').onclick = () => saveHere(); }
   const sb = $('#shareBtn');
   if (sb) sb.onclick = () => {
     if (!S().plans.some(p => p.key === e.key)) addPlan(e);
@@ -3045,6 +3051,154 @@ function closeField() {
   if (el && st?.returnTo?.isConnected) st.returnTo.focus({ preventScroll: true });
 }
 
+/* ================= right here ================= */
+// Scores and the week's sessions for wherever you're standing, without saving it as a spot.
+// Handy when travelling or on a random shoot. Nothing here touches your spots, plans or alerts.
+const PIN_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg>';
+const HERE_HUNTS = ['colour', 'fog', 'astro'];
+let here = null;   // { lat, lon, name, coastal, hunts, data, at, day, error }
+
+function hereSpot() {
+  return { id: 'here', here: true, name: here.name ? `Near ${here.name}` : 'Right here', lat: here.lat, lon: here.lon,
+    hunts: here.hunts, events: ['sunrise', 'sunset'], coastal: here.coastal, tide: 'any', facing: '', fogMode: 'in', driveMin: '', notes: '', photos: [] };
+}
+// The sessions for the next 7 days, tagged with their day (0 today). Leave times assume you're already here.
+function hereEvents() {
+  const st = S();
+  const now = Date.now() / 1000;
+  const out = [];
+  for (const e of evaluateSpot(hereSpot(), here.data, st.keepers, { ...st.settings, home: null })) {
+    const k = dayKey(e.dayT ?? e.t, e.offset);
+    for (let i = 0; i < 7; i++) if (dayKey(now + i * 86400, e.offset) === k) { out.push({ ...e, dayIdx: i }); break; }
+  }
+  indexEvents(out);
+  return out;
+}
+
+async function openHere() {
+  openSheet(`<p class="eyebrow here-eyebrow">${PIN_ICON}Right here</p><h2 class="bf-name">Finding you…</h2>${skeleton('here', 'Getting your location')}`);
+  let pos;
+  try { pos = await getPosition(); }
+  catch (err) {
+    if (!$('#sheetBody .here-eyebrow')) return;
+    openSheet(`<p class="eyebrow here-eyebrow">${PIN_ICON}Right here</p><h2 class="bf-name">Couldn't find you</h2>
+      <p>${esc(err.message)}</p><p class="small muted">On iPhone: Settings, Privacy & Security, Location Services, then allow it for Safari Websites (or Tidelight).</p>
+      <div class="sheet-actions"><button class="btn primary" id="hereRetry">Try again</button></div>`);
+    $('#hereRetry').onclick = () => openHere();
+    return;
+  }
+  if (!$('#sheetBody .here-eyebrow')) return;   // closed while we waited
+  // Same place (within a kilometre) and fetched in the last half hour: reuse it.
+  if (here?.data && haversineKm(here, pos) < 1 && Date.now() - here.at < FORECAST_TTL) return drawHere();
+  const hunts = here?.hunts || S().settings.hereHunts || HERE_HUNTS;
+  here = { lat: pos.lat, lon: pos.lon, name: null, coastal: false, hunts, data: null, at: 0, day: null };
+  $('#sheetBody .sk-status') && ($('#sheetBody .sk-status').textContent = 'Reading the sky here…');
+  const [name, coastal] = await Promise.all([placeName(pos.lat, pos.lon).catch(() => null), coastalCheck(pos.lat, pos.lon)]);
+  Object.assign(here, { name, coastal });
+  await loadHere();
+}
+async function loadHere() {
+  try {
+    here.data = await fetchSpotForecast(hereSpot());
+    here.at = Date.now(); here.error = null;
+  } catch (err) { here.error = err.message; }
+  if ($('#sheetBody .here-eyebrow')) drawHere();
+}
+
+function drawHere() {
+  if (!here) return openHere();
+  const head = `<p class="eyebrow here-eyebrow">${PIN_ICON}Right here<span>Not a saved spot</span></p>
+    <h2 class="bf-name">${esc(hereSpot().name)}</h2>
+    <p class="small muted here-where">${here.lat.toFixed(4)}, ${here.lon.toFixed(4)}. ${here.coastal ? 'On the coast, so tides and waves count.' : 'Inland.'} <button class="link-btn" id="hereAgain">Update location</button></p>`;
+  if (!here.data) {
+    openSheet(`${head}<div class="alert danger"><p>Couldn't load the forecast here. ${esc(here.error || '')}</p></div>
+      <div class="sheet-actions"><button class="btn primary" id="hereRetry">Try again</button></div>`);
+    $('#hereRetry').onclick = () => { openSheet(`${head}${skeleton('here', 'Reading the sky here…')}`); loadHere(); };
+    return;
+  }
+  const evs = hereEvents();
+  const now = Date.now() / 1000;
+  const offset = here.data.offset ?? evs[0]?.offset ?? 0;
+  const soon = evs.filter(e => e.dayIdx <= 1 && (e.end ?? e.t) > now).sort((a, b) => b.score - a.score)[0];
+  if (here.day == null) here.day = soon ? soon.dayIdx : 0;
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const t = now + i * 86400;
+    const best = evs.filter(e => e.dayIdx === i).sort((a, b) => b.score - a.score)[0];
+    const date = fmtDayDate(t, offset).split(' ')[1] || '';
+    const label = i === 0 ? 'Today' : i === 1 ? 'Tmrw' : fmtWeekday(t, offset).slice(0, 3);
+    days.push(`<button class="wk-d ${i === here.day ? 'on' : ''}" data-hday="${i}" aria-pressed="${i === here.day}" aria-label="${i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : esc(fmtWeekday(t, offset))}${best ? `, best ${best.score}` : ', no sessions'}">
+      ${i === here.day ? '<span class="wk-hl" aria-hidden="true"></span>' : ''}<span class="wk-l">${label}<small class="num">${esc(date)}</small></span>
+      <span class="wk-sky ${best ? `${skyClass(best)} ${scoreTone(best.score)}` : 'none'}" ${best ? `style="background:${skyOf(best)}"` : ''} aria-hidden="true"></span>
+      <span class="wk-s num ${best && best.score >= 75 ? 'go' : ''}" aria-hidden="true">${best ? best.score : '–'}</span></button>`);
+  }
+  const dayEvs = evs.filter(e => e.dayIdx === here.day).sort((a, b) => a.t - b.t);
+  const dayWord = here.day === 0 ? 'Today' : here.day === 1 ? 'Tomorrow' : fmtWeekday(now + here.day * 86400, offset);
+  const row = (e, i) => `<button class="other-row" style="--i:${i}" data-ev="${esc(e.key)}">
+      <span class="other-sky ${skyClass(e)} ${scoreTone(e.score)}" style="background:${skyOf(e)}"><b class="num">${e.score}</b></span>
+      <span class="other-name">${TYPE_NAME[e.type]}, ${shortWhen(e)}<small>${esc(huntPhrase(e))}. ${esc(whyLine(e))}</small></span>
+      <span class="other-verdict ${e.score >= 75 ? 'go' : ''}">${e.score >= 75 ? 'Go' : e.score >= 50 ? 'Maybe' : 'Skip'}</span></button>`;
+  openSheet(`${head}
+    ${soon ? `<section class="here-best ${skyClass(soon)}" style="--sky:${skyOf(soon)}">
+      <div><p class="here-best-k">Best in the next two days</p><p class="here-best-w">${esc(cap(sessionName(soon)))}, ${sessionWhen(soon)}</p><p class="here-best-v">${esc(huntPhrase(soon))}</p></div>
+      <p class="here-best-s num" data-count="${soon.score}">${soon.score}</p></section>` : ''}
+    <nav class="week here-week" aria-label="Choose a day">${days.join('')}</nav>
+    <h3 class="sec">${esc(dayWord)}</h3>
+    ${dayEvs.length ? `<div class="here-list">${dayEvs.map(row).join('')}</div>` : `<p class="small muted">${here.day === 0 ? "Today's light is done here." : 'No sessions this day.'}</p>`}
+    <details class="here-hunts">
+      <summary>Scoring for: ${here.hunts.map(k => HUNT_LABEL[k]).join(', ')}</summary>
+      <p class="small muted">Tap to change what to score here. Tidelight remembers your choice for next time.</p>
+      <div class="chip-row">${HUNT_ORDER.map(k => `<button class="chip-btn ${here.hunts.includes(k) ? 'on' : ''}" data-hhunt="${k}" aria-pressed="${here.hunts.includes(k)}">${HUNT_LABEL[k]}</button>`).join('')}
+        <button class="chip-btn ${here.coastal ? 'on' : ''}" data-hcoast aria-pressed="${here.coastal}">Coastal</button></div>
+    </details>
+    <p class="small muted">General rules plus your keepers. It hasn't learned this place yet, and doesn't know which way you're facing, so the horizon is checked towards the sunrise and sunset.</p>
+    <div class="sheet-actions"><div class="row"><button class="btn primary" id="hereSave">Save as a spot</button><button class="btn" id="hereCompass">Compass</button></div></div>`);
+  runCounts($('#sheetBody'));
+  $$('#sheetBody [data-hday]').forEach(b => b.onclick = () => { here.day = Number(b.dataset.hday); const y = $('#sheetBody').scrollTop; drawHere(); $('#sheetBody').scrollTop = y; });
+  $$('#sheetBody [data-hhunt]').forEach(b => b.onclick = () => {
+    const k = b.dataset.hhunt;
+    const next = here.hunts.includes(k) ? here.hunts.filter(x => x !== k) : HUNT_ORDER.filter(x => x === k || here.hunts.includes(x));
+    if (!next.length) return toast('Pick at least one thing to score.');
+    const neededDay = next.some(x => DAY_HUNTS.includes(x)) && !here.hunts.some(x => DAY_HUNTS.includes(x));
+    here.hunts = next;
+    update(st => { st.settings.hereHunts = next; });
+    rescoreHere(neededDay);
+  });
+  $('#sheetBody [data-hcoast]').onclick = () => { here.coastal = !here.coastal; rescoreHere(here.coastal); };
+  $('#hereSave').onclick = () => saveHere();
+  $('#hereCompass').onclick = () => openCompassHere();
+  $('#hereAgain').onclick = () => { here.at = 0; here.day = null; openHere(); };
+}
+// Re-score with the new choices. Day hunts (rainforest, waterfalls) and tides need extra data: fetch it.
+async function rescoreHere(refetch) {
+  const y = $('#sheetBody').scrollTop;
+  if (refetch) { const btns = $$('#sheetBody .chip-btn'); btns.forEach(b => (b.disabled = true)); await loadHere(); }
+  else drawHere();
+  const det = $('#sheetBody .here-hunts'); if (det) det.open = true;
+  $('#sheetBody').scrollTop = y;
+}
+function saveHere() {
+  const name = hereSpot().name === 'Right here' ? '' : hereSpot().name;
+  openSheet(`<h2>Save as a spot</h2>
+    <p class="small muted">It joins your spots: scored on the Forecast page, included in alerts, and Tidelight starts learning it from your ratings.</p>
+    <form class="form" id="hsForm"><label>Name<input name="name" required value="${esc(name)}" placeholder="e.g. North ledge"></label>
+      <p class="small muted">Scoring for ${here.hunts.map(k => HUNT_LABEL[k].toLowerCase()).join(', ')}${here.coastal ? ', with tides' : ''}. Add the direction you shoot, the drive and notes in the spot's settings.</p>
+      <div class="row"><button class="btn primary" type="submit">Save spot</button><button class="btn ghost" type="button" id="hsBack">Back</button></div></form>`);
+  $('#hsBack').onclick = () => drawHere();
+  $('#hsForm').onsubmit = ev => {
+    ev.preventDefault();
+    const nm = String(new FormData(ev.target).get('name') || '').trim();
+    if (!nm) return toast('Give the spot a name');
+    const id = uid();
+    update(st => st.spots.push({ ...hereSpot(), id, here: undefined, name: nm, scoutedAt: Date.now() }));
+    if (here.data) forecasts[id] = here.data;
+    closeSheet();
+    toast('Spot saved.');
+    tab = 'spots'; render();
+    openSpotDetail(id);
+  };
+}
+
 /* ================= scout a spot ================= */
 function openScout() {
   let pos = null, facing = null, photoFile = null, live = null, heading = null;
@@ -3649,12 +3803,14 @@ function renderTools(v) {
     <p class="page-lede">For when you're out there. These work without reception. Radar and the hourly forecast are under Now, at the top.</p>
     <div class="tool-list">
       ${nextPlan ? tool(`data-field="${esc(nextPlan.key)}"`, 'Field mode', `Countdowns and the sky for ${esc(nextPlan.spotName)}, your next plan.`) : ''}
+      ${tool('id="toolHere"', 'Right here', "Scores and the week's forecast for wherever you're standing, no spot needed.")}
       ${tool('id="toolCompass"', 'Compass', "Where the sun rises and sets today, and where the sun, moon and Milky Way are now.")}
       ${tool('id="toolExposure"', 'Exposure', 'ND filter times with a countdown, the longest exposure for sharp stars, and hyperfocal distance.')}
       ${tool('id="toolDial"', 'Light dial', 'Drag around a 24-hour dial to see the light, the sun and the moon at any time.')}
       ${tool('data-lightning', 'Lightning distance', 'Time the gap between flash and thunder to see how far away a storm is.')}
     </div>
     ${!nextPlan ? '<p class="small muted tool-note">Field mode opens from any session. Plan a shoot and it appears here for the next one.</p>' : ''}`;
+  $('#toolHere').onclick = () => openHere();
   $('#toolCompass').onclick = () => openCompassHere();
   $('#toolDial').onclick = () => openLightDialHere();
   $('#toolExposure').onclick = () => openExposure();

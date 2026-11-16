@@ -1710,3 +1710,25 @@ html[data-motion="reduced"] .sk::after { animation: none; }
 ::view-transition-group(wk-sel) { z-index: 1; }
 ::view-transition-group(week) { z-index: 2; }
 ::view-transition-old(week), ::view-transition-new(week) { animation-duration: .2s; }
+
+/* =================== v6.5: Right here =================== */
+.here-pill { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px 0 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: 600 var(--t-xs) var(--sans); cursor: pointer; order: 3; }
+.here-pill svg { color: var(--caramel); }
+.here-pill:hover { border-color: color-mix(in srgb, var(--caramel) 50%, var(--line)); }
+.day-head-v2 .here-pill { margin: 4px 0 2px; }
+.here-eyebrow { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 6px; font: 600 var(--t-xs) var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--caramel); }
+.here-eyebrow span { color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 500; margin-left: 4px; }
+.here-where { margin: 4px 0 16px; }
+.here-best { position: relative; isolation: isolate; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; margin: 0 0 16px; border-radius: 18px; background: var(--sky); color: #FBF7F0; overflow: hidden; }
+.here-best::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(0, 0, 0, .42), rgba(0, 0, 0, .08)); }
+.here-best p { margin: 0; text-shadow: 0 1px 8px rgba(0, 0, 0, .4); }
+.here-best-k { font: 600 var(--t-xs) var(--sans); letter-spacing: .06em; text-transform: uppercase; opacity: .85; }
+.here-best-w { font: 400 var(--t-lg)/1.2 var(--serif); margin-top: 4px !important; }
+.here-best-v { font: 500 var(--t-sm) var(--sans); opacity: .9; margin-top: 2px !important; }
+.here-best-s { font: 400 3.4rem/1 var(--serif); }
+.here-week { margin: 0 -6px 6px; view-transition-name: none; }
+.here-week .wk-hl { view-transition-name: none; }
+.here-list { margin-bottom: 14px; }
+.here-hunts { margin: 8px 0 12px; }
+.here-hunts summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font: 600 var(--t-sm) var(--sans); }
+.here-hunts .chip-btn:disabled { opacity: .5; }

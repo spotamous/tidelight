@@ -1288,7 +1288,7 @@ async function fetchModels(spot) {
 
 /* ---------- every spot at once: a handful of requests instead of three or four per spot ---------- */
 // Open-Meteo takes comma-separated coordinates and answers with one result per place, in order.
-const coords = list => ({ latitude: list.map(p => (+p.lat).toFixed(4)).join(','), longitude: list.map(p => (+p.lon).toFixed(4)).join(',') });
+const coords = list => ({ latitude: list.map(p => p.lat).join(','), longitude: list.map(p => p.lon).join(',') });
 const asList = (j, n) => { const a = Array.isArray(j) ? j : [j]; if (a.length !== n) throw new Error('Unexpected answer from the weather service'); return a; };
 const chunks = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
 async function many(list, size, fn) {   // run fn on chunks of the list, keeping order
@@ -1564,6 +1564,14 @@ async function fetchHourly(lat, lon) {
   return { offset: j.utc_offset_seconds || 0, hours, suns };
 }
 
+// Is this point on the coast? The marine model has wave data over water and nothing over land.
+async function coastalCheck(lat, lon) {
+  try {
+    const j = await getJSON(`${MARINE}?${qs({ latitude: lat, longitude: lon, hourly: 'wave_height', forecast_days: 1, timezone: 'auto' })}`, 8000);
+    return (j.hourly?.wave_height || []).some(v => v != null);
+  } catch { return false; }
+}
+
 // A short place name for a coordinate ("Cowes"), or null.
 async function placeName(lat, lon) {
   try {
@@ -1573,7 +1581,7 @@ async function placeName(lat, lon) {
   } catch { return null; }
 }
 
-return { clearCache, restoreForecasts, savedForecast, FORECAST_TTL, fetchSpotForecast, fetchForecasts, fetchHistorical, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName };
+return { clearCache, restoreForecasts, savedForecast, FORECAST_TTL, fetchSpotForecast, fetchForecasts, fetchHistorical, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, coastalCheck, placeName };
 })();
 
 /* ===== Tidelight hourly alerts (Supabase Edge Function) =====
