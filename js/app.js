@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.5';
-import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, coastalCheck, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.5';
-import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.5';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.5';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, DAY_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.5';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.5';
-import { gearFor } from './gear.js?v=6.5';
-import { VAPID_PUBLIC_KEY } from './config.js?v=6.5';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.5';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.5';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.6';
+import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, coastalCheck, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.6';
+import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.6';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.6';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, DAY_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.6';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.6';
+import { gearFor } from './gear.js?v=6.6';
+import { VAPID_PUBLIC_KEY } from './config.js?v=6.6';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.6';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.6';
 
-export const APP_VERSION = '6.5';
+export const APP_VERSION = '6.6';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -796,6 +796,39 @@ function skyOf(e) {
 const scoreTone = sc => (sc >= 75 ? 'tone-go' : sc >= 50 ? 'tone-maybe' : 'tone-skip');
 const skyClass = e => (/dark|twilight/.test(skyPhase(e)) ? 'sky-night' : skyPhase(e) === 'daylight' ? 'sky-day' : 'sky-low');
 
+// What the sky is doing at a session, as a small icon and a word or two: the key to the week strip's colours.
+const G = (body) => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+const G_CLOUD = 'M7.5 18.5h9.2a3.6 3.6 0 0 0 .4-7.2 5 5 0 0 0-9.6 1.3 3 3 0 0 0 0 5.9z';
+const G_CLOUD_SM = 'M11 20h7a2.8 2.8 0 0 0 .3-5.6 3.9 3.9 0 0 0-7.5 1A2.3 2.3 0 0 0 11 20z';
+const G_HORIZON = 'M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0';
+const G_RAYS_UP = 'M12 7.5V5M6.6 10.4 5 8.8M17.4 10.4 19 8.8';
+const G_SUN = '<circle cx="12" cy="12" r="3.6"/><path d="M12 4v1.6M12 18.4V20M4 12h1.6M18.4 12H20M6.3 6.3l1.1 1.1M16.6 16.6l1.1 1.1M6.3 17.7l1.1-1.1M16.6 7.4l1.1-1.1"/>';
+const G_MOON = '<path d="M17.5 14.6A6.5 6.5 0 0 1 9.4 6.5a6.5 6.5 0 1 0 8.1 8.1z"/>';
+function skyNow(e) {
+  const h = e.hour || {};
+  const low = h.low ?? 0, mid = h.mid ?? 0, high = h.high ?? 0;
+  const total = h.total ?? Math.max(low, mid, high);
+  const night = skyClass(e) === 'sky-night';
+  if ((h.precip ?? 0) >= 0.3 || (h.pp ?? 0) >= 60) return { kind: 'rain', word: 'Showers' };
+  if (e.topHunt === 'fog' || (h.vis != null && h.vis < 1500)) return { kind: 'fog', word: 'Fog' };
+  if (low >= 70 || total >= 88) return { kind: 'cloudy', word: 'Overcast' };
+  if (Math.max(mid, high) >= 30 && low < 40) return { kind: 'canvas', word: night ? 'High cloud' : 'Cloud to catch colour' };
+  if (total >= 30) return { kind: 'part', word: 'Some cloud' };
+  return { kind: 'clear', word: night ? 'Clear night' : 'Clear' };
+}
+function skyGlyph(e) {
+  const { kind } = skyNow(e);
+  const golden = e.type === 'sunrise' || e.type === 'sunset';
+  const night = e.type === 'night' || skyClass(e) === 'sky-night';
+  const sun = night ? G_MOON : golden ? '<path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0"/><path d="M12 9.5V8M7.6 11.6l-1.1-1.1M16.4 11.6l1.1-1.1"/>' : G_SUN;
+  if (kind === 'rain') return G(`<path d="${G_CLOUD}" transform="translate(0 -3)"/><path d="M9 18.5l-1 2.5M12.5 18.5l-1 2.5M16 18.5l-1 2.5"/>`);
+  if (kind === 'fog') return G('<path d="M4 8.5h16M6 12.5h12M4 16.5h16"/>');
+  if (kind === 'cloudy') return G(`<path d="${G_CLOUD}"/>`);
+  if (kind === 'canvas') return G(golden ? '<path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0"/><path d="M4 7.5h7.5M14 5.5h6M9 11h9"/>' : `<g transform="translate(-2.4 -2.4) scale(.8)">${sun}</g><path d="M11 15.5h9M13.5 19h6"/>`);
+  if (kind === 'part') return G(`<g transform="translate(-2.4 -2.4) scale(.8)">${sun}</g><path d="${G_CLOUD_SM}"/>`);
+  return G(night ? `${G_MOON}<path d="M18.5 4.5v2M17.5 5.5h2"/>` : sun);
+}
+
 function weekStrip(evs, offset) {
   const now = Date.now() / 1000;
   const cells = [];
@@ -807,13 +840,15 @@ function weekStrip(evs, offset) {
     const label = i === 0 ? 'Today' : i === 1 ? 'Tmrw' : wd.slice(0, 3);
     const full = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : `${wd} ${date}`;
     cells.push(`<button class="wk-d ${i === homeDay ? 'on' : ''}" data-day="${i}" aria-pressed="${i === homeDay}"
-        aria-label="${esc(full)}${S().plans.some(p => evs.some(e => e.dayIdx === i && e.key === p.key)) ? ', you have a plan' : ''}${best ? `: best is ${best.score}, ${TYPE_NAME[best.type].toLowerCase()} at ${esc(best.spot.name)}` : ': no sessions'}">
+        aria-label="${esc(full)}${S().plans.some(p => evs.some(e => e.dayIdx === i && e.key === p.key)) ? ', you have a plan' : ''}${best ? `: best is ${best.score}, ${TYPE_NAME[best.type].toLowerCase()} at ${esc(best.spot.name)}, ${skyNow(best).word.toLowerCase()}` : ': no sessions'}">
       ${i === homeDay ? '<span class="wk-hl" aria-hidden="true"></span>' : ''}<span class="wk-l">${label}<small class="num">${esc(date)}</small></span>
-      <span class="wk-sky ${best ? `${skyClass(best)} ${scoreTone(best.score)}` : 'none'}" ${best ? `style="background:${skyOf(best)}"` : ''} aria-hidden="true"></span>
+      <span class="wk-sky ${best ? `${skyClass(best)} ${scoreTone(best.score)}` : 'none'}" ${best ? `style="background:${skyOf(best)}"` : ''} aria-hidden="true">${best ? skyGlyph(best) : ''}</span>
       <span class="wk-s num ${best && best.score >= 75 ? 'go' : ''}" aria-hidden="true">${best ? best.score : '–'}</span>${S().plans.some(p => evs.some(e => e.dayIdx === i && e.key === p.key)) ? '<span class="wk-plan" aria-hidden="true"></span>' : ''}
     </button>`);
   }
-  return `<nav class="week" aria-label="Choose a day">${cells.join('')}</nav>`;
+  return `<nav class="week" aria-label="Choose a day">${cells.join('')}</nav>
+    <p class="wk-key" aria-hidden="true"><span>The sky at each day's best session</span>
+      <span class="wk-key-i">${G('<path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0"/><path d="M12 9.5V8M7.6 11.6l-1.1-1.1M16.4 11.6l1.1-1.1"/>')}Clear</span><span class="wk-key-i">${G('<path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0"/><path d="M4 7.5h7.5M14 5.5h6M9 11h9"/>')}High cloud</span><span class="wk-key-i">${G(`<path d="${G_CLOUD}"/>`)}Overcast</span><span class="wk-key-i">${G(`<path d="${G_CLOUD}" transform="translate(0 -3)"/><path d="M9 18.5l-1 2.5M12.5 18.5l-1 2.5M16 18.5l-1 2.5"/>`)}Rain</span><span class="wk-key-i">${G('<path d="M4 8.5h16M6 12.5h12M4 16.5h16"/>')}Fog</span></p>`;
 }
 
 // When to set the alarm: the leave time, less the time you need to get ready.
@@ -3129,7 +3164,7 @@ function drawHere() {
     const label = i === 0 ? 'Today' : i === 1 ? 'Tmrw' : fmtWeekday(t, offset).slice(0, 3);
     days.push(`<button class="wk-d ${i === here.day ? 'on' : ''}" data-hday="${i}" aria-pressed="${i === here.day}" aria-label="${i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : esc(fmtWeekday(t, offset))}${best ? `, best ${best.score}` : ', no sessions'}">
       ${i === here.day ? '<span class="wk-hl" aria-hidden="true"></span>' : ''}<span class="wk-l">${label}<small class="num">${esc(date)}</small></span>
-      <span class="wk-sky ${best ? `${skyClass(best)} ${scoreTone(best.score)}` : 'none'}" ${best ? `style="background:${skyOf(best)}"` : ''} aria-hidden="true"></span>
+      <span class="wk-sky ${best ? `${skyClass(best)} ${scoreTone(best.score)}` : 'none'}" ${best ? `style="background:${skyOf(best)}"` : ''} aria-hidden="true">${best ? skyGlyph(best) : ''}</span>
       <span class="wk-s num ${best && best.score >= 75 ? 'go' : ''}" aria-hidden="true">${best ? best.score : '–'}</span></button>`);
   }
   const dayEvs = evs.filter(e => e.dayIdx === here.day).sort((a, b) => a.t - b.t);

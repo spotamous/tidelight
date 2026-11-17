@@ -1,0 +1,167 @@
+/* =================== Liquid Glass (preview) ===================
+   Apple's iOS 26 look, built only from what Safari supports today:
+   translucent material (backdrop blur + saturation), a bright specular rim,
+   floating controls, and concentric, extra-round corners.
+   Content runs under the bars; the bars and controls float on top as glass.
+   Loaded after styles.css. Remove the <link> in index.html to go back to the flat look. */
+:root {
+  --glass: rgba(28, 31, 33, .42);
+  --glass-strong: rgba(24, 27, 29, .52);
+  --glass-blur: blur(22px) saturate(180%);
+  --glass-rim: rgba(255, 255, 255, .16);
+  --glass-shine:
+    inset 0 1px 0 rgba(255, 255, 255, .30),
+    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    inset 1px 0 0 rgba(255, 255, 255, .06),
+    inset -1px 0 0 rgba(255, 255, 255, .06);
+  --glass-drop: 0 12px 34px -12px rgba(0, 0, 0, .65), 0 2px 6px -2px rgba(0, 0, 0, .35);
+  --r-glass: 28px;
+}
+
+/* Something for the glass to bend: a soft, slow light behind everything */
+body {
+  background:
+    radial-gradient(120% 60% at 85% -10%, rgba(217, 160, 102, .16), transparent 60%),
+    radial-gradient(90% 50% at -10% 35%, rgba(157, 173, 177, .10), transparent 65%),
+    radial-gradient(100% 50% at 110% 95%, rgba(217, 160, 102, .08), transparent 60%),
+    var(--ground);
+  background-attachment: fixed;
+}
+@media (max-width: 999px) { body { padding-bottom: calc(108px + env(safe-area-inset-bottom)); } }
+
+/* The material */
+.topbar .brand, .now-btn, .tabbar, .sheet-panel, .sheet-close, .call-slide,
+.btn:not(.primary), .tool-chip, .chip-btn, .day-pills, .here-pill, .wk-hl {
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+}
+
+/* ---- Header: no bar. The page fades out under it; logo and Now float as glass ---- */
+.topbar {
+  background: none; isolation: isolate;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  border-bottom: 0;
+  padding-bottom: 26px;
+}
+/* iOS's scroll-edge effect: content blurs and darkens as it slides under the floating controls */
+.topbar::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(to bottom, rgba(15, 17, 17, .9), rgba(15, 17, 17, .72) 60%, rgba(15, 17, 17, 0));
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent); mask-image: linear-gradient(to bottom, #000 62%, transparent);
+}
+.topbar .brand {
+  padding: 6px 14px 6px 12px; border-radius: 999px;
+  background: var(--glass); border: 1px solid var(--glass-rim);
+  box-shadow: var(--glass-shine), var(--glass-drop);
+}
+.now-btn {
+  background: var(--glass) !important; border: 1px solid var(--glass-rim) !important;
+  box-shadow: var(--glass-shine), var(--glass-drop);
+}
+
+/* ---- Tab bar: a floating glass capsule, with a lens over the active tab ---- */
+.tabbar {
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-rim); border-top: 1px solid rgba(255, 255, 255, .22);
+  box-shadow: var(--glass-shine), 0 18px 40px -14px rgba(0, 0, 0, .8);
+}
+@media (max-width: 999px) {
+  .tabbar { left: 14px; right: 14px; bottom: calc(10px + env(safe-area-inset-bottom)); padding: 6px; border-radius: 999px; }
+  .tabbar button { position: relative; z-index: 1; padding: 7px 0 6px; border-radius: 999px; }
+  .tab-ind {
+    top: 6px; bottom: 6px; left: 6px; height: auto; width: calc((100% - 12px) / 5);
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .05));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 0 0 1px rgba(255, 255, 255, .10), 0 4px 12px -4px rgba(0, 0, 0, .5);
+  }
+  .tab-ind::before { display: none; }
+}
+/* Desktop: the side rail floats as a glass column */
+@media (min-width: 1000px) {
+  .tabbar { left: 14px; top: 84px; bottom: auto; width: 76px; padding: 10px 6px; border-radius: 28px; border-right: 1px solid var(--glass-rim); }
+  .tabbar button { border-radius: 20px; }
+  .tabbar button.active { background: linear-gradient(180deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .05)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3); }
+  .tabbar button:hover:not(.active) { background: rgba(255, 255, 255, .06); }
+}
+
+/* ---- Buttons: glass capsules; the main action is tinted glass in caramel ---- */
+.btn:not(.primary) {
+  background: rgba(255, 255, 255, .07);
+  border: 1px solid var(--glass-rim);
+  box-shadow: var(--glass-shine);
+}
+.btn.primary {
+  background: linear-gradient(180deg, rgba(232, 182, 128, .96), rgba(208, 148, 88, .92));
+  border: 1px solid rgba(255, 226, 190, .55);
+  box-shadow: inset 0 1px 0 rgba(255, 244, 228, .7), inset 0 -2px 6px rgba(120, 70, 20, .25), 0 10px 24px -10px rgba(217, 160, 102, .55);
+}
+.tool-chip, .chip-btn, .here-pill {
+  background: rgba(255, 255, 255, .06); border: 1px solid var(--glass-rim);
+  box-shadow: var(--glass-shine);
+}
+.chip-btn.on { background: rgba(217, 160, 102, .22); border-color: rgba(217, 160, 102, .55); }
+
+/* Segmented control (Plans views): one glass track, a lens on the chosen option */
+.day-pills {
+  display: inline-flex; gap: 2px; padding: 4px; border-radius: 999px;
+  background: var(--glass); border: 1px solid var(--glass-rim); box-shadow: var(--glass-shine);
+}
+.day-pills button { border: 0 !important; background: none !important; color: var(--muted) !important; }
+.day-pills button.on {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .18), rgba(255, 255, 255, .06)) !important;
+  color: var(--text) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 3px 10px -4px rgba(0, 0, 0, .5);
+}
+
+/* ---- The call card: extra-round, with a glass rim; its controls float on the photo ---- */
+.call { border-radius: var(--r-glass); border: 1px solid rgba(255, 255, 255, .10); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 24px 50px -26px rgba(0, 0, 0, .9); }
+.call-slide { background: rgba(20, 22, 26, .38); border: 1px solid var(--glass-rim); box-shadow: var(--glass-shine); }
+.band { border-radius: 20px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), inset 0 0 0 1px rgba(255, 255, 255, .06); }
+
+/* Week strip: the chosen day sits under a glass lens */
+.wk-hl {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .04)) !important;
+  border: 1px solid rgba(255, 255, 255, .14) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), 0 6px 16px -8px rgba(0, 0, 0, .6) !important;
+  border-radius: 18px !important;
+}
+
+/* ---- Sheets: a floating glass panel, inset from the edges, page still visible behind ---- */
+.sheet { padding: 0 8px calc(8px + env(safe-area-inset-bottom)); }
+.sheet-backdrop { background: rgba(0, 0, 0, .38); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.sheet-panel {
+  border-radius: 36px;
+  background: linear-gradient(180deg, rgba(36, 40, 42, .80), rgba(22, 25, 26, .86));
+  border: 1px solid rgba(255, 255, 255, .14); border-top-color: rgba(255, 255, 255, .26);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 30px 70px -20px rgba(0, 0, 0, .85);
+  max-height: calc(88dvh - 8px);
+}
+.sheet-close {
+  background: rgba(255, 255, 255, .08) !important; border: 1px solid var(--glass-rim) !important;
+  box-shadow: var(--glass-shine);
+}
+#sheetBody { padding-bottom: 28px; }
+
+/* Lists sit on a quiet glass platter */
+.lib, .here-list, .others {
+  border-radius: 24px; padding: 2px 16px;
+  background: rgba(255, 255, 255, .035); border: 1px solid rgba(255, 255, 255, .07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+.lib .lib-row:last-child, .here-list .other-row:last-child, .others .other-row:last-child { border-bottom: 0; }
+.lib-row, .other-row { border-bottom-color: rgba(255, 255, 255, .07); }
+
+/* Inputs: inset glass */
+input[type="text"], input[type="search"], input:not([type]), select, textarea {
+  background: rgba(255, 255, 255, .05) !important; border: 1px solid rgba(255, 255, 255, .12) !important; border-radius: 16px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .35);
+}
+
+/* Without blur support, fall back to solid surfaces so text stays readable */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .tabbar, .sheet-panel, .topbar .brand, .now-btn, .day-pills { background: var(--surface) !important; }
+}
+/* Reduce transparency: iOS's accessibility setting */
+@media (prefers-reduced-transparency: reduce) {
+  .tabbar, .sheet-panel, .topbar .brand, .now-btn, .day-pills, .btn:not(.primary), .tool-chip, .chip-btn { background: var(--surface) !important; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}

@@ -6,7 +6,9 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 
 ## What it does
 
-**New in 6.5: Right here.** Tap *Right here* on the Forecast page (or in Tools) for scores and the week's sessions wherever you're standing, without saving a spot: the best session in the next two days, a 7-day strip, each day's sessions, and the full briefing for any of them. It works out whether you're on the coast (so tides and waves count), lets you choose what to score (remembered for next time), and *Save as a spot* keeps the place. Leave times assume you're already there, and nothing here touches your spots, plans or alerts until you save it.
+**New in 6.6: Liquid Glass.** The look follows Apple's iOS 26 design: the tab bar is a floating glass capsule with a lens over the active tab (a floating rail on desktop), the logo and Now button float as glass over a soft scroll-edge fade, buttons and chips are glass, sheets float in from the edges with large rounded corners, and lists sit on glass panels. It's all in `css/glass.css`; remove its `<link>` in `index.html` to go back to the flat look. With Reduce Transparency on (iPhone Accessibility settings), panels go solid. The week strip's squares now carry an icon for the sky at each day's best session (clear, high cloud, overcast, rain, fog, clear night), with a key underneath.
+
+**6.5: Right here.** Tap *Right here* on the Forecast page (or in Tools) for scores and the week's sessions wherever you're standing, without saving a spot: the best session in the next two days, a 7-day strip, each day's sessions, and the full briefing for any of them. It works out whether you're on the coast (so tides and waves count), lets you choose what to score (remembered for next time), and *Save as a spot* keeps the place. Leave times assume you're already there, and nothing here touches your spots, plans or alerts until you save it.
 
 **6.4: opens fast.** The app saves the last forecast for each spot on your device and shows it the moment you open the app, then fetches fresh forecasts in the background ("Updating…" under the day title) and redraws when they land. All your spots are fetched together in about five requests instead of three or four per spot, so adding spots no longer slows it down. On a weak signal the app opens from its saved copy after 2.5 s instead of waiting, and Refresh keeps the saved forecast for any spot that doesn't load.
 
@@ -160,7 +162,7 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=6.5`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=6.6`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:

@@ -1732,3 +1732,13 @@ html[data-motion="reduced"] .sk::after { animation: none; }
 .here-hunts { margin: 8px 0 12px; }
 .here-hunts summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font: 600 var(--t-sm) var(--sans); }
 .here-hunts .chip-btn:disabled { opacity: .5; }
+
+/* =================== v6.6: the week strip says what its colours mean =================== */
+.wk-sky { display: grid; place-items: center; }
+.wk-sky svg { color: #FBF7F0; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .55)); opacity: .92; }
+.wk-sky.sky-day svg { opacity: .85; }
+.week { margin-bottom: 6px; }
+.wk-key { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin: 0 0 18px; font: 500 var(--t-xs)/1.4 var(--sans); color: var(--muted); }
+.wk-key > span:first-child { flex: 1 0 100%; }
+.wk-key-i { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.wk-key-i svg { width: 14px; height: 14px; color: var(--text); opacity: .8; }
