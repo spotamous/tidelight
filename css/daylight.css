@@ -1,0 +1,97 @@
+/* =================== Daylight theme ===================
+   For reading on a bright headland. Switch it in You, Display (Dark, Daylight, or Match my phone).
+   Warm paper ground, near-black text, a deeper caramel so accents stay readable in sun,
+   and white frosted glass. Anything drawn on a sky or photo (session cards, the light bar,
+   briefing headers) keeps its own colours. */
+:root[data-theme="light"] {
+  --ground: #EEE9E1;
+  --surface: #FBF9F5;
+  --surface-2: #F1ECE4;
+  --line: #DCD4C8;
+  --text: #1B1A17;
+  --muted: #5F5B55;
+  --caramel: #94561E;        /* accents and links: 5.6:1 on the ground */
+  --caramel-ink: #FFF9F2;    /* text on caramel */
+  --slate: #44606A;
+  --danger: #B0433A;
+  --ok: #3B7631;
+  color-scheme: light;
+
+  --glass: rgba(255, 255, 255, .58);
+  --glass-strong: rgba(255, 255, 255, .66);
+  --glass-rim: rgba(0, 0, 0, .09);
+  --glass-shine: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 -1px 0 rgba(255, 255, 255, .35);
+  --glass-drop: 0 10px 28px -12px rgba(60, 40, 20, .28), 0 2px 6px -2px rgba(60, 40, 20, .12);
+}
+:root[data-theme="light"] body {
+  background:
+    radial-gradient(120% 60% at 85% -10%, rgba(217, 160, 102, .22), transparent 60%),
+    radial-gradient(90% 50% at -10% 35%, rgba(157, 173, 177, .18), transparent 65%),
+    var(--ground);
+  background-attachment: fixed;
+}
+
+/* Header fade and the floating bars */
+:root[data-theme="light"] .topbar::before { background: linear-gradient(to bottom, rgba(238, 233, 225, .94), rgba(238, 233, 225, .78) 60%, rgba(238, 233, 225, 0)); }
+:root[data-theme="light"] .topbar .brand img { filter: invert(1) brightness(.15); }
+:root[data-theme="light"] .tabbar { box-shadow: var(--glass-shine), 0 16px 36px -14px rgba(60, 40, 20, .35); border-color: rgba(0, 0, 0, .08); }
+:root[data-theme="light"] .tab-ind { background: linear-gradient(180deg, rgba(255, 255, 255, .95), rgba(255, 255, 255, .7)); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .06), 0 4px 12px -4px rgba(60, 40, 20, .3); }
+:root[data-theme="light"] .tabbar button { color: #6E6961; }
+:root[data-theme="light"] .tabbar button.active { color: var(--caramel); }
+
+/* Glass controls: white frost with a fine dark edge */
+:root[data-theme="light"] .btn:not(.primary),
+:root[data-theme="light"] .tool-chip, :root[data-theme="light"] .chip-btn, :root[data-theme="light"] .here-pill,
+:root[data-theme="light"] .sheet-close, :root[data-theme="light"] .now-btn {
+  background: rgba(255, 255, 255, .7) !important; border-color: rgba(0, 0, 0, .1) !important; color: var(--text);
+  box-shadow: inset 0 1px 0 #fff, 0 2px 8px -4px rgba(60, 40, 20, .25);
+}
+:root[data-theme="light"] .btn.primary {
+  background: linear-gradient(180deg, #E2AA6E, #CC8C4C); border-color: rgba(150, 90, 30, .45); color: #24170A;
+  box-shadow: inset 0 1px 0 rgba(255, 246, 232, .8), 0 8px 20px -10px rgba(170, 100, 40, .6);
+}
+:root[data-theme="light"] .chip-btn.on { background: rgba(217, 160, 102, .3) !important; border-color: rgba(148, 86, 30, .45) !important; }
+:root[data-theme="light"] .day-pills { background: rgba(255, 255, 255, .55); border-color: rgba(0, 0, 0, .08); }
+:root[data-theme="light"] .day-pills button.on { background: #fff !important; box-shadow: 0 2px 8px -3px rgba(60, 40, 20, .3); }
+:root[data-theme="light"] .wk-hl { background: rgba(255, 255, 255, .8) !important; border-color: rgba(0, 0, 0, .08) !important; box-shadow: 0 4px 14px -6px rgba(60, 40, 20, .3) !important; }
+
+/* Sheets: frosted white */
+:root[data-theme="light"] .sheet-backdrop { background: rgba(40, 30, 20, .22); }
+:root[data-theme="light"] .sheet-panel {
+  background: linear-gradient(180deg, rgba(255, 253, 250, .92), rgba(248, 244, 238, .95));
+  border-color: rgba(255, 255, 255, .9); border-top-color: #fff;
+  box-shadow: inset 0 1px 0 #fff, 0 30px 70px -20px rgba(60, 40, 20, .45);
+}
+
+/* Lists, panels, inputs */
+:root[data-theme="light"] .lib, :root[data-theme="light"] .here-list, :root[data-theme="light"] .others {
+  background: rgba(255, 255, 255, .62); border-color: rgba(0, 0, 0, .06); box-shadow: inset 0 1px 0 #fff, 0 6px 20px -14px rgba(60, 40, 20, .3);
+}
+:root[data-theme="light"] .lib-row, :root[data-theme="light"] .other-row { border-bottom-color: rgba(0, 0, 0, .07); }
+:root[data-theme="light"] input[type="text"], :root[data-theme="light"] input[type="search"], :root[data-theme="light"] input:not([type]),
+:root[data-theme="light"] input[type="password"], :root[data-theme="light"] input[type="number"], :root[data-theme="light"] select, :root[data-theme="light"] textarea {
+  background: rgba(255, 255, 255, .8) !important; border-color: rgba(0, 0, 0, .12) !important; color: var(--text); box-shadow: inset 0 1px 2px rgba(60, 40, 20, .12);
+}
+:root[data-theme="light"] .call { border-color: rgba(0, 0, 0, .06); box-shadow: 0 24px 50px -28px rgba(60, 40, 20, .55); }
+:root[data-theme="light"] .call-body, :root[data-theme="light"] .panel { background: var(--surface); }
+
+/* Score colours that were set for a dark ground */
+:root[data-theme="light"] .b3 { background: #C99764; color: #24170A; }
+:root[data-theme="light"] .b2 { background: #E6DED2; color: var(--text); }
+:root[data-theme="light"] .b1 { background: #F4F0EA; color: var(--muted); }
+:root[data-theme="light"] .avatar { box-shadow: 0 0 0 2px var(--surface), inset 0 1px 0 rgba(255, 255, 255, .45); }
+:root[data-theme="light"] .avatar.you { background: #E8E1D6; color: var(--text); }
+
+/* Loading placeholders */
+:root[data-theme="light"] .sk { background: rgba(255, 255, 255, .6); box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1px rgba(0, 0, 0, .05); }
+:root[data-theme="light"] .sk::after { background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, .9) 50%, transparent 80%); }
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-theme="light"] .tabbar, :root[data-theme="light"] .sheet-panel, :root[data-theme="light"] .btn:not(.primary) { background: var(--surface) !important; }
+}
+
+/* Night vision stays red-on-black whatever the theme */
+:root[data-theme="light"] .field.nightvision .btn, :root[data-theme="light"] .field.nightvision .icon-btn {
+  background: transparent !important; border-color: #5A1A15 !important; color: #E0453A !important; box-shadow: none;
+}
+:root[data-theme="light"] .field.nightvision { color-scheme: dark; }

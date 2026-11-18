@@ -6,7 +6,11 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 
 ## What it does
 
-**New in 6.6: Liquid Glass.** The look follows Apple's iOS 26 design: the tab bar is a floating glass capsule with a lens over the active tab (a floating rail on desktop), the logo and Now button float as glass over a soft scroll-edge fade, buttons and chips are glass, sheets float in from the edges with large rounded corners, and lists sit on glass panels. It's all in `css/glass.css`; remove its `<link>` in `index.html` to go back to the flat look. With Reduce Transparency on (iPhone Accessibility settings), panels go solid. The week strip's squares now carry an icon for the sky at each day's best session (clear, high cloud, overcast, rain, fog, clear night), with a key underneath.
+**New in 6.8: daylight, and scores you can read at a glance.** A Daylight theme for reading in the sun (warm paper, dark text, white frosted glass), chosen in You, Display: Dark, Daylight, or Match my phone. Night vision in field mode stays red on black either way. Every score now carries the same go / maybe / skip mark: a filled dot for 75+, a ring for 50–74, a faint ring under 50, in the week strip, the session lists, briefings, plans and crew plans. Loading placeholders are glass with a slow sweep of light.
+
+**6.7: pictures where there were blanks.** Briefings for spots without a photo open on a small horizon scene for that session: the sun placed where it will be (relative to the way you face, when the spot knows it), high cloud as streaks, mid cloud as soft clouds that glow warm at sunrise and sunset, low cloud as a band on the horizon, stars on clear nights, rain and fog when they're forecast. Every briefing shows High, Mid and Low cloud for the session. Spots without a photo get a sky tile with an icon for what you shoot there instead of a letter. Crew members get initials avatars in a colour that's theirs everywhere: the crew list, who's going where, notes, shared spots, and on your own sessions when a mate is going too.
+
+**6.6: Liquid Glass.** The look follows Apple's iOS 26 design: the tab bar is a floating glass capsule with a lens over the active tab (a floating rail on desktop), the logo and Now button float as glass over a soft scroll-edge fade, buttons and chips are glass, sheets float in from the edges with large rounded corners, and lists sit on glass panels. It's all in `css/glass.css`; remove its `<link>` in `index.html` to go back to the flat look. With Reduce Transparency on (iPhone Accessibility settings), panels go solid. The week strip's squares now carry an icon for the sky at each day's best session (clear, high cloud, overcast, rain, fog, clear night), with a key underneath.
 
 **6.5: Right here.** Tap *Right here* on the Forecast page (or in Tools) for scores and the week's sessions wherever you're standing, without saving a spot: the best session in the next two days, a 7-day strip, each day's sessions, and the full briefing for any of them. It works out whether you're on the coast (so tides and waves count), lets you choose what to score (remembered for next time), and *Save as a spot* keeps the place. Leave times assume you're already there, and nothing here touches your spots, plans or alerts until you save it.
 
@@ -162,7 +166,7 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=6.6`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=6.8`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:
