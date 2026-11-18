@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.9';
-import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, coastalCheck, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.9';
-import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.9';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.9';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, DAY_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.9';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.9';
-import { gearFor } from './gear.js?v=6.9';
-import { VAPID_PUBLIC_KEY } from './config.js?v=6.9';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.9';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.9';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.10';
+import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, coastalCheck, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.10';
+import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.10';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.10';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, DAY_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.10';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.10';
+import { gearFor } from './gear.js?v=6.10';
+import { VAPID_PUBLIC_KEY } from './config.js?v=6.10';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.10';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.10';
 
-export const APP_VERSION = '6.9';
+export const APP_VERSION = '6.10';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -1421,6 +1421,7 @@ function openEvent(key) {
       <button class="tool-chip" data-compass="${esc(e.key)}">Compass</button>
       <button class="tool-chip" data-dial="${esc(e.key)}">Light dial</button>
       ${labModel(e) ? `<button class="tool-chip" data-lab="${esc(e.key)}">What if?</button>` : ''}
+      <button class="tool-chip" id="cardBtn">Share card</button>
       ${currentUser() && crewState.crews.length && !e.spot.here ? '<button class="tool-chip" id="shareBtn">Share with crew</button>' : ''}
     </div>
     ${e.spot.here ? `<p class="bf-note">${e.spot.hereMode === 'place' ? 'Not a saved spot. Leave times are from home.' : 'Right here, not a saved spot. Times assume you\'re already here.'}</p>` : ''}
@@ -1456,6 +1457,7 @@ function openEvent(key) {
   runCounts($('#sheetBody'));
   wireTide(e);
   if (e.spot.here) { $('#hereBack').onclick = () => drawHere(); $('#hereSave').onclick = () => saveHere(); }
+  $('#cardBtn').onclick = () => openShareCard(e);
   const sb = $('#shareBtn');
   if (sb) sb.onclick = () => {
     if (!S().plans.some(p => p.key === e.key)) addPlan(e);
@@ -2580,9 +2582,11 @@ async function openSpotDetail(id) {
     ${alignmentText(s) || s.notes ? `<h3 class="sec">About this spot</h3>
       ${alignmentText(s) ? `<p class="align-line">${esc(alignmentText(s))}</p>` : ''}
       ${s.notes ? `<p class="bf-brief">${esc(s.notes)}</p>` : ''}` : ''}
+    ${seasonView(s)}
     <p class="small muted">${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}${s.coastal && !data.hasMarine ? '. No tide or wave data at this exact point; try moving the pin slightly offshore.' : ''}</p>
     <div class="bf-quiet">
       <button class="link-btn" id="spotHourly">Hourly forecast</button>
+      ${s.coastal && data.hasMarine ? '<button class="link-btn" id="spotTide">Tide windows</button>' : ''}
       <a class="link-btn" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}">Directions</a>
     </div>
     <div class="sheet-actions">
@@ -2591,6 +2595,8 @@ async function openSpotDetail(id) {
     </div>`;
   $('#editSpot').onclick = () => openSpotForm({}, s);
   $('#spotHourly').onclick = () => openNow({ kind: 'spot', id: s.id, lat: s.lat, lon: s.lon, name: s.name });
+  if ($('#spotTide')) $('#spotTide').onclick = () => openTideWindows(s.id);
+  wireSeason(s);
   $$('[data-show]').forEach(b => b.onclick = () => {
     $('#spotBanner').src = photoUrl(b.dataset.show);
     $$('[data-show]').forEach(x => x.classList.toggle('on', x === b));
@@ -3626,6 +3632,307 @@ function openAligner() {
   }));
 }
 
+/* ================= tide windows ================= */
+// Every stretch in the next week when the tide at a spot is where you need it: below or above a level,
+// rising or falling. Levels are a share of the local tide range, the same way the score reads the tide.
+const TW_DEFAULT = { rule: 'below', level: 0.35, dir: 'any' };
+let twSpotId = null;
+function tidePositions(hours) {
+  return hours.map((h, i) => { const ti = tideInfo(hours, i); return ti ? { t: h.t, pos: ti.pos, sea: h.sea, rising: ti.rising } : { t: h.t, pos: null }; });
+}
+function tideWindows(hours, rule, now) {
+  const P = tidePositions(hours);
+  const ok = p => p.pos != null && (rule.rule === 'below' ? p.pos <= rule.level : p.pos >= rule.level)
+    && (rule.dir === 'any' || (rule.dir === 'rising' ? p.rising === true : p.rising === false));
+  const out = [];
+  let cur = null;
+  for (let i = 0; i < P.length; i++) {
+    const p = P[i], good = ok(p);
+    if (good && !cur) {
+      // Starts between the last hour and this one: interpolate on the level.
+      let start = p.t;
+      const q = P[i - 1];
+      if (q && q.pos != null && p.pos != null && q.pos !== p.pos) {
+        const f = (rule.level - q.pos) / (p.pos - q.pos);
+        if (f > 0 && f < 1) start = q.t + f * (p.t - q.t);
+      }
+      cur = { start };
+    }
+    if (!good && cur) {
+      let end = P[i - 1].t;
+      const q = P[i - 1];
+      if (q.pos != null && p.pos != null && q.pos !== p.pos) {
+        const f = (rule.level - q.pos) / (p.pos - q.pos);
+        if (f > 0 && f < 1) end = q.t + f * (p.t - q.t);
+      }
+      cur.end = end; out.push(cur); cur = null;
+    }
+  }
+  if (cur) { cur.end = P[P.length - 1].t; cur.open = true; out.push(cur); }
+  return out.filter(w => w.end > now && w.end - w.start >= 20 * 60);
+}
+async function openTideWindows(spotId) {
+  const st = S();
+  const coastal = st.spots.filter(sp => sp.coastal);
+  if (!coastal.length) {
+    openSheet(`<h2>Tide windows</h2><p>Tide windows work for coastal spots. Mark a spot as coastal in its settings, and its tides show up here.</p>`);
+    return;
+  }
+  twSpotId = spotId || twSpotId || coastal[0].id;
+  const sp = coastal.find(x => x.id === twSpotId) || coastal[0];
+  twSpotId = sp.id;
+  const rule = { ...TW_DEFAULT, ...(sp.tideRule || {}) };
+  openSheet(`<h2>Tide windows</h2>${skeleton('week', 'Reading the tides…')}`);
+  let data;
+  try { data = forecasts[sp.id] || (forecasts[sp.id] = await fetchSpotForecast(sp)); }
+  catch (err) { $('#sheetBody').innerHTML = `<h2>Tide windows</h2><div class="alert danger">${esc(err.message)}</div>`; return; }
+  if (!$('#sheetBody')) return;
+  const o = data.offset, now = Date.now() / 1000;
+  const hours = data.hours.filter(h => h.t >= now - 12 * 3600);
+  const seas = hours.map(h => h.sea).filter(v => v != null);
+  if (seas.length < 24 || Math.max(...seas) - Math.min(...seas) < 0.05) {
+    $('#sheetBody').innerHTML = `<h2>Tide windows</h2><p class="bf-name">${esc(sp.name)}</p><p>There's no tide data at this exact point. Try moving the spot's pin slightly offshore.</p>`;
+    return;
+  }
+  const lo = Math.min(...seas), hi = Math.max(...seas);
+  const wins = tideWindows(hours, rule, now);
+  const evs = evaluateSpot(sp, data, st.keepers, st.settings);
+  indexEvents(evs);
+  const overlaps = w => evs.filter(e => e.t >= w.start - 1800 && e.t <= w.end + 1800);
+  const dur = s => { const m = Math.round(s / 60); return m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`; };
+  // Seven days of curve, one row a day, with the windows shaded and sunrise/sunset marked.
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const t = now + i * 86400, k = dayKey(t, o);
+    const hs = hours.filter(h => dayKey(h.t, o) === k && h.sea != null);
+    if (hs.length < 6) continue;
+    const d0 = hs[0].t - ((hs[0].t + o) % 3600 === 0 ? 0 : 0);
+    const dayStart = Math.floor((hs[0].t + o) / 86400) * 86400 - o;
+    const x = tt => ((tt - dayStart) / 86400 * 100).toFixed(2);
+    const y = v => (34 - (v - lo) / (hi - lo || 1) * 28).toFixed(1);
+    const path = hs.map((h, j) => `${j ? 'L' : 'M'}${x(h.t)} ${y(h.sea)}`).join(' ');
+    const shade = wins.filter(w => w.end > dayStart && w.start < dayStart + 86400)
+      .map(w => `<rect x="${x(Math.max(w.start, dayStart))}" y="0" width="${(Math.min(w.end, dayStart + 86400) - Math.max(w.start, dayStart)) / 86400 * 100}" height="40" class="tw-win"/>`).join('');
+    const marks = evs.filter(e => dayKey(e.t, o) === k && (e.type === 'sunrise' || e.type === 'sunset'))
+      .map(e => `<line x1="${x(e.t)}" x2="${x(e.t)}" y1="2" y2="38" class="tw-sun"/>`).join('');
+    const levelY = y(lo + rule.level * (hi - lo));
+    days.push(`<div class="tw-day"><span class="tw-dl">${i === 0 ? 'Today' : fmtWeekday(t, o).slice(0, 3)}<small>${fmtDayDate(t, o).split(' ')[1]}</small></span>
+      <svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">${shade}<line x1="0" x2="100" y1="${levelY}" y2="${levelY}" class="tw-level"/>${marks}<path d="${path}" class="tw-curve" vector-effect="non-scaling-stroke"/></svg></div>`);
+    void d0;
+  }
+  const levelM = lo + rule.level * (hi - lo);
+  const seg = (key, opts) => `<div class="day-pills al-seg" role="radiogroup">${opts.map(([k, l]) => `<button type="button" role="radio" class="${rule[key] === k ? 'on' : ''}" aria-checked="${rule[key] === k}" data-tw="${key}" data-v="${k}">${l}</button>`).join('')}</div>`;
+  $('#sheetBody').innerHTML = `
+    <p class="eyebrow here-eyebrow">Tide windows</p>
+    <h2>When the tide's right</h2>
+    <label class="al-field"><select id="twSpot" aria-label="Spot">${coastal.map(x => `<option value="${esc(x.id)}" ${x.id === sp.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+    <div class="al-opts">${seg('rule', [['below', 'Below'], ['above', 'Above']])}${seg('dir', [['any', 'Rising or falling'], ['rising', 'Rising'], ['falling', 'Falling']])}</div>
+    <label class="al-slider">Tide level <span class="num" id="twLevelV">${Math.round(rule.level * 100)}% of the range</span>
+      <input type="range" id="twLevel" min="0.05" max="0.95" step="0.05" value="${rule.level}" style="--val:${((rule.level - 0.05) / 0.9 * 100).toFixed(1)}%">
+      <small>About ${levelM >= 0 ? '+' : ''}${levelM.toFixed(2)} m from mean sea level here this week (lowest ${lo.toFixed(2)} m, highest ${hi.toFixed(2)} m). Saved for this spot.</small></label>
+    <div class="tw-chart">${days.join('')}<p class="tw-key"><i class="tw-k-win"></i>Your window <i class="tw-k-sun"></i>Sunrise and sunset <i class="tw-k-lvl"></i>Your level</p></div>
+    <h3 class="sec">${wins.length ? `${wins.length} window${wins.length === 1 ? '' : 's'} this week` : 'No windows this week'}</h3>
+    ${wins.length ? `<div class="tw-list">${wins.map(w => {
+      const ov = overlaps(w).sort((a, b) => b.score - a.score);
+      return `<div class="tw-row ${ov.length ? 'with-light' : ''}">
+        <p><b>${fmtDay(w.start, o)}, ${fmtTime(w.start, o)} to ${w.open ? 'beyond the forecast' : fmtTime(w.end, o)}</b><small>${w.open ? 'At least ' : ''}${dur(w.end - w.start)}</small></p>
+        ${ov.length ? ov.map(e => `<button class="tw-sess" data-ev="${esc(e.key)}">${toneDot(e.score)}${TYPE_NAME[e.type]} ${fmtTime(e.t, o)}, ${e.score}: ${esc(huntPhrase(e).toLowerCase())}</button>`).join('') : '<small class="muted">No light session inside it.</small>'}
+      </div>`;
+    }).join('')}</div>` : `<p class="small muted">Try a ${rule.rule === 'below' ? 'higher' : 'lower'} level${rule.dir !== 'any' ? ', or rising or falling' : ''}.</p>`}
+    <p class="small muted">Tide heights come from the marine forecast, measured from mean sea level, not the chart datum on printed tide tables. Check local tide tables before relying on access.</p>`;
+  const save = patch => { update(s2 => { const x = s2.spots.find(q => q.id === sp.id); if (x) x.tideRule = { ...rule, ...patch }; }); const y = $('#sheetBody').scrollTop; openTideWindows(sp.id).then(() => { $('#sheetBody').scrollTop = y; }); };
+  $('#twSpot').onchange = e => openTideWindows(e.target.value);
+  $$('#sheetBody [data-tw]').forEach(b => b.onclick = () => save({ [b.dataset.tw]: b.dataset.v }));
+  const lv = $('#twLevel');
+  lv.oninput = () => { $('#twLevelV').textContent = `${Math.round(lv.value * 100)}% of the range`; lv.style.setProperty('--val', `${((lv.value - 0.05) / 0.9 * 100).toFixed(1)}%`); };
+  lv.onchange = () => save({ level: Number(lv.value) });
+}
+
+/* ================= through the year: a spot's seasons ================= */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+// The Milky Way's core (Sagittarius A*): right ascension 266.4°, declination -29.0°.
+function coreAltAt(d, lat, lon) {
+  const days = d.getTime() / 864e5 - 10957.5;            // days since J2000
+  const lst = (280.16 + 360.9856235 * days + lon) * Math.PI / 180;
+  const H = lst - 266.4 * Math.PI / 180, dec = -29.0 * Math.PI / 180, phi = lat * Math.PI / 180;
+  return Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H)) * 180 / Math.PI;
+}
+// For each month: hours the core is 10°+ up in full dark, and whether the sun rises or sets in your view.
+function seasonFacts(sp) {
+  const SC = window.SunCalc;
+  const year = new Date().getFullYear();
+  const facing = sp.facing !== '' && sp.facing != null && !isNaN(Number(sp.facing)) ? Number(sp.facing) : null;
+  return MONTHS.map((m, i) => {
+    const mid = new Date(year, i, 15, 12);
+    let core = 0, sunIn = [];
+    if (SC) {
+      const T = SC.getTimes(mid, sp.lat, sp.lon);
+      for (const [kind, d] of [['sunrise', T.sunrise], ['sunset', T.sunset]]) {
+        if (facing == null || !(d instanceof Date) || isNaN(d)) continue;
+        const az = (SC.getPosition(d, sp.lat, sp.lon).azimuth * 180 / Math.PI + 180) % 360;
+        if (angleDiff(az, facing) <= 15) sunIn.push(kind);
+      }
+      for (let k = 0; k < 24 * 6; k++) {   // 10-minute steps from noon to noon
+        const d = new Date(mid.getTime() + k * 600e3);
+        if (SC.getPosition(d, sp.lat, sp.lon).altitude * 180 / Math.PI > -18) continue;
+        if (coreAltAt(d, sp.lat, sp.lon) >= 10) core += 1 / 6;
+      }
+    }
+    return { m, i, core, sunIn };
+  });
+}
+// Fog climatology: share of mornings (5 to 8am) with near-saturated, near-still air over the last two years.
+async function fogByMonth(sp) {
+  const key = `tidelight:fogclim:${sp.lat.toFixed(2)},${sp.lon.toFixed(2)}`;
+  try { const c = JSON.parse(localStorage.getItem(key) || 'null'); if (c && Date.now() - c.at < 30 * 864e5) return c.pct; } catch {}
+  const end = new Date(Date.now() - 8 * 864e5), start = new Date(end.getTime() - 730 * 864e5);
+  const ymd = d => d.toISOString().slice(0, 10);
+  const j = await getJSONPublic(`https://archive-api.open-meteo.com/v1/archive?latitude=${sp.lat}&longitude=${sp.lon}&start_date=${ymd(start)}&end_date=${ymd(end)}&hourly=relative_humidity_2m,wind_speed_10m&timezone=auto&timeformat=unixtime`);
+  const H = j.hourly, off = j.utc_offset_seconds || 0;
+  const tally = MONTHS.map(() => ({ days: new Set(), fog: new Set() }));
+  H.time.forEach((t, i) => {
+    const d = new Date((t + off) * 1000), h = d.getUTCHours();
+    if (h < 5 || h > 8) return;
+    const m = d.getUTCMonth(), day = d.toISOString().slice(0, 10);
+    tally[m].days.add(day);
+    if ((H.relative_humidity_2m[i] ?? 0) >= 96 && (H.wind_speed_10m[i] ?? 99) <= 7) tally[m].fog.add(day);
+  });
+  const pct = tally.map(x => (x.days.size ? Math.round(x.fog.size / x.days.size * 100) : null));
+  try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), pct })); } catch {}
+  return pct;
+}
+async function getJSONPublic(url) {
+  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 20000);
+  try { const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) throw new Error(`Weather archive: ${r.status}`); return await r.json(); }
+  finally { clearTimeout(timer); }
+}
+function seasonView(sp) {
+  const facts = seasonFacts(sp);
+  const st = S();
+  const mine = MONTHS.map(() => 0);
+  st.keepers.filter(k => (k.spotId === sp.id || k.spotName === sp.name) && (k.label === 'keeper' || (k.score10 ?? 0) >= 7) && k.date).forEach(k => { mine[new Date(k.date).getMonth()]++; });
+  const nowM = new Date().getMonth();
+  const hunts = huntsOf(sp);
+  const showCore = hunts.includes('astro');
+  const showSun = sp.facing !== '' && sp.facing != null && !isNaN(Number(sp.facing));
+  const head = `<span></span>${MONTHS.map((m, i) => `<span class="yr-m ${i === nowM ? 'now' : ''}">${m[0]}<small>${m.slice(1)}</small></span>`).join('')}`;
+  const rowSun = showSun ? `<span class="yr-l">Sun in view</span>${facts.map(f => `<span class="yr-c ${f.sunIn.length ? 'on' : ''}" title="${f.m}: ${f.sunIn.join(' and ') || 'not in line'}">${f.sunIn.length ? G(f.sunIn.includes('sunset') && !f.sunIn.includes('sunrise') ? '<path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0"/><path d="M12 9.5V13M10.4 11.4 12 13l1.6-1.6"/>' : '<path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0"/><path d="M12 13V9.5M10.4 11.1 12 9.5l1.6 1.6"/>') : ''}</span>`).join('')}` : '';
+  const rowCore = showCore ? `<span class="yr-l">Milky Way</span>${facts.map(f => `<span class="yr-c core" style="--a:${Math.min(1, f.core / 6).toFixed(2)}" title="${f.m}: ${f.core.toFixed(1)} h of the core up in full dark">${f.core >= 0.5 ? `<b class="num">${Math.round(f.core)}h</b>` : ''}</span>`).join('')}` : '';
+  const rowFog = hunts.includes('fog') ? `<span class="yr-l">Fog</span>${MONTHS.map((m, i) => `<span class="yr-c fog" data-fogm="${i}"></span>`).join('')}` : '';
+  const rowMine = `<span class="yr-l">Keepers</span>${mine.map((n, i) => `<span class="yr-c mine" title="${MONTHS[i]}: ${n} keeper${n === 1 ? '' : 's'}">${n ? `<b class="num">${n}</b>` : ''}</span>`).join('')}`;
+  const best = [];
+  const sunM = facts.filter(f => f.sunIn.length).map(f => f.m);
+  if (sunM.length) best.push(`the sun lines up with your view in ${listMonths(sunM)}`);
+  const coreM = facts.filter(f => f.core >= 2).map(f => f.m);
+  if (showCore && coreM.length) best.push(`the core is up for 2+ hours of full dark in ${listMonths(coreM)}`);
+  const mineM = mine.map((n, i) => (n ? MONTHS[i] : null)).filter(Boolean);
+  if (mineM.length) best.push(`your keepers here came in ${listMonths(mineM)}`);
+  return `<h3 class="sec">Through the year</h3>
+    <div class="yr-wrap"><div class="yr">${head}${rowSun}${rowCore}${rowFog}${rowMine}</div></div>
+    <p class="small muted">${best.length ? `${cap(best.join('; '))}.` : 'Set the direction you face in the spot\'s settings to see when the sun lines up.'}${showCore ? ' Milky Way: hours the core is well up in full dark, mid-month.' : ''}${hunts.includes('fog') ? ' Fog: the share of mornings in the last two years with still, saturated air at dawn.' : ''} Keepers: your 7+ ratings here.</p>`;
+}
+// "Mar to Jul" for a run of months, "Jan, Apr, Nov" otherwise.
+function listMonths(ms) {
+  const idx = ms.map(m => MONTHS.indexOf(m)).sort((a, b) => a - b);
+  const runs = [];
+  for (const i of idx) { const r = runs[runs.length - 1]; if (r && i === r[1] + 1) r[1] = i; else runs.push([i, i]); }
+  // a run that wraps from December into January
+  if (runs.length > 1 && runs[0][0] === 0 && runs[runs.length - 1][1] === 11) { const last = runs.pop(); runs[0][0] = last[0]; }
+  return runs.map(([a, b]) => (a === b ? MONTHS[a] : `${MONTHS[a]} to ${MONTHS[b]}`)).join(', ');
+}
+function wireSeason(sp) {
+  if (!huntsOf(sp).includes('fog')) return;
+  fogByMonth(sp).then(pct => {
+    $$('[data-fogm]').forEach(c => {
+      const p = pct[Number(c.dataset.fogm)];
+      c.style.setProperty('--a', p == null ? 0 : Math.min(1, p / 35).toFixed(2));
+      c.innerHTML = p == null ? '' : `<b class="num">${p}%</b>`;
+      c.title = `${MONTHS[Number(c.dataset.fogm)]}: ${p ?? '?'}% of mornings`;
+    });
+  }).catch(() => { $$('[data-fogm]').forEach(c => { c.textContent = '–'; }); });
+}
+
+/* ================= shareable plan card ================= */
+// A picture of a session to send anyone: the spot, the time, the score and the sky. Drawn on a canvas
+// from the spot's photo (or its horizon scene), so it shares as an ordinary image.
+function loadImg(src) { return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; }); }
+async function shareCardBlob(e) {
+  const W = 1080, H = 1350, c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  try { await Promise.all([document.fonts.load('400 120px "Instrument Serif"'), document.fonts.load('italic 400 60px "Instrument Serif"'), document.fonts.load('600 30px Manrope'), document.fonts.load('700 30px Manrope')]); } catch {}
+  const SERIF = '"Instrument Serif", Georgia, serif', SANS = 'Manrope, Helvetica, Arial, sans-serif';
+  // the sky: colours from the session's own sky gradient
+  const cols = (skyOf(e).match(/#[0-9a-f]{6}/gi) || ['#1A2233', '#C98A55']);
+  const sky = g.createLinearGradient(0, 0, 0, H * 0.62);
+  cols.forEach((col, i) => sky.addColorStop(i / Math.max(1, cols.length - 1), col));
+  g.fillStyle = sky; g.fillRect(0, 0, W, H);
+  const photo = coverUrl(e.spot);
+  const drawCover = (im, h) => { const s = Math.max(W / im.width, h / im.height); g.drawImage(im, (W - im.width * s) / 2, (h - im.height * s) / 2, im.width * s, im.height * s); };
+  try {
+    if (photo) drawCover(await loadImg(photo), H * 0.66);
+    else {
+      const svg = horizonScene(e).replace('<svg ', `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${Math.round(H * 0.66)}" `);
+      drawCover(await loadImg(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`), H * 0.66);
+    }
+  } catch {}
+  // fade into the panel
+  const fade = g.createLinearGradient(0, H * 0.38, 0, H * 0.7);
+  fade.addColorStop(0, 'rgba(12,14,16,0)'); fade.addColorStop(1, 'rgba(12,14,16,1)');
+  g.fillStyle = fade; g.fillRect(0, 0, W, H); g.fillStyle = '#0C0E10'; g.fillRect(0, H * 0.7, W, H * 0.3);
+  const top = g.createLinearGradient(0, 0, 0, 220); top.addColorStop(0, 'rgba(0,0,0,.45)'); top.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = top; g.fillRect(0, 0, W, 220);
+  const o = e.offset;
+  const text = (t, x, y, font, color, align = 'left') => { g.font = font; g.fillStyle = color; g.textAlign = align; g.fillText(t, x, y); };
+  g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 18;
+  text('TIDELIGHT', 72, 110, `700 30px ${SANS}`, '#F2DFC6');
+  g.letterSpacing = '0px';
+  text(`${TYPE_NAME[e.type]} · ${fmtDay(e.t, o)} ${fmtDayDate(e.t, o)}`, W - 72, 110, `600 30px ${SANS}`, '#F4EFE7', 'right');
+  g.shadowBlur = 0;
+  // score and verdict
+  const P = H * 0.62;
+  g.font = `400 200px ${SERIF}`;
+  const scoreW = g.measureText(String(e.score)).width;
+  text(String(e.score), W - 72, P + 70, `400 200px ${SERIF}`, e.score >= 75 ? '#E2AA6E' : '#F4EFE7', 'right');
+  // Verdict and spot name shrink to fit beside the score.
+  const room = W - 144 - scoreW - 36;
+  const fit = (t, size, style) => { let px = size; g.font = `${style} ${px}px ${SERIF}`; while (g.measureText(t).width > room && px > 34) { px -= 2; g.font = `${style} ${px}px ${SERIF}`; } return `${style} ${px}px ${SERIF}`; };
+  text(`${huntPhrase(e)}.`, 72, P + 24, fit(`${huntPhrase(e)}.`, 76, 'italic 400'), '#F4EFE7');
+  text(e.spot.name, 72, P + 112, fit(e.spot.name, 64, '400'), '#F4EFE7');
+  // facts
+  const facts = [['Be there', fmtTime(e.t - ((e.type === 'sunrise' ? 30 : 15) * 60), o)], [cap(TYPE_NAME[e.type]), fmtTime(e.t, o)]];
+  const h = e.hour || {};
+  facts.push(['Cloud', `${Math.round(h.high ?? 0)} / ${Math.round(h.mid ?? 0)} / ${Math.round(h.low ?? 0)}%`]);
+  if (e.tide) facts.push(['Tide', `${Math.round(e.tide.pos * 100)}%, ${e.tide.rising ? 'rising' : 'falling'}`]);
+  const cw = (W - 144) / facts.length;
+  facts.forEach(([k, v], i) => {
+    text(k.toUpperCase(), 72 + i * cw, P + 210, `700 24px ${SANS}`, '#9DA3A3');
+    text(v, 72 + i * cw, P + 262, `600 40px ${SANS}`, '#F4EFE7');
+  });
+  g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(72, P + 160, W - 144, 2);
+  text('Cloud high / mid / low', 72, H - 96, `600 24px ${SANS}`, '#6F7576');
+  text('Planned with Tidelight', W - 72, H - 96, `600 24px ${SANS}`, '#C98A55', 'right');
+  return new Promise(res => c.toBlob(res, 'image/png'));
+}
+async function openShareCard(e) {
+  openSheet(`<h2>Share card</h2>${skeleton('here', 'Drawing the card…')}`);
+  let blob;
+  try { blob = await shareCardBlob(e); } catch { blob = null; }
+  if (!$('#sheetBody')) return;
+  if (!blob) { $('#sheetBody').innerHTML = '<h2>Share card</h2><p>Couldn\'t draw the card on this device.</p>'; return; }
+  const url = URL.createObjectURL(blob);
+  const name = `${e.spot.name.replace(/[^\w]+/g, '-').toLowerCase()}-${e.type}-${new Date(e.t * 1000).toISOString().slice(0, 10)}.png`;
+  const file = new File([blob], name, { type: 'image/png' });
+  const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+  $('#sheetBody').innerHTML = `<h2>Share card</h2>
+    <p class="small muted">A picture of this session to send anyone, or post as a story.</p>
+    <img class="share-card" src="${url}" alt="Share card: ${esc(e.spot.name)}, ${esc(TYPE_NAME[e.type].toLowerCase())} ${esc(fmtDay(e.t, e.offset).toLowerCase())}, score ${e.score}">
+    <div class="sheet-actions"><div class="row">${canShare ? '<button class="btn primary" id="scShare">Share</button>' : ''}<a class="btn ${canShare ? '' : 'primary'}" id="scSave" href="${url}" download="${name}">Save image</a><button class="btn ghost" id="scBack">Back</button></div></div>`;
+  if (canShare) $('#scShare').onclick = () => navigator.share({ files: [file], title: `${e.spot.name}, ${TYPE_NAME[e.type].toLowerCase()}` }).catch(() => {});
+  $('#scBack').onclick = () => openEvent(e.key);
+  onSheetClose = () => setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 /* ================= scout a spot ================= */
 function openScout() {
   let pos = null, facing = null, photoFile = null, live = null, heading = null;
@@ -4231,6 +4538,7 @@ function renderTools(v) {
     <div class="tool-list">
       ${nextPlan ? tool(`data-field="${esc(nextPlan.key)}"`, 'Field mode', `Countdowns and the sky for ${esc(nextPlan.spotName)}, your next plan.`) : ''}
       ${tool('id="toolHere"', 'Right here, or anywhere', "Scores and the week's forecast for where you're standing, or anywhere you search or pin. No spot needed.")}
+      ${tool('id="toolTide"', 'Tide windows', 'When the tide is below or above the level you need this week, and which light sessions fall inside.')}
       ${tool('id="toolAlign"', 'Moon planner', 'When the full moon (or the sun) rises or sets right behind a landmark, over the next year.')}
       ${tool('id="toolCompass"', 'Compass', "Where the sun rises and sets today, and where the sun, moon and Milky Way are now.")}
       ${tool('id="toolExposure"', 'Exposure', 'ND filter times with a countdown, the longest exposure for sharp stars, and hyperfocal distance.')}
@@ -4240,6 +4548,7 @@ function renderTools(v) {
     ${!nextPlan ? '<p class="small muted tool-note">Field mode opens from any session. Plan a shoot and it appears here for the next one.</p>' : ''}`;
   $('#toolHere').onclick = () => openHere();
   $('#toolAlign').onclick = () => openAligner();
+  $('#toolTide').onclick = () => openTideWindows();
   $('#toolCompass').onclick = () => openCompassHere();
   $('#toolDial').onclick = () => openLightDialHere();
   $('#toolExposure').onclick = () => openExposure();
