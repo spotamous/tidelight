@@ -1,7 +1,7 @@
 // Sky view: the live camera with the sun's path, the moon's path and phase, and the Milky Way drawn
 // over it, at any time you scrub to. Uses the camera, the motion sensors and the compass; without
 // them (a computer, or sensors refused) you drag to look around a drawn sky instead.
-import { esc, fmtTime, toast, getPosition, compass } from './util.js?v=6.13';
+import { esc, fmtTime, toast, getPosition, compass } from './util.js?v=6.14';
 
 const D2R = Math.PI / 180, R2D = 180 / Math.PI;
 const LENS_FOV = 67;                       // phone main camera, degrees across the long side of the frame
@@ -126,7 +126,7 @@ export async function openSkyAR(opts = {}) {
     focus: opts.focus || null,          // 'moon' | 'sun' | 'core': open looking for it
     fov: Number(localStorage.getItem('tidelight:arFov')) || LENS_FOV,
     day: dayStart(start), minute: minuteOfWindow(start),
-    basis: null, smooth: null, sensors: false, absolute: false, compassOffset: null,
+    basis: null, smooth: null, sensors: false, absolute: false, compassOffset: null, untrustedFrames: 0, jumpFrames: 0,
     manual: { az: 180, alt: 15 }, decl: 0, userCorr: Number(localStorage.getItem('tidelight:arCorr')) || 0, corrSet: !!localStorage.getItem('tidelight:arCorr'),
     calibrating: false, raf: 0, stream: null, cache: null, listeners: [],
   };
@@ -221,11 +221,31 @@ function listenSensors() {
     if (e.beta == null || e.gamma == null) return;
     let alpha = e.alpha ?? 0;
     if (e.webkitCompassHeading != null && !isNaN(e.webkitCompassHeading)) {
-      // iOS: alpha starts wherever the phone was; webkitCompassHeading is magnetic. Keep a smoothed offset between them.
+      // iOS: alpha is the gyro (smooth, but starts wherever the phone was); webkitCompassHeading is magnetic.
+      // Keep a slowly-smoothed offset between them, but only learn it while the compass can be trusted:
+      // with the camera tipped well up (screen facing the ground) iOS's heading wobbles and can flip 180°,
+      // which used to drag the whole sky round. Up there we just ride the gyro on the last good offset.
+      const camAlt = Math.asin(Math.max(-1, Math.min(1, Math.cos(e.beta * D2R) * Math.cos(e.gamma * D2R)))) / D2R * -1;
+      const acc = e.webkitCompassAccuracy;
+      const trusted = camAlt < 45 && camAlt > -75 && !(acc < 0) && !(acc > 35);
       const want = (360 - e.webkitCompassHeading - alpha + 720) % 360;
-      if (S.compassOffset == null) S.compassOffset = want;
-      else { let d = ((want - S.compassOffset + 540) % 360) - 180; S.compassOffset = (S.compassOffset + d * 0.02 + 360) % 360; }
+      if (S.compassOffset == null) {
+        if (trusted || S.untrustedFrames++ > 90) S.compassOffset = want;   // first fix (or give up waiting after ~1.5 s)
+        else return;
+      } else if (trusted) {
+        const d = ((want - S.compassOffset + 540) % 360) - 180;
+        if (Math.abs(d) > 25) {
+          // a big jump: believe it only if it holds for a moment (a real recalibration), not a single glitch
+          S.jumpFrames = (S.jumpFrames || 0) + 1;
+          if (S.jumpFrames > 30) { S.compassOffset = want; S.jumpFrames = 0; }
+        } else {
+          S.jumpFrames = 0;
+          S.compassOffset = (S.compassOffset + d * 0.02 + 360) % 360;
+        }
+      }
       alpha = alpha + S.compassOffset;
+    } else if (S.absolute && !e.absolute) {
+      return;   // Android sends both; once we have the absolute stream, ignore the relative one so they don't fight
     } else if (!e.absolute && !S.absolute) {
       return;   // a relative-only alpha can't point anywhere real
     }

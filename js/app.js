@@ -1,16 +1,16 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.13';
-import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, coastalCheck, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.13';
-import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.13';
-import { openSkyAR } from './skyar.js?v=6.13';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.13';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, DAY_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.13';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.13';
-import { gearFor } from './gear.js?v=6.13';
-import { VAPID_PUBLIC_KEY } from './config.js?v=6.13';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.13';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.13';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.14';
+import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, coastalCheck, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.14';
+import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.14';
+import { openSkyAR } from './skyar.js?v=6.14';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.14';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, DAY_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.14';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.14';
+import { gearFor } from './gear.js?v=6.14';
+import { VAPID_PUBLIC_KEY } from './config.js?v=6.14';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.14';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.14';
 
-export const APP_VERSION = '6.13';
+export const APP_VERSION = '6.14';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -5370,6 +5370,10 @@ function pageData(v) {
 // For testers: what changed in each update. Opens once after an update, and any time from You.
 const SEEN_VERSION = 'tidelight:seenVersion';
 const WHATS_NEW = [
+  { v: '6.14', date: '18 Nov', title: 'Steadier Sky view', items: [
+    'Sky view no longer loses its direction or spins when you tip the phone up high toward the core or the moon.',
+    'It now only trusts the compass when it\'s reliable, and holds steady on the gyro the rest of the time.',
+  ], tryIt: ['sky', 'Open Sky view'] },
   { v: '6.13', date: '18 Nov', title: 'Welcome touch-ups', items: [
     'The light bar in the welcome and the tour now shows weather, the way it does on the Forecast page.',
     'Crew avatars no longer get clipped.',

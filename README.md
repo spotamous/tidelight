@@ -6,6 +6,8 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 
 ## What it does
 
+**New in 6.14: steadier Sky view.** On iPhone, Sky view learns the compass only while the camera is near the horizon, where iOS's heading is reliable, and ignores single-reading jumps; tipped well up toward the core or the moon it holds direction on the gyro instead of spinning. On Android it ignores the relative orientation stream once the absolute one is running.
+
 **New in 6.12: smoother, with a tour and What's new.** Tabs slide in the direction you're moving along the tab bar (the header and tab bar hold still), each tab remembers where you'd scrolled to, and tapping the tab you're on scrolls back to the top. New users get a five-card tour of how Tidelight works after the welcome's first page (the score, the light bar, planning, rating and learning, the tools); anyone can replay it from You, *How Tidelight works*. *What's new* (You) lists what changed in each update for testers, opens once after each update, and has *Try it* buttons. The welcome now matches the glass look, and the share card's buttons and figures are tidied.
 
 **6.11: Sky view.** Hold your phone up and the sun's path, the moon's path and phase, and the Milky Way (its band, the core, and the core's path through the night) are drawn over the camera, with the horizon and compass points. Scrub the time or pick a date and everything moves; chips jump to sunset, dark, moonrise, core rise and more. The compass is corrected for magnetic north around Australia and New Zealand, and *Calibrate* (point at the sun or moon, tap Set) fixes the rest. *Snapshot* shares the view with the paths drawn on. Open it from Tools, from a session's briefing (at that session's time), or from a moon planner line-up (*See it in Sky view*, at that time, pointing you to the moon). Without a camera or motion sensors it shows a drawn sky you drag to look around.
@@ -174,7 +176,7 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=6.13`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=6.14`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:
