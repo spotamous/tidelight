@@ -1,16 +1,16 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.11';
-import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, coastalCheck, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.11';
-import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.11';
-import { openSkyAR } from './skyar.js?v=6.11';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.11';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, DAY_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.11';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.11';
-import { gearFor } from './gear.js?v=6.11';
-import { VAPID_PUBLIC_KEY } from './config.js?v=6.11';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.11';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.11';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.12';
+import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, coastalCheck, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.12';
+import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.12';
+import { openSkyAR } from './skyar.js?v=6.12';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.12';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, DAY_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.12';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.12';
+import { gearFor } from './gear.js?v=6.12';
+import { VAPID_PUBLIC_KEY } from './config.js?v=6.12';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.12';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.12';
 
-export const APP_VERSION = '6.11';
+export const APP_VERSION = '6.12';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -338,7 +338,36 @@ function closeSheet() {
 
 /* ================= router ================= */
 
-function setTab(t) { if (t !== tab && t === 'you' && tab !== 'you') lastScreen = { forecast: 'Forecast', spots: 'Spots', plans: 'Plans', tools: 'Tools' }[tab] || 'You'; if (t !== tab) { tabChanged = true; homeAnimate = true; } if (t === 'forecast' && tab !== 'forecast') { homeDay = null; homeSel = null; } if (t === 'you') youPage = null; tab = t; closeSheet(); render(); window.scrollTo(0, 0); }
+// Switching tabs: the page slides the way you're moving along the tab bar, while the header and the
+// tab bar stay put. Each tab keeps where you'd scrolled to (the forecast always opens at the top).
+const TAB_ORDER = ['forecast', 'spots', 'plans', 'tools', 'you'];
+const tabScroll = {};
+let tabVT = null;
+function setTab(t) {
+  if (t === tab) {   // tapping the tab you're on: back to the top, like iOS
+    if (t === 'you' && youPage) { youPage = null; render(); window.scrollTo(0, 0); return; }
+    closeSheet(); window.scrollTo({ top: 0, behavior: motionOK() ? 'smooth' : 'auto' }); return;
+  }
+  if (t === 'you') lastScreen = { forecast: 'Forecast', spots: 'Spots', plans: 'Plans', tools: 'Tools' }[tab] || 'You';
+  homeAnimate = true;
+  if (t === 'forecast') { homeDay = null; homeSel = null; }
+  if (t === 'you') youPage = null;
+  tabScroll[tab] = window.scrollY;
+  const dir = TAB_ORDER.indexOf(t) > TAB_ORDER.indexOf(tab) ? 'fwd' : 'back';
+  const restore = () => window.scrollTo(0, t === 'forecast' ? 0 : (tabScroll[t] || 0));
+  const swap = () => { tab = t; closeSheet(); return render(); };
+  const html = document.documentElement;
+  if (document.startViewTransition && motionOK() && !tabVT) {
+    tabChanged = false;
+    html.dataset.tabdir = dir; html.classList.add('tab-vt');
+    // Hold the old picture only briefly: if a page is still loading, it slides in with its placeholder.
+    tabVT = document.startViewTransition(async () => { const p = swap(); await Promise.race([p, new Promise(r => setTimeout(r, 220))]); restore(); });
+    tabVT.finished.finally(() => { html.classList.remove('tab-vt'); delete html.dataset.tabdir; tabVT = null; });
+  } else {
+    tabChanged = true; html.dataset.tabdir = dir;
+    swap().finally?.(restore); restore();
+  }
+}
 
 function render() {
   if (map) { map.remove(); map = null; }
@@ -350,7 +379,7 @@ function render() {
   v.classList.remove('view-in');
   if (tabChanged) { void v.offsetWidth; v.classList.add('view-in'); tabChanged = false; }
   const shown = tab;
-  Promise.resolve()
+  return Promise.resolve()
     .then(() => ({ forecast: renderForecast, spots: renderSpots, plans: renderPlans, tools: renderTools, you: renderYou })[shown](v))
     .catch(err => {
       console.error(err);
@@ -3909,12 +3938,15 @@ async function shareCardBlob(e) {
   // facts
   const facts = [['Be there', fmtTime(e.t - ((e.type === 'sunrise' ? 30 : 15) * 60), o)], [cap(TYPE_NAME[e.type]), fmtTime(e.t, o)]];
   const h = e.hour || {};
-  facts.push(['Cloud', `${Math.round(h.high ?? 0)} / ${Math.round(h.mid ?? 0)} / ${Math.round(h.low ?? 0)}%`]);
+  facts.push(['Cloud', `${Math.round(h.high ?? 0)}/${Math.round(h.mid ?? 0)}/${Math.round(h.low ?? 0)}%`]);
   if (e.tide) facts.push(['Tide', `${Math.round(e.tide.pos * 100)}%, ${e.tide.rising ? 'rising' : 'falling'}`]);
   const cw = (W - 144) / facts.length;
   facts.forEach(([k, v], i) => {
     text(k.toUpperCase(), 72 + i * cw, P + 210, `700 24px ${SANS}`, '#9DA3A3');
-    text(v, 72 + i * cw, P + 262, `600 40px ${SANS}`, '#F4EFE7');
+    // shrink a value that would run into the next column
+    let px = facts.length > 3 ? 36 : 40; g.font = `600 ${px}px ${SANS}`;
+    while (g.measureText(v).width > cw - 18 && px > 24) { px -= 2; g.font = `600 ${px}px ${SANS}`; }
+    text(v, 72 + i * cw, P + 262, `600 ${px}px ${SANS}`, '#F4EFE7');
   });
   g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(72, P + 160, W - 144, 2);
   text('Cloud high / mid / low', 72, H - 96, `600 24px ${SANS}`, '#6F7576');
@@ -3934,7 +3966,7 @@ async function openShareCard(e) {
   $('#sheetBody').innerHTML = `<h2>Share card</h2>
     <p class="small muted">A picture of this session to send anyone, or post as a story.</p>
     <img class="share-card" src="${url}" alt="Share card: ${esc(e.spot.name)}, ${esc(TYPE_NAME[e.type].toLowerCase())} ${esc(fmtDay(e.t, e.offset).toLowerCase())}, score ${e.score}">
-    <div class="sheet-actions"><div class="row">${canShare ? '<button class="btn primary" id="scShare">Share</button>' : ''}<a class="btn ${canShare ? '' : 'primary'}" id="scSave" href="${url}" download="${name}">Save image</a><button class="btn ghost" id="scBack">Back</button></div></div>`;
+    <div class="sheet-actions sc-actions">${canShare ? '<button class="btn primary" id="scShare">Share</button>' : ''}<div class="row"><a class="btn ${canShare ? '' : 'primary'}" id="scSave" href="${url}" download="${name}">Save image</a><button class="btn" id="scBack">Back</button></div></div>`;
   if (canShare) $('#scShare').onclick = () => navigator.share({ files: [file], title: `${e.spot.name}, ${TYPE_NAME[e.type].toLowerCase()}` }).catch(() => {});
   $('#scBack').onclick = () => openEvent(e.key);
   onSheetClose = () => setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -4672,6 +4704,8 @@ function renderYou(v, logLines = []) {
 
     <h2 class="sec">Tidelight</h2>
     <div class="you-list">
+      <button class="you-row" id="youNews"><span class="you-text"><span class="you-title">What's new${hasNews() ? ' <span class="you-badge">New</span>' : ''}</span><span class="you-status">Version ${APP_VERSION}: what's changed for testers.</span></span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+      <button class="you-row" id="youTour"><span class="you-text"><span class="you-title">How Tidelight works</span><span class="you-status">A one-minute tour of the score, planning, learning and the tools.</span></span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
       ${row('feedback', 'Send feedback', 'Found a bug, or have an idea? Tell Tyson directly.')}
       <a class="you-row" href="https://tysonwaldron.com" target="_blank" rel="noopener">
         <span class="you-text"><span class="you-title">Visit tysonwaldron.com</span><span class="you-status">Prints, workshops and the field journal.</span></span>
@@ -4682,6 +4716,8 @@ function renderYou(v, logLines = []) {
     <button class="link-btn" id="replayWelcome">Show the welcome again</button>`;
   $('#replayWelcome').onclick = () => openWelcome();
   $$('[data-you]', v).forEach(b => b.onclick = () => { youPage = b.dataset.you; renderYou(v); window.scrollTo(0, 0); });
+  if ($('#youNews', v)) $('#youNews', v).onclick = () => openWhatsNew();
+  if ($('#youTour', v)) $('#youTour', v).onclick = () => openTour();
 }
 
 function pageProfile(v, logLines = []) {
@@ -5318,6 +5354,119 @@ function pageData(v) {
 }
 
 /* ================= first-run welcome ================= */
+/* ================= what's new ================= */
+// For testers: what changed in each update. Opens once after an update, and any time from You.
+const SEEN_VERSION = 'tidelight:seenVersion';
+const WHATS_NEW = [
+  { v: '6.12', date: '18 Nov', title: 'Smoother, with a guided tour', items: [
+    'Tabs slide in the direction you\'re moving, and each one remembers where you\'d scrolled to.',
+    'A quick tour of how Tidelight works, in the welcome and any time from You.',
+    'This What\'s new page.',
+  ], tryIt: ['tour', 'Take the tour'] },
+  { v: '6.11', date: '18 Nov', title: 'Sky view', items: [
+    'Hold your phone up to see the sun\'s path, the moon and its phase, and the Milky Way drawn over the camera.',
+    'Scrub the time or pick a date. Jump to sunset, dark, moonrise or when the core rises.',
+    'Calibrate on the sun or moon, and save a snapshot with the paths drawn on.',
+  ], tryIt: ['sky', 'Open Sky view'] },
+  { v: '6.10', date: '18 Nov', title: 'Tide windows, a spot\'s year, share cards', items: [
+    'Tide windows: when the tide is below or above the level you need this week, and which light sessions fall inside.',
+    'Through the year on every spot: when the sun lines up with your view, Milky Way season, foggy months, and your keepers.',
+    'Share card: a picture of any session to send or post.',
+  ], tryIt: ['tide', 'Open tide windows'] },
+  { v: '6.9', date: '18 Nov', title: 'Anywhere, and the moon planner', items: [
+    'Right here works for anywhere: search a place or pin it on the map to plan a trip.',
+    'Moon planner: when the full moon (or the sun) rises or sets right behind a landmark, over the next year.',
+  ], tryIt: ['moon', 'Open the moon planner'] },
+  { v: '6.8', date: '17 Nov', title: 'Daylight theme', items: [
+    'A bright theme for reading in the sun, or match your phone (You, Display).',
+    'Every score carries a go, maybe or skip mark.',
+    'Glass loading placeholders.',
+  ] },
+  { v: '6.7', date: '17 Nov', title: 'Pictures where there were blanks', items: [
+    'Briefings without a photo open on a horizon scene with the sun and cloud layers drawn in.',
+    'Spot tiles with an icon for what you shoot there, and initials avatars for your crew.',
+  ] },
+  { v: '6.6', date: '17 Nov', title: 'Liquid Glass', items: [
+    'A new look: a floating glass tab bar, glass buttons and sheets.',
+    'The week strip shows each day\'s weather as an icon.',
+  ] },
+  { v: '6.5', date: '16 Nov', title: 'Right here', items: ['Scores and the week\'s forecast for wherever you\'re standing, no spot needed.'] },
+  { v: '6.4', date: '16 Nov', title: 'Opens fast', items: ['The app opens straight away with your last forecast and refreshes in the background.'] },
+];
+const hasNews = () => localStorage.getItem(SEEN_VERSION) !== APP_VERSION;
+function markNewsSeen() { try { localStorage.setItem(SEEN_VERSION, APP_VERSION); } catch {} }
+function openWhatsNew() {
+  const seen = localStorage.getItem(SEEN_VERSION);
+  const newer = v => !seen || v.localeCompare(seen, undefined, { numeric: true }) > 0;
+  openSheet(`<p class="eyebrow here-eyebrow">For testers</p>
+    <h2>What's new</h2>
+    <p class="small muted">Version ${APP_VERSION}. Thanks for testing. Tell Tyson what works and what doesn't from You, Send feedback.</p>
+    <div class="wn-list">${WHATS_NEW.map((u, i) => `<details class="wn-item ${newer(u.v) ? 'new' : ''}" ${i === 0 || (newer(u.v) && i < 3) ? 'open' : ''}>
+      <summary><span class="wn-v num">${u.v}</span><span class="wn-t">${esc(u.title)}<small>${u.date}${newer(u.v) && seen ? ' · new since you last looked' : ''}</small></span></summary>
+      <ul>${u.items.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+      ${u.tryIt ? `<button class="tool-chip" data-try="${u.tryIt[0]}">${esc(u.tryIt[1])}</button>` : ''}
+    </details>`).join('')}</div>
+    <div class="sheet-actions"><div class="row"><button class="btn primary" id="wnDone">Got it</button><button class="btn" id="wnFeedback">Send feedback</button></div></div>`);
+  markNewsSeen();
+  $('#wnDone').onclick = () => closeSheet();
+  $('#wnFeedback').onclick = () => { closeSheet(); youPage = 'feedback'; setTab('you'); if (tab === 'you') { youPage = 'feedback'; render(); } };
+  $$('#sheetBody [data-try]').forEach(b => b.onclick = () => {
+    const k = b.dataset.try;
+    if (k === 'tour') return openTour();
+    closeSheet();
+    if (k === 'sky') openSkyAR({});
+    else if (k === 'tide') openTideWindows();
+    else if (k === 'moon') openAligner();
+  });
+  const badge = $('.you-badge'); if (badge) badge.remove();
+}
+
+/* ================= how Tidelight works: a five-card tour ================= */
+const TOUR = [
+  { k: 'score', title: 'One score for the light', text: 'Tidelight reads the whole sky for every session: low, mid and high cloud, the horizon the light has to come through, whether the weather models agree, rain, wind, fog and the tide. Then it gives you one score. Tap any score to see its working.' },
+  { k: 'band', title: 'Your days, drawn as light', text: 'Each day is drawn as its light, from dark to golden hour, with your sessions marked on it. The week strip shows the best of each day and its weather. Drag the light bar to read the cloud hour by hour.' },
+  { k: 'plan', title: 'Plan it, then go', text: 'Plan this shoot sets your alarm and leave time, builds a gear list, and opens field mode when you get there. Your crew sees your plans, and alerts tell you when the light lines up.' },
+  { k: 'learn', title: 'Rate it, and it learns', text: 'After a shoot, rate the light 0 to 10 and tap what made it or spoiled it. Tidelight tunes its scores to your taste and to each spot, so the more you rate, the sharper it gets.' },
+  { k: 'tools', title: 'Tools for the field', text: 'Right here scores wherever you\'re standing, or anywhere you pin. The moon planner, Sky view, tide windows and exposure tools help you nail the shot.' },
+];
+function tourVisual(k) {
+  const off = -new Date().getTimezoneOffset() * 60;
+  if (k === 'score') return `<div class="tv-score"><div class="tv-num"><b class="num">82</b><span>${toneDot(82)}Worth the alarm</span></div>
+    ${[['Cloud to catch colour', 92], ['Clear horizon', 86], ['Models agree', 78], ['Tide', 70]].map(([l, v]) => `<div class="tv-bar"><span>${l}</span><i style="--w:${v}%"></i></div>`).join('')}</div>`;
+  if (k === 'band') {
+    const b = lightBand(day3am(Date.now() / 1000, off), S().settings.home);
+    return `<div class="tv-band"><div class="band" style="background:${b.gradient}"></div>
+      <div class="tv-marks"><span style="left:13%">82</span><span style="left:63%">67</span></div>
+      <div class="band-ticks">${[['6am', 12.5], ['Noon', 37.5], ['6pm', 62.5]].map(([l, x]) => `<span class="band-tick" style="left:${x}%">${l}</span>`).join('')}</div></div>`;
+  }
+  if (k === 'plan') return `<ol class="tv-plan">${[['4:40am', 'Alarm'], ['5:10am', 'Leave home, 35 min drive'], ['5:52am', 'Blue hour'], ['6:20am', 'Sunrise', 1]].map(([t, l, key]) => `<li class="${key ? 'key' : ''}"><b class="num">${t}</b><span>${l}</span></li>`).join('')}</ol>
+    <div class="tv-chips"><span>Gear list</span><span>Field mode</span><span>${avatar('Sam', 20)}Crew</span></div>`;
+  if (k === 'learn') return `<div class="tv-learn"><div class="tv-card"><b class="num">46</b><small>Before your ratings</small></div><span class="tv-arrow" aria-hidden="true">→</span><div class="tv-card warm"><b class="num">81</b><small>Tuned to you</small></div></div>
+    <p class="tv-rated">You rated it <b>9/10</b> · <span>Great colour</span></p>`;
+  const tools = [['Right here', PIN_ICON], ['Moon planner', G('<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>')], ['Sky view', G('<path d="M3 17c4-9 14-9 18 0"/><circle cx="12" cy="9" r="1.6"/><path d="M6 6l.6 1.2M18 6l-.6 1.2"/>')],
+    ['Tide windows', G('<path d="M3 12c3-4 6-4 9 0s6 4 9 0"/><path d="M3 17c3-4 6-4 9 0s6 4 9 0" opacity=".6"/>')], ['Alerts', G('<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/>')], ['Share card', G('<rect x="5" y="3" width="14" height="18" rx="3"/><path d="M8 15l3-3 2 2 3-4"/>')]];
+  return `<div class="tv-tools">${tools.map(([l, ic]) => `<span>${ic}<small>${l}</small></span>`).join('')}</div>`;
+}
+// Standalone (from You or What's new), or as a step of the welcome.
+function openTour() {
+  closeSheet();
+  openWelcome({ tourOnly: true });
+}
+function tourHtml(i, inWelcome) {
+  const c = TOUR[i];
+  return `<div class="tour" data-tour="${i}">
+    <p class="eyebrow here-eyebrow">How Tidelight works · ${i + 1} of ${TOUR.length}</p>
+    <div class="tour-visual">${tourVisual(c.k)}</div>
+    <h1 class="page-title">${esc(c.title)}</h1>
+    <p class="page-lede">${esc(c.text)}</p>
+    <div class="tour-dots" aria-hidden="true">${TOUR.map((_, j) => `<i class="${j === i ? 'on' : ''}"></i>`).join('')}</div>
+    <div class="wl-actions">
+      <button class="btn primary" id="tourNext">${i < TOUR.length - 1 ? 'Next' : inWelcome ? 'Set up Tidelight' : 'Done'}</button>
+      ${i > 0 ? '<button class="btn" id="tourBack">Back</button>' : ''}
+    </div>
+  </div>`;
+}
+
 const WELCOMED = 'tidelight:welcomed';
 let welcome = null;   // { steps, i, picked, signedIn, returning }
 
@@ -5327,10 +5476,10 @@ function maybeWelcome() {
   if (localStorage.getItem(WELCOMED) || S().spots.length) return;
   openWelcome();
 }
-function openWelcome() {
+function openWelcome(opts = {}) {
   closeWelcome(false);
-  const steps = [...(isIosBrowser() ? ['install'] : []), 'intro', 'home', 'spot', ...(isConfigured() ? ['account'] : []), 'done'];
-  welcome = { steps, i: 0, picked: null, returning: false };
+  const steps = opts.tourOnly ? ['tour'] : [...(isIosBrowser() ? ['install'] : []), 'intro', 'tour', 'home', 'spot', ...(isConfigured() ? ['account'] : []), 'done'];
+  welcome = { steps, i: 0, picked: null, returning: false, tourI: 0, tourOnly: !!opts.tourOnly };
   const el = document.createElement('div');
   el.id = 'welcome';
   el.className = 'welcome';
@@ -5341,7 +5490,7 @@ function openWelcome() {
   drawWelcome();
 }
 function closeWelcome(done = true) {
-  if (done) localStorage.setItem(WELCOMED, '1');
+  if (done) { localStorage.setItem(WELCOMED, '1'); if (!welcome?.tourOnly) markNewsSeen(); }
   welcome = null;
   const el = $('#welcome');
   if (el) el.remove();
@@ -5359,11 +5508,11 @@ function drawWelcome() {
   const el = $('#welcome');
   if (!el || !welcome) return;
   const step = welcome.steps[welcome.i];
-  const numbered = welcome.steps.filter(x => !['install', 'intro', 'done'].includes(x));
+  const numbered = welcome.steps.filter(x => !['install', 'intro', 'tour', 'done'].includes(x));
   const n = numbered.indexOf(step);
   const top = `<div class="wl-top">
       <span class="wl-progress">${n >= 0 ? `Step ${n + 1} of ${numbered.length}` : ''}</span>
-      ${step !== 'done' ? '<button class="link-btn" id="wlSkipAll">Skip setup</button>' : ''}
+      ${welcome.tourOnly ? '<button class="link-btn" id="wlSkipAll">Close</button>' : step === 'tour' ? '<button class="link-btn" id="wlSkipTour">Skip the tour</button>' : step !== 'done' ? '<button class="link-btn" id="wlSkipAll">Skip setup</button>' : ''}
     </div>`;
   const results = id => `<div class="wl-results" id="${id}" hidden></div>`;
   const st = S();
@@ -5390,9 +5539,11 @@ function drawWelcome() {
       </figure>
       <p class="you-copy">Every day is drawn as its light, with your sessions marked on it. Setting up takes about a minute.</p>
       <div class="wl-actions">
-        <button class="btn primary" id="wlNext">Set up Tidelight</button>
+        <button class="btn primary" id="wlNext">Show me how it works</button>
         ${isConfigured() ? '<button class="btn" id="wlHave">I already have an account</button>' : ''}
       </div>`;
+  } else if (step === 'tour') {
+    el.innerHTML = `${top}${tourHtml(welcome.tourI, !welcome.tourOnly)}`;
   } else if (step === 'home') {
     el.innerHTML = `${top}
       <h1 class="page-title">Where do you set out from?</h1>
@@ -5462,7 +5613,23 @@ function drawWelcome() {
 
   // ----- wiring -----
   const on = (id, fn) => { const b = $(`#${id}`, el); if (b) b.onclick = fn; };
-  on('wlSkipAll', () => { closeWelcome(); render(); });
+  on('wlSkipAll', () => { closeWelcome(!welcome.tourOnly); if (!welcome) render(); });
+  on('wlSkipTour', () => welcomeGo(1));
+  if (step === 'tour') {
+    const go = d => {
+      const next = welcome.tourI + d;
+      if (next >= TOUR.length) { if (welcome.tourOnly) closeWelcome(false); else { welcome.tourI = 0; welcomeGo(1); } return; }
+      if (next < 0) return;
+      welcome.tourI = next; drawWelcome();
+    };
+    on('tourNext', () => go(1));
+    on('tourBack', () => go(-1));
+    // swipe between cards
+    const card = $('.tour', el);
+    let sx = null;
+    card.addEventListener('pointerdown', e => { sx = e.clientX; });
+    card.addEventListener('pointerup', e => { if (sx == null) return; const dx = e.clientX - sx; sx = null; if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1); });
+  }
   on('wlNext', () => welcomeGo(1));
   on('wlSkip', () => { if (step === 'account' && welcome.returning) { welcome.returning = false; welcomeGo('home'); } else welcomeGo(1); });
   on('wlHave', () => { welcome.returning = true; welcomeGo('account'); });
@@ -5655,6 +5822,8 @@ Promise.allSettled([loadAllPhotos(), restoreForecasts()]).finally(() => {
   backfillRatings();
   render();
   maybeWelcome();
+  // After an update, show testers what's new, once.
+  if (!$('#welcome') && hasNews()) setTimeout(() => { if (!$('#welcome') && $('#sheet').classList.contains('hidden') && !document.querySelector('.skyar')) openWhatsNew(); }, 1400);
   onPasswordRecovery(openRecoverySheet);
   initSync(() => {
     for (const k in forecasts) delete forecasts[k];

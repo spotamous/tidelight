@@ -1,7 +1,7 @@
 // Sky view: the live camera with the sun's path, the moon's path and phase, and the Milky Way drawn
 // over it, at any time you scrub to. Uses the camera, the motion sensors and the compass; without
 // them (a computer, or sensors refused) you drag to look around a drawn sky instead.
-import { esc, fmtTime, toast, getPosition, compass } from './util.js?v=6.11';
+import { esc, fmtTime, toast, getPosition, compass } from './util.js?v=6.12';
 
 const D2R = Math.PI / 180, R2D = 180 / Math.PI;
 const LENS_FOV = 67;                       // phone main camera, degrees across the long side of the frame
