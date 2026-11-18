@@ -1,16 +1,16 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.12';
-import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, coastalCheck, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.12';
-import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.12';
-import { openSkyAR } from './skyar.js?v=6.12';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.12';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, DAY_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.12';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.12';
-import { gearFor } from './gear.js?v=6.12';
-import { VAPID_PUBLIC_KEY } from './config.js?v=6.12';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.12';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.12';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.13';
+import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, coastalCheck, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.13';
+import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.13';
+import { openSkyAR } from './skyar.js?v=6.13';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.13';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, DAY_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.13';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.13';
+import { gearFor } from './gear.js?v=6.13';
+import { VAPID_PUBLIC_KEY } from './config.js?v=6.13';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.13';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.13';
 
-export const APP_VERSION = '6.12';
+export const APP_VERSION = '6.13';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -555,8 +555,20 @@ function runCounts(root) {
 // clouds hover and swell gently rather than drifting, so they never suggest cloud moving through the day.
 // Rain slots get a dark rain cloud with drops falling beneath (a denser layer for heavy rain); clear dark
 // hours get stars. Clouds dim after sunset, as real cloud does.
-function bandSky(e, w0, marks) {
-  const data = e && forecasts[e.spot.id];
+// A sample day for the welcome and the tour: high cloud at sunrise, cloud building, a mid-afternoon
+// shower, then clearing to a starry night. Same shape as a forecast's hours.
+function demoSkyDay(w0) {
+  const hours = [];
+  for (let h = 0; h <= 26; h++) {
+    const lh = (3 + h) % 24;   // the band starts at 3am
+    const sh = lh >= 14 && lh < 17;
+    const cover = lh < 5 ? 8 : lh < 9 ? 45 : lh < 14 ? 55 : sh ? 85 : lh < 19 ? 40 : lh < 21 ? 25 : 6;
+    hours.push({ t: w0 + h * 3600, total: cover, low: sh ? 70 : 10, mid: cover * 0.6, high: lh < 9 ? 45 : 20, pp: sh ? 75 : 5, precip: sh ? 1.1 : 0 });
+  }
+  return { hours };
+}
+function bandSky(e, w0, marks, sample) {
+  const data = sample || (e && forecasts[e.spot.id]);
   if (!data) return '';
   const cl = x => Math.max(0, Math.min(1, x));
   const at = t => { const i = nearestIndex(data.hours, t); return i >= 0 ? data.hours[i] : null; };
@@ -5358,6 +5370,10 @@ function pageData(v) {
 // For testers: what changed in each update. Opens once after an update, and any time from You.
 const SEEN_VERSION = 'tidelight:seenVersion';
 const WHATS_NEW = [
+  { v: '6.13', date: '18 Nov', title: 'Welcome touch-ups', items: [
+    'The light bar in the welcome and the tour now shows weather, the way it does on the Forecast page.',
+    'Crew avatars no longer get clipped.',
+  ], tryIt: ['tour', 'Take the tour'] },
   { v: '6.12', date: '18 Nov', title: 'Smoother, with a guided tour', items: [
     'Tabs slide in the direction you\'re moving, and each one remembers where you\'d scrolled to.',
     'A quick tour of how Tidelight works, in the welcome and any time from You.',
@@ -5429,14 +5445,21 @@ const TOUR = [
   { k: 'learn', title: 'Rate it, and it learns', text: 'After a shoot, rate the light 0 to 10 and tap what made it or spoiled it. Tidelight tunes its scores to your taste and to each spot, so the more you rate, the sharper it gets.' },
   { k: 'tools', title: 'Tools for the field', text: 'Right here scores wherever you\'re standing, or anywhere you pin. The moon planner, Sky view, tide windows and exposure tools help you nail the shot.' },
 ];
+// Two sessions on the sample day, marked the way the Forecast page marks them: at sunrise and sunset.
+function demoMarks(w0) {
+  const home = S().settings.home || { lat: -37.81, lon: 144.96 };
+  const T = window.SunCalc ? window.SunCalc.getTimes(new Date((w0 + 12 * 3600) * 1000), home.lat, home.lon) : {};
+  const pos = (d, fb) => (d instanceof Date && !isNaN(d) ? Math.max(4, Math.min(96, (d.getTime() / 1000 - w0) / 864)) : fb);
+  return [[pos(T.sunrise, 12.5), 82], [pos(T.sunset, 70), 67]].map(([x, sc]) => `<span class="band-mark demo" style="left:${x.toFixed(1)}%; --fill:${bandFill(sc)}; --ink:${bandInk(sc)}" aria-hidden="true">${sc}</span>`).join('');
+}
 function tourVisual(k) {
   const off = -new Date().getTimezoneOffset() * 60;
   if (k === 'score') return `<div class="tv-score"><div class="tv-num"><b class="num">82</b><span>${toneDot(82)}Worth the alarm</span></div>
     ${[['Cloud to catch colour', 92], ['Clear horizon', 86], ['Models agree', 78], ['Tide', 70]].map(([l, v]) => `<div class="tv-bar"><span>${l}</span><i style="--w:${v}%"></i></div>`).join('')}</div>`;
   if (k === 'band') {
-    const b = lightBand(day3am(Date.now() / 1000, off), S().settings.home);
-    return `<div class="tv-band"><div class="band" style="background:${b.gradient}"></div>
-      <div class="tv-marks"><span style="left:13%">82</span><span style="left:63%">67</span></div>
+    const w0 = day3am(Date.now() / 1000, off);
+    const b = lightBand(w0, S().settings.home);
+    return `<div class="tv-band"><div class="band" style="background:${b.gradient}">${bandSky(null, w0, b.marks, demoSkyDay(w0))}${demoMarks(w0)}</div>
       <div class="band-ticks">${[['6am', 12.5], ['Noon', 37.5], ['6pm', 62.5]].map(([l, x]) => `<span class="band-tick" style="left:${x}%">${l}</span>`).join('')}</div></div>`;
   }
   if (k === 'plan') return `<ol class="tv-plan">${[['4:40am', 'Alarm'], ['5:10am', 'Leave home, 35 min drive'], ['5:52am', 'Blue hour'], ['6:20am', 'Sunrise', 1]].map(([t, l, key]) => `<li class="${key ? 'key' : ''}"><b class="num">${t}</b><span>${l}</span></li>`).join('')}</ol>
@@ -5534,7 +5557,7 @@ function drawWelcome() {
       <h1 class="page-title wl-hero">Know before the alarm</h1>
       <p class="page-lede">Tidelight scores sunrise, sunset, daytime and night sessions at your own spots, tells you when to leave, and explains why.</p>
       <figure class="band-wrap wl-band">
-        <div class="band reveal" style="background:${b.gradient}" role="img" aria-label="A day's light from dark through blue hour, golden hour and daylight"></div>
+        <div class="band reveal" style="background:${b.gradient}" role="img" aria-label="A day's light from dark through blue hour, golden hour and daylight, with cloud, a shower and a starry night">${bandSky(null, day3am(Date.now() / 1000, offset), b.marks, demoSkyDay(day3am(Date.now() / 1000, offset)))}${demoMarks(day3am(Date.now() / 1000, offset))}</div>
         <div class="band-ticks" aria-hidden="true">${[['6am', 12.5], ['Noon', 37.5], ['6pm', 62.5], ['Midnight', 87.5]].map(([l, x]) => `<span class="band-tick" style="left:${x}%">${l}</span>`).join('')}</div>
       </figure>
       <p class="you-copy">Every day is drawn as its light, with your sessions marked on it. Setting up takes about a minute.</p>
