@@ -1,15 +1,15 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.8';
-import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, coastalCheck, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.8';
-import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.8';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.8';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, DAY_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.8';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.8';
-import { gearFor } from './gear.js?v=6.8';
-import { VAPID_PUBLIC_KEY } from './config.js?v=6.8';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.8';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.8';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.9';
+import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, coastalCheck, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.9';
+import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.9';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.9';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, DAY_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.9';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.9';
+import { gearFor } from './gear.js?v=6.9';
+import { VAPID_PUBLIC_KEY } from './config.js?v=6.9';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.9';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.9';
 
-export const APP_VERSION = '6.8';
+export const APP_VERSION = '6.9';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -1423,7 +1423,7 @@ function openEvent(key) {
       ${labModel(e) ? `<button class="tool-chip" data-lab="${esc(e.key)}">What if?</button>` : ''}
       ${currentUser() && crewState.crews.length && !e.spot.here ? '<button class="tool-chip" id="shareBtn">Share with crew</button>' : ''}
     </div>
-    ${e.spot.here ? '<p class="bf-note">Right here, not a saved spot. Times assume you\'re already here.</p>' : ''}
+    ${e.spot.here ? `<p class="bf-note">${e.spot.hereMode === 'place' ? 'Not a saved spot. Leave times are from home.' : 'Right here, not a saved spot. Times assume you\'re already here.'}</p>` : ''}
 
     <h3 class="sec">The plan</h3>
     <ol class="tline" style="--strip: linear-gradient(to bottom, ${stripStops})">
@@ -1450,7 +1450,7 @@ function openEvent(key) {
     <ul class="gear-preview">${gear.map(g => `<li><strong>${esc(g.label)}</strong><span>${esc(g.why)}</span></li>`).join('')}</ul>
     <p class="small muted">${e.spot.here ? 'Your always-bring items live under You, in My kit.' : 'Plan the shoot to tick these off as you pack. Your always-bring items live under You, in My kit.'}</p>
 
-    <div class="sheet-actions">${e.spot.here ? '<div class="row"><button class="btn primary" id="hereSave">Save as a spot</button><button class="btn" id="hereBack">Back to Right here</button></div>'
+    <div class="sheet-actions">${e.spot.here ? '<div class="row"><button class="btn primary" id="hereSave">Save as a spot</button><button class="btn" id="hereBack">Back</button></div>'
       : planned ? commitPanel(e) : `<button class="btn primary" data-plan="${esc(e.key)}">Plan this shoot</button>`}</div>
   `);
   runCounts($('#sheetBody'));
@@ -3217,10 +3217,11 @@ function closeField() {
 // Handy when travelling or on a random shoot. Nothing here touches your spots, plans or alerts.
 const PIN_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg>';
 const HERE_HUNTS = ['colour', 'fog', 'astro'];
-let here = null;   // { lat, lon, name, coastal, hunts, data, at, day, error }
+let here = null;   // { lat, lon, name, coastal, hunts, data, at, day, error, mode: 'gps' | 'place' }
+const hereIsPlace = () => here?.mode === 'place';
 
 function hereSpot() {
-  return { id: 'here', here: true, name: here.name ? `Near ${here.name}` : 'Right here', lat: here.lat, lon: here.lon,
+  return { id: 'here', here: true, hereMode: here.mode || 'gps', name: hereIsPlace() ? here.name || 'Pinned place' : here.name ? `Near ${here.name}` : 'Right here', lat: here.lat, lon: here.lon,
     hunts: here.hunts, events: ['sunrise', 'sunset'], coastal: here.coastal, tide: 'any', facing: '', fogMode: 'in', driveMin: '', notes: '', photos: [] };
 }
 // The sessions for the next 7 days, tagged with their day (0 today). Leave times assume you're already here.
@@ -3228,7 +3229,8 @@ function hereEvents() {
   const st = S();
   const now = Date.now() / 1000;
   const out = [];
-  for (const e of evaluateSpot(hereSpot(), here.data, st.keepers, { ...st.settings, home: null })) {
+  // Right here: you're already there. Somewhere else: leave times are worked out from home, like your spots.
+  for (const e of evaluateSpot(hereSpot(), here.data, st.keepers, hereIsPlace() ? st.settings : { ...st.settings, home: null })) {
     const k = dayKey(e.dayT ?? e.t, e.offset);
     for (let i = 0; i < 7; i++) if (dayKey(now + i * 86400, e.offset) === k) { out.push({ ...e, dayIdx: i }); break; }
   }
@@ -3244,20 +3246,40 @@ async function openHere() {
     if (!$('#sheetBody .here-eyebrow')) return;
     openSheet(`<p class="eyebrow here-eyebrow">${PIN_ICON}Right here</p><h2 class="bf-name">Couldn't find you</h2>
       <p>${esc(err.message)}</p><p class="small muted">On iPhone: Settings, Privacy & Security, Location Services, then allow it for Safari Websites (or Tidelight).</p>
-      <div class="sheet-actions"><button class="btn primary" id="hereRetry">Try again</button></div>`);
+      <div class="sheet-actions"><div class="row"><button class="btn primary" id="hereRetry">Try again</button><button class="btn" id="hereElse">Choose a place instead</button></div></div>`);
     $('#hereRetry').onclick = () => openHere();
+    $('#hereElse').onclick = () => chooseHerePlace();
     return;
   }
   if (!$('#sheetBody .here-eyebrow')) return;   // closed while we waited
   // Same place (within a kilometre) and fetched in the last half hour: reuse it.
-  if (here?.data && haversineKm(here, pos) < 1 && Date.now() - here.at < FORECAST_TTL) return drawHere();
+  if (here?.data && !hereIsPlace() && haversineKm(here, pos) < 1 && Date.now() - here.at < FORECAST_TTL) return drawHere();
   const hunts = here?.hunts || S().settings.hereHunts || HERE_HUNTS;
-  here = { lat: pos.lat, lon: pos.lon, name: null, coastal: false, hunts, data: null, at: 0, day: null };
+  here = { lat: pos.lat, lon: pos.lon, name: null, coastal: false, hunts, data: null, at: 0, day: null, mode: 'gps' };
   $('#sheetBody .sk-status') && ($('#sheetBody .sk-status').textContent = 'Reading the sky here…');
   const [name, coastal] = await Promise.all([placeName(pos.lat, pos.lon).catch(() => null), coastalCheck(pos.lat, pos.lon)]);
   Object.assign(here, { name, coastal });
   await loadHere();
 }
+// The same, for a place you search for or pin on the map: plan a trip before you go.
+async function openHereAt(place) {
+  const hunts = here?.hunts || S().settings.hereHunts || HERE_HUNTS;
+  here = { lat: place.lat, lon: place.lon, name: place.name || null, coastal: false, hunts, data: null, at: 0, day: null, mode: 'place' };
+  openSheet(`<p class="eyebrow here-eyebrow">${PIN_ICON}Anywhere</p><h2 class="bf-name">${esc(place.name || 'Pinned place')}</h2>${skeleton('here', 'Reading the sky there…')}`);
+  const [name, coastal] = await Promise.all([place.name ? Promise.resolve(place.name) : placeName(place.lat, place.lon).catch(() => null), coastalCheck(place.lat, place.lon)]);
+  Object.assign(here, { name, coastal });
+  await loadHere();
+}
+function chooseHerePlace() {
+  pickPlace({
+    title: 'Somewhere else',
+    note: "Search for a place or tap the map. You'll get its scores and week, with leave times from home.",
+    start: here ? { lat: here.lat, lon: here.lon } : S().settings.home,
+    onPick: openHereAt,
+    onBack: here?.data ? () => drawHere() : null,
+  });
+}
+
 async function loadHere() {
   try {
     here.data = await fetchSpotForecast(hereSpot());
@@ -3268,13 +3290,17 @@ async function loadHere() {
 
 function drawHere() {
   if (!here) return openHere();
-  const head = `<p class="eyebrow here-eyebrow">${PIN_ICON}Right here<span>Not a saved spot</span></p>
+  const away = hereIsPlace() && S().settings.home ? haversineKm(S().settings.home, here) : null;
+  const head = `<p class="eyebrow here-eyebrow">${PIN_ICON}${hereIsPlace() ? 'Anywhere' : 'Right here'}<span>Not a saved spot</span></p>
     <h2 class="bf-name">${esc(hereSpot().name)}</h2>
-    <p class="small muted here-where">${here.lat.toFixed(4)}, ${here.lon.toFixed(4)}. ${here.coastal ? 'On the coast, so tides and waves count.' : 'Inland.'} <button class="link-btn" id="hereAgain">Update location</button></p>`;
+    <p class="small muted here-where">${here.lat.toFixed(4)}, ${here.lon.toFixed(4)}${away != null ? `, ${away < 10 ? away.toFixed(1) : Math.round(away)} km from home` : ''}. ${here.coastal ? 'On the coast, so tides and waves count.' : 'Inland.'}</p>
+    <div class="here-switch"><button class="tool-chip" id="hereElse">Somewhere else</button><button class="tool-chip" id="hereAgain">${hereIsPlace() ? 'Use my location' : 'Update location'}</button></div>`;
   if (!here.data) {
     openSheet(`${head}<div class="alert danger"><p>Couldn't load the forecast here. ${esc(here.error || '')}</p></div>
       <div class="sheet-actions"><button class="btn primary" id="hereRetry">Try again</button></div>`);
     $('#hereRetry').onclick = () => { openSheet(`${head}${skeleton('here', 'Reading the sky here…')}`); loadHere(); };
+    $('#hereElse').onclick = () => chooseHerePlace();
+    $('#hereAgain').onclick = () => { here.mode = 'gps'; openHere(); };
     return;
   }
   const evs = hereEvents();
@@ -3312,7 +3338,7 @@ function drawHere() {
       <div class="chip-row">${HUNT_ORDER.map(k => `<button class="chip-btn ${here.hunts.includes(k) ? 'on' : ''}" data-hhunt="${k}" aria-pressed="${here.hunts.includes(k)}">${HUNT_LABEL[k]}</button>`).join('')}
         <button class="chip-btn ${here.coastal ? 'on' : ''}" data-hcoast aria-pressed="${here.coastal}">Coastal</button></div>
     </details>
-    <p class="small muted">General rules plus your keepers. It hasn't learned this place yet, and doesn't know which way you're facing, so the horizon is checked towards the sunrise and sunset.</p>
+    <p class="small muted">General rules plus your keepers. It hasn't learned this place yet, and doesn't know which way you're facing, so the horizon is checked towards the sunrise and sunset.${hereIsPlace() ? ' Leave times are from home.' : ''}</p>
     <div class="sheet-actions"><div class="row"><button class="btn primary" id="hereSave">Save as a spot</button><button class="btn" id="hereCompass">Compass</button></div></div>`);
   runCounts($('#sheetBody'));
   $$('#sheetBody [data-hday]').forEach(b => b.onclick = () => { here.day = Number(b.dataset.hday); const y = $('#sheetBody').scrollTop; drawHere(); $('#sheetBody').scrollTop = y; });
@@ -3328,7 +3354,8 @@ function drawHere() {
   $('#sheetBody [data-hcoast]').onclick = () => { here.coastal = !here.coastal; rescoreHere(here.coastal); };
   $('#hereSave').onclick = () => saveHere();
   $('#hereCompass').onclick = () => openCompassHere();
-  $('#hereAgain').onclick = () => { here.at = 0; here.day = null; openHere(); };
+  $('#hereAgain').onclick = () => { here.at = 0; here.day = null; here.mode = 'gps'; openHere(); };
+  $('#hereElse').onclick = () => chooseHerePlace();
 }
 // Re-score with the new choices. Day hunts (rainforest, waterfalls) and tides need extra data: fetch it.
 async function rescoreHere(refetch) {
@@ -3358,6 +3385,245 @@ function saveHere() {
     tab = 'spots'; render();
     openSpotDetail(id);
   };
+}
+
+/* ================= choose a place: search, or tap the map ================= */
+// One sheet for "where?" questions: Right here's Somewhere else, and the moon planner's stand and landmark.
+// opts: { title, note, start: {lat, lon}, onPick(place), onBack?, mark?: {lat, lon, label} }
+let pickMap = null;
+function pickPlace(opts) {
+  let chosen = null;
+  openSheet(`<h2>${esc(opts.title)}</h2>
+    ${opts.note ? `<p class="small muted">${esc(opts.note)}</p>` : ''}
+    <form class="pp-search" id="ppForm" role="search"><input id="ppQ" type="search" placeholder="Search a place, beach or lookout" autocomplete="off" enterkeyhint="search"><button class="btn" type="submit">Search</button></form>
+    <div class="pp-results" id="ppResults" hidden></div>
+    <div class="pp-map" id="ppMap" role="application" aria-label="Map. Tap to drop a pin."></div>
+    <p class="small muted pp-chosen" id="ppChosen" aria-live="polite">Tap the map to drop a pin, or search above.</p>
+    <div class="sheet-actions"><div class="row"><button class="btn primary" id="ppUse" disabled>Use this place</button>${opts.onBack ? '<button class="btn" id="ppBack">Back</button>' : ''}</div></div>`);
+  const start = opts.start || S().settings.home || { lat: -37.81, lon: 144.96 };
+  let pin = null;
+  const setChosen = (p, zoom) => {
+    chosen = p;
+    if (pickMap) {
+      if (pin) pin.setLatLng([p.lat, p.lon]); else pin = window.L.circleMarker([p.lat, p.lon], { radius: 9, color: '#0F1111', weight: 2, fillColor: '#D9A066', fillOpacity: 1 }).addTo(pickMap);
+      if (zoom) pickMap.setView([p.lat, p.lon], Math.max(pickMap.getZoom(), 12));
+    }
+    $('#ppChosen').textContent = `${p.name || 'Pinned place'}, ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`;
+    $('#ppUse').disabled = false;
+  };
+  if (window.L) {
+    pickMap = window.L.map('ppMap', { zoomControl: false, attributionControl: true }).setView([start.lat, start.lon], opts.start ? 12 : 9);
+    window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, className: 'base-tiles', attribution: '&copy; OpenStreetMap contributors' }).addTo(pickMap);
+    if (opts.mark) window.L.circleMarker([opts.mark.lat, opts.mark.lon], { radius: 6, color: '#ECE8E1', fillColor: '#ECE8E1', fillOpacity: 1 }).addTo(pickMap).bindTooltip(opts.mark.label || '', { permanent: !!opts.mark.label, direction: 'top' });
+    pickMap.on('click', ev => {
+      const p = { lat: ev.latlng.lat, lon: ev.latlng.lng, name: null };
+      setChosen(p);
+      placeName(p.lat, p.lon).then(n => { if (chosen === p && n) { p.name = n; setChosen(p); } }).catch(() => {});
+    });
+    setTimeout(() => pickMap && pickMap.invalidateSize(), 80);
+    onSheetClose = () => { if (pickMap) { pickMap.remove(); pickMap = null; } };
+  } else $('#ppMap').hidden = true;
+  $('#ppForm').onsubmit = async ev => {
+    ev.preventDefault();
+    const q = $('#ppQ').value.trim(), box = $('#ppResults');
+    if (q.length < 2) return;
+    box.hidden = false; box.innerHTML = '<p class="small muted">Searching…</p>';
+    let res = [];
+    try { res = await searchPlaces(q, S().settings.home); } catch { box.innerHTML = '<p class="small muted">Search isn\'t available right now. Tap the map instead.</p>'; return; }
+    if (!$('#ppResults')) return;
+    box.innerHTML = res.length ? res.slice(0, 6).map((r, i) => `<button type="button" class="result" data-pp="${i}"><span class="r-name">${esc(r.name)}</span><span class="r-detail">${esc(r.detail || '')}</span></button>`).join('')
+      : '<p class="small muted">Nothing found. Try a nearby town, or tap the map.</p>';
+    $$('[data-pp]', box).forEach(b => b.onclick = () => { box.hidden = true; setChosen(res[Number(b.dataset.pp)], true); });
+  };
+  $('#ppUse').onclick = () => { if (chosen) opts.onPick(chosen); };
+  if (opts.onBack) $('#ppBack').onclick = () => opts.onBack();
+}
+
+/* ================= moon planner ================= */
+// When does the moon (or the sun) rise or set right behind something: a lighthouse, an arch, a peak?
+// Stand somewhere, pick the landmark (or a direction), and it searches the next year, day by day.
+const AL_DAYS = 365;
+let al = null;   // { stand: {lat, lon, name, spotId}, target: {lat, lon, name}|null, bearing, body, events, full, tol, clear, open }
+const toDeg = r => r * 180 / Math.PI;
+function bearingTo(a, b) {
+  const f1 = a.lat * Math.PI / 180, f2 = b.lat * Math.PI / 180, dl = (b.lon - a.lon) * Math.PI / 180;
+  const y = Math.sin(dl) * Math.cos(f2), x = Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+const localOffset = t => -new Date(t * 1000).getTimezoneOffset() * 60;   // the phone's time zone, daylight saving included
+
+function alignState() {
+  if (al) return al;
+  const st = S();
+  const faced = st.spots.find(sp => sp.facing !== '' && sp.facing != null && !isNaN(Number(sp.facing)));
+  const first = faced || st.spots[0];
+  const stand = first ? { lat: first.lat, lon: first.lon, name: first.name, spotId: first.id } : st.settings.home ? { ...st.settings.home, name: 'Home' } : null;
+  al = { stand, target: null, bearing: faced ? Number(faced.facing) : 90, body: 'moon', events: 'both', full: true, tol: 2, clear: 0, open: null };
+  return al;
+}
+
+// Every rise or set in the next year that lines up with the bearing, within the tolerance.
+function findAlignments(a) {
+  const SC = window.SunCalc;
+  if (!SC || !a.stand) return [];
+  const { lat, lon } = a.stand;
+  const pos = a.body === 'moon' ? (d => SC.getMoonPosition(d, lat, lon)) : (d => SC.getPosition(d, lat, lon));
+  const out = [];
+  const day0 = new Date(); day0.setHours(12, 0, 0, 0);
+  for (let i = 0; i < AL_DAYS; i++) {
+    const day = new Date(day0.getTime() + i * 864e5);
+    let rise, set;
+    if (a.body === 'moon') { const m = SC.getMoonTimes(day, lat, lon); rise = m.rise; set = m.set; }
+    else { const tm = SC.getTimes(day, lat, lon); rise = tm.sunrise; set = tm.sunset; }
+    for (const [kind, t0] of [['rise', rise], ['set', set]]) {
+      if (a.events !== 'both' && a.events !== kind) continue;
+      if (!(t0 instanceof Date) || isNaN(t0)) continue;
+      let t = t0;
+      if (a.clear > 0) {
+        // When it clears hills or the landmark itself: walk forward from the rise (back from the set) in 2-minute steps.
+        let found = null;
+        for (let k = 0; k <= 120; k++) {
+          const d = new Date(t0.getTime() + (kind === 'rise' ? 1 : -1) * k * 120e3);
+          if (toDeg(pos(d).altitude) >= a.clear) { found = d; break; }
+        }
+        if (!found) continue;
+        t = found;
+      }
+      const az = (toDeg(pos(t).azimuth) + 180 + 360) % 360;
+      const off = ((az - a.bearing + 540) % 360) - 180;
+      if (Math.abs(off) > a.tol) continue;
+      const ill = a.body === 'moon' ? SC.getMoonIllumination(t) : null;
+      if (ill && a.full && ill.fraction < 0.85) continue;
+      const sunAlt = toDeg(SC.getPosition(t, lat, lon).altitude);
+      out.push({ t: t.getTime() / 1000, kind, az, off, ill, sunAlt });
+    }
+  }
+  return out;
+}
+// The light on the land when it happens: what makes a moonrise photo work is a lit landscape with the moon in it.
+function alignLight(r) {
+  const s = r.sunAlt;
+  if (s > 6) return { word: 'Daylight', note: 'bright sky, a faint moon', good: false };
+  if (s > 0) return { word: 'Golden hour', note: 'warm light on the land', good: true };
+  if (s > -6) return { word: 'Blue hour', note: 'the land still lit, the moon bright', good: true };
+  if (s > -12) return { word: 'Twilight', note: 'the moon bright, the land going dark', good: false };
+  return { word: 'Dark', note: 'a bright moon over a dark landscape', good: false };
+}
+function alignIcs(r, a) {
+  const stamp = d => new Date(d * 1000).toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+  const what = `${a.body === 'moon' ? 'Moon' : 'Sun'}${r.kind === 'rise' ? 'rise' : 'set'}${a.target?.name ? ` behind ${a.target.name}` : ''}`;
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Tidelight//Moon planner//EN', 'BEGIN:VEVENT',
+    `UID:${Math.round(r.t)}-${a.stand.lat.toFixed(3)}@tidelight`, `DTSTAMP:${stamp(Date.now() / 1000)}`,
+    `DTSTART:${stamp(r.t - 1800)}`, `DTEND:${stamp(r.t + 1800)}`,
+    `SUMMARY:${what}`, `LOCATION:${a.stand.name || ''} (${a.stand.lat.toFixed(5)}, ${a.stand.lon.toFixed(5)})`,
+    `DESCRIPTION:Stand at ${a.stand.lat.toFixed(5)}\\, ${a.stand.lon.toFixed(5)}. ${r.kind === 'rise' ? 'Rises' : 'Sets'} at ${r.az.toFixed(1)}°. Planned with Tidelight.`,
+    'BEGIN:VALARM', 'TRIGGER:-PT2H', 'ACTION:DISPLAY', `DESCRIPTION:${what} in 2 hours`, 'END:VALARM',
+    'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+}
+
+function openAligner() {
+  const a = alignState();
+  const st = S();
+  const spotOpts = st.spots.map(sp => `<option value="spot:${esc(sp.id)}" ${a.stand?.spotId === sp.id ? 'selected' : ''}>${esc(sp.name)}</option>`).join('');
+  const custom = a.stand && !a.stand.spotId;
+  const results = a.stand ? findAlignments(a) : [];
+  const dist = a.target && a.stand ? haversineKm(a.stand, a.target) : null;
+  const seg = (name, val, opts) => `<div class="day-pills al-seg" role="radiogroup" aria-label="${esc(name)}">${opts.map(([k, l]) => `<button type="button" role="radio" class="${a[val] === k ? 'on' : ''}" aria-checked="${a[val] === k}" data-al="${val}" data-v="${k}">${l}</button>`).join('')}</div>`;
+  const body = a.body === 'moon' ? 'moon' : 'sun';
+  const goodCount = results.filter(r => alignLight(r).good).length;
+  const row = (r, i) => {
+    const o = localOffset(r.t), L = alignLight(r);
+    const side = Math.abs(r.off) < 0.3 ? 'dead centre' : `${Math.abs(r.off).toFixed(1)}° ${r.off < 0 ? 'left' : 'right'}`;
+    return `<details class="al-row ${L.good ? 'good' : ''}" data-ai="${i}" ${a.open === i ? 'open' : ''}>
+      <summary>
+        <span class="al-icon" aria-hidden="true">${a.body === 'moon' ? moonSvg(r.ill.phase, a.stand.lat, 34) : '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#F2C27A" stroke-width="1.8" stroke-linecap="round"><path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0M12 9.5V8M7.6 11.6l-1.1-1.1M16.4 11.6l1.1-1.1"/></svg>'}</span>
+        <span class="al-main"><b>${fmtWeekday(r.t, o).slice(0, 3)} ${fmtDayDate(r.t, o).split(' ').slice(1).join(' ')} ${new Date(r.t * 1000).getFullYear()}</b>
+          <small>${cap(body)}${r.kind} ${fmtTime(r.t, o)}${r.ill ? `, ${Math.round(r.ill.fraction * 100)}% full` : ''}. ${side}</small></span>
+        <span class="al-light ${L.good ? 'good' : ''}">${L.word}</span>
+      </summary>
+      <div class="al-more">
+        <p class="small">${cap(body)} ${r.kind === 'rise' ? 'rises' : 'sets'} at <b>${r.az.toFixed(1)}°</b> ${compass(r.az)}${a.clear > 0 ? `, clearing ${a.clear}°` : ''}; you're lining up with ${a.bearing.toFixed(1)}°. ${a.body === 'moon' ? `The sun is ${Math.abs(r.sunAlt).toFixed(0)}° ${r.sunAlt >= 0 ? 'up' : 'down'}: ${L.note}.` : ''}</p>
+        ${r.t - Date.now() / 1000 < 6.5 * 86400 ? '<p class="small muted al-wx" data-wx="' + r.t + '">Checking the forecast…</p>' : '<p class="small muted">Inside a week out, the forecast for it shows here.</p>'}
+        <div class="row"><button class="btn" data-ics="${i}">Add to calendar</button></div>
+      </div>
+    </details>`;
+  };
+  openSheet(`<p class="eyebrow here-eyebrow"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>Moon planner</p>
+    <h2>Line it up</h2>
+    <p class="small muted">When the ${body} ${a.events === 'set' ? 'sets' : a.events === 'rise' ? 'rises' : 'rises or sets'} right behind a lighthouse, an arch or a peak. Searches the next 12 months.</p>
+
+    <h3 class="sec">Where you'll stand</h3>
+    <label class="al-field"><select id="alStand" aria-label="Where you'll stand">
+      ${spotOpts}<option value="here">My location</option><option value="pick" ${custom ? 'selected' : ''}>${custom ? esc(a.stand.name || 'Pinned place') : 'Search or pick on the map…'}</option>
+    </select></label>
+
+    <h3 class="sec">What you're lining up with</h3>
+    <div class="al-target">
+      ${a.target ? `<p class="al-t"><b>${esc(a.target.name || 'Pinned landmark')}</b><small>${dist < 10 ? dist.toFixed(1) : Math.round(dist)} km away, at ${a.bearing.toFixed(1)}° ${compass(a.bearing)}</small></p>` : `<p class="al-t"><b>${a.bearing.toFixed(0)}° ${compass(a.bearing)}</b><small>Pick the landmark on the map for an exact line.</small></p>`}
+      <button class="tool-chip" id="alPickT">${a.target ? 'Change landmark' : 'Pick the landmark'}</button>
+    </div>
+    <label class="al-slider">Direction <span class="num" id="alBearV">${a.bearing.toFixed(0)}°</span><input type="range" id="alBear" min="0" max="359" step="1" value="${Math.round(a.bearing)}" style="--val:${(a.bearing / 359 * 100).toFixed(1)}%" aria-label="Direction in degrees"></label>
+
+    <div class="al-opts">
+      ${seg('Moon or sun', 'body', [['moon', 'Moon'], ['sun', 'Sun']])}
+      ${seg('Rising or setting', 'events', [['both', 'Both'], ['rise', 'Rising'], ['set', 'Setting']])}
+      ${a.body === 'moon' ? `<div class="day-pills al-seg" role="radiogroup" aria-label="Phase"><button type="button" role="radio" class="${a.full ? 'on' : ''}" aria-checked="${a.full}" data-full="1">Full or nearly</button><button type="button" role="radio" class="${!a.full ? 'on' : ''}" aria-checked="${!a.full}" data-full="0">Any phase</button></div>` : ''}
+    </div>
+    <label class="al-slider">How close <span class="num" id="alTolV">within ${a.tol}°</span><input type="range" id="alTol" min="0.5" max="6" step="0.5" value="${a.tol}" style="--val:${((a.tol - 0.5) / 5.5 * 100).toFixed(1)}%"></label>
+    <label class="al-slider">Clears the horizon at <span class="num" id="alClearV">${a.clear ? `${a.clear}°` : 'the horizon'}</span><input type="range" id="alClear" min="0" max="8" step="0.5" value="${a.clear}" style="--val:${(a.clear / 8 * 100).toFixed(1)}%"><small>Raise this when hills, or the landmark itself, sit above the horizon. A finger at arm's length is about 1°.</small></label>
+
+    <h3 class="sec">${results.length ? `${results.length} line-up${results.length === 1 ? '' : 's'} in the next 12 months` : 'No line-ups in the next 12 months'}</h3>
+    ${results.length && a.body === 'moon' ? `<p class="small muted">${goodCount ? `${goodCount} in golden or blue hour, marked: the moon bright and the land still lit. ` : ''}Times are in your phone's time zone.</p>` : ''}
+    ${results.length ? `<div class="al-list">${results.map(row).join('')}</div>`
+      : `<p class="small muted">${a.stand ? `Try a wider "How close", ${a.body === 'moon' && a.full ? 'any phase, ' : ''}or check the direction: the ${body} only rises and sets within a band of directions through the year.` : 'Choose where you\'ll stand.'}</p>`}
+  `);
+  const redraw = () => { const y = $('#sheetBody').scrollTop; openAligner(); $('#sheetBody').scrollTop = y; };
+  $('#alStand').onchange = async e => {
+    const v = e.target.value;
+    if (v.startsWith('spot:')) { const sp = st.spots.find(x => x.id === v.slice(5)); a.stand = { lat: sp.lat, lon: sp.lon, name: sp.name, spotId: sp.id }; if (!a.target && sp.facing !== '' && sp.facing != null && !isNaN(Number(sp.facing))) a.bearing = Number(sp.facing); }
+    else if (v === 'here') { try { const p = await getPosition(); a.stand = { lat: p.lat, lon: p.lon, name: 'My location' }; } catch (err) { toast(err.message, 4000); } }
+    else return pickPlace({ title: "Where you'll stand", start: a.stand, onPick: p => { a.stand = { lat: p.lat, lon: p.lon, name: p.name || 'Pinned place' }; if (a.target) a.bearing = bearingTo(a.stand, a.target); a.open = null; openAligner(); }, onBack: () => openAligner() });
+    if (a.target) a.bearing = bearingTo(a.stand, a.target);
+    a.open = null; redraw();
+  };
+  $('#alPickT').onclick = () => pickPlace({
+    title: 'Pick the landmark', note: 'Tap the lighthouse, peak or rock you want the moon behind. The white dot is where you\'ll stand.',
+    start: a.target || a.stand, mark: a.stand ? { lat: a.stand.lat, lon: a.stand.lon, label: 'You' } : null,
+    onPick: p => { a.target = { lat: p.lat, lon: p.lon, name: p.name }; a.bearing = bearingTo(a.stand, a.target); a.open = null; openAligner(); },
+    onBack: () => openAligner(),
+  });
+  const live = (id, fmt, apply) => {
+    const el = $(id);
+    el.oninput = () => { $(id + 'V').textContent = fmt(Number(el.value)); el.style.setProperty('--val', `${((el.value - el.min) / (el.max - el.min) * 100).toFixed(1)}%`); };
+    el.onchange = () => { apply(Number(el.value)); a.open = null; redraw(); };
+  };
+  live('#alBear', v => `${v}°`, v => { a.bearing = v; a.target = null; });
+  live('#alTol', v => `within ${v}°`, v => { a.tol = v; });
+  live('#alClear', v => (v ? `${v}°` : 'the horizon'), v => { a.clear = v; });
+  $$('#sheetBody [data-al]').forEach(b => b.onclick = () => { a[b.dataset.al] = b.dataset.v; a.open = null; redraw(); });
+  $$('#sheetBody [data-full]').forEach(b => b.onclick = () => { a.full = b.dataset.full === '1'; a.open = null; redraw(); });
+  $$('#sheetBody [data-ics]').forEach(b => b.onclick = () => {
+    const r = results[Number(b.dataset.ics)];
+    downloadFile(`${a.body}${r.kind}-${new Date(r.t * 1000).toISOString().slice(0, 10)}.ics`, alignIcs(r, a), 'text/calendar');
+  });
+  // Forecast for line-ups in the next week, when they're opened.
+  $$('#sheetBody .al-row').forEach(d => d.addEventListener('toggle', async () => {
+    if (!d.open) return;
+    a.open = Number(d.dataset.ai);
+    const wx = d.querySelector('[data-wx]');
+    if (!wx || wx.dataset.done) return;
+    wx.dataset.done = '1';
+    try {
+      const sp = st.spots.find(x => x.id === a.stand.spotId) || { id: 'al', lat: a.stand.lat, lon: a.stand.lon, hunts: ['colour'], events: [], coastal: false, name: a.stand.name };
+      const data = forecasts[sp.id] || await fetchSpotForecast(sp);
+      const t = Number(wx.dataset.wx);
+      const hr = data.hours.reduce((b, h) => (Math.abs(h.t - t) < Math.abs(b.t - t) ? h : b), data.hours[0]);
+      const cover = Math.round(hr.total ?? Math.max(hr.low ?? 0, hr.mid ?? 0, hr.high ?? 0));
+      const verdict = (hr.low ?? 0) >= 60 ? 'Low cloud is likely to hide it.' : cover <= 30 ? 'Looking clear.' : (hr.low ?? 0) < 30 ? 'Some cloud, but the horizon looks open.' : 'Mixed: watch the low cloud.';
+      wx.innerHTML = `<b>Forecast:</b> low ${Math.round(hr.low ?? 0)}%, mid ${Math.round(hr.mid ?? 0)}%, high ${Math.round(hr.high ?? 0)}%. ${verdict}`;
+      wx.classList.remove('muted');
+    } catch { wx.textContent = "Couldn't load the forecast right now."; }
+  }));
 }
 
 /* ================= scout a spot ================= */
@@ -3964,7 +4230,8 @@ function renderTools(v) {
     <p class="page-lede">For when you're out there. These work without reception. Radar and the hourly forecast are under Now, at the top.</p>
     <div class="tool-list">
       ${nextPlan ? tool(`data-field="${esc(nextPlan.key)}"`, 'Field mode', `Countdowns and the sky for ${esc(nextPlan.spotName)}, your next plan.`) : ''}
-      ${tool('id="toolHere"', 'Right here', "Scores and the week's forecast for wherever you're standing, no spot needed.")}
+      ${tool('id="toolHere"', 'Right here, or anywhere', "Scores and the week's forecast for where you're standing, or anywhere you search or pin. No spot needed.")}
+      ${tool('id="toolAlign"', 'Moon planner', 'When the full moon (or the sun) rises or sets right behind a landmark, over the next year.')}
       ${tool('id="toolCompass"', 'Compass', "Where the sun rises and sets today, and where the sun, moon and Milky Way are now.")}
       ${tool('id="toolExposure"', 'Exposure', 'ND filter times with a countdown, the longest exposure for sharp stars, and hyperfocal distance.')}
       ${tool('id="toolDial"', 'Light dial', 'Drag around a 24-hour dial to see the light, the sun and the moon at any time.')}
@@ -3972,6 +4239,7 @@ function renderTools(v) {
     </div>
     ${!nextPlan ? '<p class="small muted tool-note">Field mode opens from any session. Plan a shoot and it appears here for the next one.</p>' : ''}`;
   $('#toolHere').onclick = () => openHere();
+  $('#toolAlign').onclick = () => openAligner();
   $('#toolCompass').onclick = () => openCompassHere();
   $('#toolDial').onclick = () => openLightDialHere();
   $('#toolExposure').onclick = () => openExposure();

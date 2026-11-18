@@ -6,7 +6,9 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 
 ## What it does
 
-**New in 6.8: daylight, and scores you can read at a glance.** A Daylight theme for reading in the sun (warm paper, dark text, white frosted glass), chosen in You, Display: Dark, Daylight, or Match my phone. Night vision in field mode stays red on black either way. Every score now carries the same go / maybe / skip mark: a filled dot for 75+, a ring for 50–74, a faint ring under 50, in the week strip, the session lists, briefings, plans and crew plans. Loading placeholders are glass with a slow sweep of light.
+**New in 6.9: anywhere, and the moon planner.** Right here now works for anywhere: tap *Somewhere else* to search a place or pin it on the map, and get its scores, week and briefings, with leave times from home, to plan a trip before you go. The **Moon planner** (Tools) finds when the moon (or the sun) rises or sets right behind a landmark over the next 12 months: choose where you'll stand (a spot, your location, or a pin), tap the landmark on the map (or set a direction), and pick full moons only or any phase, how close the line-up must be, and how high it has to clear hills. Each line-up shows the time, how full the moon is, how far off the line it is, and the light on the land then (golden or blue hour line-ups are marked), with the cloud forecast once it's within a week and *Add to calendar*.
+
+**6.8: daylight, and scores you can read at a glance.** A Daylight theme for reading in the sun (warm paper, dark text, white frosted glass), chosen in You, Display: Dark, Daylight, or Match my phone. Night vision in field mode stays red on black either way. Every score now carries the same go / maybe / skip mark: a filled dot for 75+, a ring for 50–74, a faint ring under 50, in the week strip, the session lists, briefings, plans and crew plans. Loading placeholders are glass with a slow sweep of light.
 
 **6.7: pictures where there were blanks.** Briefings for spots without a photo open on a small horizon scene for that session: the sun placed where it will be (relative to the way you face, when the spot knows it), high cloud as streaks, mid cloud as soft clouds that glow warm at sunrise and sunset, low cloud as a band on the horizon, stars on clear nights, rain and fog when they're forecast. Every briefing shows High, Mid and Low cloud for the session. Spots without a photo get a sky tile with an icon for what you shoot there instead of a letter. Crew members get initials avatars in a colour that's theirs everywhere: the crew list, who's going where, notes, shared spots, and on your own sessions when a mate is going too.
 
@@ -166,7 +168,7 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=6.8`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=6.9`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:
