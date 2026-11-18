@@ -1,15 +1,16 @@
-import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.10';
-import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, coastalCheck, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.10';
-import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.10';
-import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.10';
-import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, DAY_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.10';
-import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.10';
-import { gearFor } from './gear.js?v=6.10';
-import { VAPID_PUBLIC_KEY } from './config.js?v=6.10';
-import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.10';
-import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.10';
+import { getState, update, exportData, importData, resetAll } from './storage.js?v=6.11';
+import { fetchSpotForecast, fetchForecasts, restoreForecasts, savedForecast, FORECAST_TTL, coastalCheck, fetchHistorical, clearCache, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, placeName } from './api.js?v=6.11';
+import { RATING_TAGS, ratingScore, labelFor, spotFloor, tuningReport, colourRatings, CLEAN_FLOOR, baseScore, horizonBlock, driveMinutes, DIFFICULTIES, hikeMinutes, hikeIsEstimate, nearestIndex, tideInfo, evaluateSpot, featureVector, similarity, personalModelSummary, MIN_KEEPERS } from './scoring.js?v=6.11';
+import { openSkyAR } from './skyar.js?v=6.11';
+import { loadAllPhotos, photoUrl, coverUrl, addPhotoFile, deletePhotos, clearPhotos, exportPhotos, importPhotos } from './photos.js?v=6.11';
+import { HUNT_ORDER, HUNT_LABEL, HUNT_VERB, huntsOf, NIGHT_HUNTS, DAY_HUNTS, setKp, forestAt, waterfallAt, stormAt, coreAltAz } from './hunts.js?v=6.11';
+import { initSync, isConfigured, syncStatus, onSyncStatus, signInWithPassword, createAccount, signOut, syncNow, savePushSubscription, removePushSubscription, sendTestAlert, onPasswordRecovery, sendPasswordReset, setNewPassword, currentUser, myCrews, crewMembers, crewPlans, createCrew, joinCrew, leaveCrew, shareToCrew, unshareFromCrew, sendFeedback, myFeedback } from './sync.js?v=6.11';
+import { gearFor } from './gear.js?v=6.11';
+import { VAPID_PUBLIC_KEY } from './config.js?v=6.11';
+import { hasAI, testKey, aiBriefing, briefingContext, aiAnalyzeReference, aiResultToFeatures, readExif, resizeImage } from './ai.js?v=6.11';
+import { angleDiff, haversineKm, compass, esc, fmtTime, fmtDay, fmtDate, fmtDayDate, fmtWeekday, dayKey, cap, uid, toast, downloadFile, getPosition } from './util.js?v=6.11';
 
-export const APP_VERSION = '6.10';
+export const APP_VERSION = '6.11';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -1421,6 +1422,7 @@ function openEvent(key) {
       <button class="tool-chip" data-compass="${esc(e.key)}">Compass</button>
       <button class="tool-chip" data-dial="${esc(e.key)}">Light dial</button>
       ${labModel(e) ? `<button class="tool-chip" data-lab="${esc(e.key)}">What if?</button>` : ''}
+      <button class="tool-chip" id="skyBtn">Sky view</button>
       <button class="tool-chip" id="cardBtn">Share card</button>
       ${currentUser() && crewState.crews.length && !e.spot.here ? '<button class="tool-chip" id="shareBtn">Share with crew</button>' : ''}
     </div>
@@ -1458,6 +1460,7 @@ function openEvent(key) {
   wireTide(e);
   if (e.spot.here) { $('#hereBack').onclick = () => drawHere(); $('#hereSave').onclick = () => saveHere(); }
   $('#cardBtn').onclick = () => openShareCard(e);
+  $('#skyBtn').onclick = () => { closeSheet(); openSkyAR({ time: e.t, focus: e.type === 'night' || e.topHunt === 'astro' ? 'core' : 'sun' }); };
   const sb = $('#shareBtn');
   if (sb) sb.onclick = () => {
     if (!S().plans.some(p => p.key === e.key)) addPlan(e);
@@ -3550,7 +3553,7 @@ function openAligner() {
       <div class="al-more">
         <p class="small">${cap(body)} ${r.kind === 'rise' ? 'rises' : 'sets'} at <b>${r.az.toFixed(1)}°</b> ${compass(r.az)}${a.clear > 0 ? `, clearing ${a.clear}°` : ''}; you're lining up with ${a.bearing.toFixed(1)}°. ${a.body === 'moon' ? `The sun is ${Math.abs(r.sunAlt).toFixed(0)}° ${r.sunAlt >= 0 ? 'up' : 'down'}: ${L.note}.` : ''}</p>
         ${r.t - Date.now() / 1000 < 6.5 * 86400 ? '<p class="small muted al-wx" data-wx="' + r.t + '">Checking the forecast…</p>' : '<p class="small muted">Inside a week out, the forecast for it shows here.</p>'}
-        <div class="row"><button class="btn" data-ics="${i}">Add to calendar</button></div>
+        <div class="row"><button class="btn" data-ar="${i}">See it in Sky view</button><button class="btn" data-ics="${i}">Add to calendar</button></div>
       </div>
     </details>`;
   };
@@ -3608,6 +3611,10 @@ function openAligner() {
   live('#alClear', v => (v ? `${v}°` : 'the horizon'), v => { a.clear = v; });
   $$('#sheetBody [data-al]').forEach(b => b.onclick = () => { a[b.dataset.al] = b.dataset.v; a.open = null; redraw(); });
   $$('#sheetBody [data-full]').forEach(b => b.onclick = () => { a.full = b.dataset.full === '1'; a.open = null; redraw(); });
+  $$('#sheetBody [data-ar]').forEach(b => b.onclick = () => {
+    const r = results[Number(b.dataset.ar)];
+    openSkyAR({ time: r.t, focus: a.body === 'moon' ? 'moon' : 'sun' });   // uses where you're standing now
+  });
   $$('#sheetBody [data-ics]').forEach(b => b.onclick = () => {
     const r = results[Number(b.dataset.ics)];
     downloadFile(`${a.body}${r.kind}-${new Date(r.t * 1000).toISOString().slice(0, 10)}.ics`, alignIcs(r, a), 'text/calendar');
@@ -4538,6 +4545,7 @@ function renderTools(v) {
     <div class="tool-list">
       ${nextPlan ? tool(`data-field="${esc(nextPlan.key)}"`, 'Field mode', `Countdowns and the sky for ${esc(nextPlan.spotName)}, your next plan.`) : ''}
       ${tool('id="toolHere"', 'Right here, or anywhere', "Scores and the week's forecast for where you're standing, or anywhere you search or pin. No spot needed.")}
+      ${tool('id="toolSky"', 'Sky view', 'Hold your phone up to see where the sun, moon and Milky Way will be, drawn over the camera, at any time.')}
       ${tool('id="toolTide"', 'Tide windows', 'When the tide is below or above the level you need this week, and which light sessions fall inside.')}
       ${tool('id="toolAlign"', 'Moon planner', 'When the full moon (or the sun) rises or sets right behind a landmark, over the next year.')}
       ${tool('id="toolCompass"', 'Compass', "Where the sun rises and sets today, and where the sun, moon and Milky Way are now.")}
@@ -4549,6 +4557,7 @@ function renderTools(v) {
   $('#toolHere').onclick = () => openHere();
   $('#toolAlign').onclick = () => openAligner();
   $('#toolTide').onclick = () => openTideWindows();
+  $('#toolSky').onclick = () => openSkyAR({ autostart: false });
   $('#toolCompass').onclick = () => openCompassHere();
   $('#toolDial').onclick = () => openLightDialHere();
   $('#toolExposure').onclick = () => openExposure();

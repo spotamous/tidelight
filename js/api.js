@@ -1,6 +1,6 @@
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
-import { nearestIndex, tideInfo } from './scoring.js?v=6.10';
-import { huntsOf, DAY_HUNTS } from './hunts.js?v=6.10';
+import { nearestIndex, tideInfo } from './scoring.js?v=6.11';
+import { huntsOf, DAY_HUNTS } from './hunts.js?v=6.11';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
