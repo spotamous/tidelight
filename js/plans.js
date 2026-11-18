@@ -1,15 +1,17 @@
 // Tidelight: The Plans tab: upcoming, crew and history views, gear lists, alarms and rating a shoot.
-import { update } from './storage.js?v=7.0';
-import { uid, downloadFile, esc, fmtDay, fmtTime, fmtWeekday, cap, toast } from './util.js?v=7.0';
-import { gearFor } from './gear.js?v=7.0';
-import { currentUser, unshareFromCrew } from './sync.js?v=7.0';
-import { RATING_TAGS, ratingScore, featureVector, labelFor } from './scoring.js?v=7.0';
-import { fetchHistorical } from './api.js?v=7.0';
-import { crewPanel, crewState, loadCrew, openShareSheet, sessionKeyOf, wireCrewPanel } from './crews.js?v=7.0';
-import { $, $$, S, allEvents, briefing, chips, closeSheet, ensureForecasts, eventIndex, openSheet, sessionName, ui } from './core.js?v=7.0';
-import { TYPE_NAME, whyLine } from './forecast.js?v=7.0';
-import { untilText } from './field.js?v=7.0';
-import { render, setTab } from './app.js?v=7.0';
+import { update } from './storage.js?v=7.1';
+import { uid, downloadFile, esc, fmtDay, fmtTime, fmtWeekday, cap, toast } from './util.js?v=7.1';
+import { gearFor } from './gear.js?v=7.1';
+import { currentUser, unshareFromCrew } from './sync.js?v=7.1';
+import { RATING_TAGS, ratingScore, featureVector, labelFor } from './scoring.js?v=7.1';
+import { fetchHistorical } from './api.js?v=7.1';
+import { crewPanel, crewState, loadCrew, openShareSheet, sessionKeyOf, wireCrewPanel } from './crews.js?v=7.1';
+import { $, $$, S, allEvents, briefing, chips, closeSheet, ensureForecasts, eventIndex, openSheet, sessionName, ui } from './core.js?v=7.1';
+import { TYPE_NAME, whyLine } from './forecast.js?v=7.1';
+import { untilText } from './field.js?v=7.1';
+import { render, setTab } from './app.js?v=7.1';
+import { snap } from './records.js?v=7.1';
+import { accuracySummary, openQuickRate, openRecord, verdictMark, wireAccuracySummary } from './accuracy.js?v=7.1';
 
 /* ================= plans ================= */
 
@@ -21,6 +23,7 @@ export function addPlan(e) {
       type: e.type, t: e.t, dayT: e.dayT ?? null, leave: e.leave, offset: e.offset, score: e.score, hunt: e.topHunt,
       sessionKey: sessionKeyOf(e.spot.lat, e.spot.lon, e.type, e.t), features: e.features,
       brief: briefing(e), gear: gearFor(e, s.settings), packed: [], rating: null,
+      fc: snap(e),   // the forecast when you planned it, for the shoot record
     });
   });
 }
@@ -145,7 +148,7 @@ export async function renderPlans(v, refreshed = false) {
       <p class="small muted">Each rating teaches your personal score, and counts towards the hit rate under History.</p>
       ${toRate.map(p => `<div class="rate-row">
         <p class="rate-name">${esc(p.spotName)}<small>${esc(cap(planWhen(p)))}${p.score != null ? `, predicted ${p.score}` : ''}</small></p>
-        <div class="rate-btns"><button class="btn primary" data-rate-open="${p.id}">Rate the light</button></div></div>`).join('')}
+        <div class="rate-btns"><button class="btn primary" data-quick-open="${p.id}">Rate the light</button></div></div>`).join('')}
     </section>` : ''}
     ${next ? `<section class="next-up">
       <h2 class="nu-name">${esc(next.spotName)}</h2>
@@ -173,17 +176,17 @@ export async function renderPlans(v, refreshed = false) {
     </section>` : ''}`;
 
   const historyView = () => `
-    ${hitPanel(st)}
+    ${accuracySummary()}
     ${rated.length ? `<section><h3 class="sec">Rated sessions</h3>
       ${rated.slice(0, 40).map(p => {
         const tagNames = (p.tags || []).map(t => Object.values(RATING_TAGS).flat().find(([k]) => k === t)?.[1]).filter(Boolean);
-        return `<button class="hist-row hist-btn" data-rate-open="${p.id}" aria-label="Change the rating for ${esc(p.spotName)}">
+        return `<button class="hist-row hist-btn" data-rec-open="${p.id}" aria-label="What happened at ${esc(p.spotName)}">
         <span class="hist-name">${esc(p.spotName)}<small>${esc(cap(planWhen(p)))}${tagNames.length ? `. ${esc(tagNames.join(', '))}` : ''}</small></span>
         <span class="hist-score num" title="Predicted">${p.score ?? '–'}</span>
-        <span class="hist-rating ${p.rating}">${p.rating === 'skipped' ? label.skipped : `${ratingScore(p)}/10`}</span>
+        <span class="hist-rating ${p.rating}">${p.rating === 'skipped' ? label.skipped : `${ratingScore(p)}/10`}${verdictMark(p)}</span>
       </button>`;
       }).join('')}
-      <p class="small muted">The middle number is what the app predicted. Tap a session to change its rating.</p></section>` : '<p class="muted">No rated sessions yet. After a planned session passes, it appears under Upcoming to rate.</p>'}
+      <p class="small muted">The middle number is what Tidelight predicted. Tap a shoot to see what the weather actually did, or to change its rating.</p></section>` : '<p class="muted">No rated sessions yet. After a planned session passes, it appears under Upcoming to rate.</p>'}
     <div id="unplanned"></div>`;
 
   v.innerHTML = `
@@ -234,6 +237,9 @@ export async function renderPlans(v, refreshed = false) {
   $$('[data-gearbox]', v).forEach(d => d.ontoggle = () => { if (d.open) openGear.add(d.dataset.gearbox); else openGear.delete(d.dataset.gearbox); });
   $$('[data-item]', v).forEach(d => d.ontoggle = () => { const k = 'item:' + d.dataset.item; if (d.open) openGear.add(k); else openGear.delete(k); });
   $$('[data-rate-open]', v).forEach(b => b.onclick = () => openRating(b.dataset.rateOpen));
+  $$('[data-quick-open]', v).forEach(b => b.onclick = () => openQuickRate(b.dataset.quickOpen));
+  $$('[data-rec-open]', v).forEach(b => b.onclick = () => openRecord(b.dataset.recOpen));
+  wireAccuracySummary(v);
   if (ui.plansView === 'crew') {
     wireCrewPanel(v);
     if (currentUser() && !crewState.loaded) loadCrew().then(() => { if (ui.tab === 'plans' && ui.plansView === 'crew') renderPlans(v); });

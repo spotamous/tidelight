@@ -1,18 +1,20 @@
 // Tidelight: The You tab: light profile, account, alerts, settings, kit, data and feedback.
-import { syncStatus, syncNow, signOut, sendPasswordReset, createAccount, signInWithPassword, savePushSubscription, removePushSubscription, sendTestAlert, currentUser, sendFeedback, myFeedback } from './sync.js?v=7.0';
-import { esc, fmtDate, uid, toast, fmtDay, getPosition, cap, downloadFile } from './util.js?v=7.0';
-import { MIN_KEEPERS, spotFloor, personalModelSummary, featureVector, similarity, tuningReport, colourRatings, ratingScore } from './scoring.js?v=7.0';
-import { hasAI, readExif, resizeImage, aiAnalyzeReference, aiResultToFeatures, testKey } from './ai.js?v=7.0';
-import { APP_VERSION } from './version.js?v=7.0';
-import { update, exportData, importData, resetAll } from './storage.js?v=7.0';
-import { fetchHistorical } from './api.js?v=7.0';
-import { VAPID_PUBLIC_KEY } from './config.js?v=7.0';
-import { exportPhotos, importPhotos, clearPhotos } from './photos.js?v=7.0';
-import { $, $$, S, allEvents, ensureForecasts, eventRow, forecasts, ui } from './core.js?v=7.0';
-import { THEMES, applyMotion, applyTheme, next3Days } from './forecast.js?v=7.0';
-import { hasNews, openTour, openWelcome, openWhatsNew } from './welcome.js?v=7.0';
-import { openSpotDetail } from './spots.js?v=7.0';
-import { render, setTab } from './app.js?v=7.0';
+import { syncStatus, syncNow, signOut, sendPasswordReset, createAccount, signInWithPassword, savePushSubscription, removePushSubscription, sendTestAlert, currentUser, sendFeedback, myFeedback } from './sync.js?v=7.1';
+import { pageAccuracy } from './accuracy.js?v=7.1';
+import { accuracyReport } from './records.js?v=7.1';
+import { esc, fmtDate, uid, toast, fmtDay, getPosition, cap, downloadFile } from './util.js?v=7.1';
+import { MIN_KEEPERS, spotFloor, personalModelSummary, featureVector, similarity, tuningReport, colourRatings, ratingScore } from './scoring.js?v=7.1';
+import { hasAI, readExif, resizeImage, aiAnalyzeReference, aiResultToFeatures, testKey } from './ai.js?v=7.1';
+import { APP_VERSION } from './version.js?v=7.1';
+import { update, exportData, importData, resetAll } from './storage.js?v=7.1';
+import { fetchHistorical } from './api.js?v=7.1';
+import { VAPID_PUBLIC_KEY } from './config.js?v=7.1';
+import { exportPhotos, importPhotos, clearPhotos } from './photos.js?v=7.1';
+import { $, $$, S, allEvents, ensureForecasts, eventRow, forecasts, ui } from './core.js?v=7.1';
+import { THEMES, applyMotion, applyTheme, next3Days } from './forecast.js?v=7.1';
+import { hasNews, openTour, openWelcome, openWhatsNew } from './welcome.js?v=7.1';
+import { openSpotDetail } from './spots.js?v=7.1';
+import { render, setTab } from './app.js?v=7.1';
 
 /* ================= coach ================= */
 
@@ -28,7 +30,7 @@ export const youHead = (title, lede = '') => `<button class="link-btn back" id="
 export function renderYou(v, logLines = []) {
   const st = S(), s = st.settings;
   if (ui.youPage) {
-    ({ profile: pageProfile, recreate: pageRecreate, account: pageAccount, alerts: pageAlerts, home: pageHome, kit: pageKit, display: pageDisplay, ai: pageAI, data: pageData, feedback: pageFeedback, tuning: pageTuning })[ui.youPage](v, logLines);
+    ({ profile: pageProfile, recreate: pageRecreate, account: pageAccount, alerts: pageAlerts, home: pageHome, kit: pageKit, display: pageDisplay, ai: pageAI, data: pageData, feedback: pageFeedback, tuning: pageTuning, accuracy: pageAccuracy })[ui.youPage](v, logLines);
     const back = $('#youBack', v);
     if (back) back.onclick = () => { ui.youPage = null; renderYou(v); window.scrollTo(0, 0); };
     return;
@@ -48,6 +50,7 @@ export function renderYou(v, logLines = []) {
     <div class="you-list">
       ${row('profile', 'Light profile and keepers', good >= MIN_KEEPERS ? `${good} keepers. Your personal score is on.` : `${good} keeper${good === 1 ? '' : 's'}. Add ${MIN_KEEPERS - good} more to switch on your personal score.`)}
       ${row('tuning', 'Score tuning', s.tuning === false ? 'Off. Scores use the standard rules.' : (() => { const n = st.spots.filter(sp => spotFloor(sp, st.keepers, s).floor > 0.35).length; return n ? `Learning from your ratings. ${n} spot${n === 1 ? '' : 's'} adjusted.` : 'Learning from your ratings.'; })())}
+      ${row('accuracy', 'How accurate is Tidelight?', (() => { const r = accuracyReport(); return r.n >= 3 ? `Right ${r.right} times in ${r.n} rated shoots.` : 'Rate a few shoots to see.'; })())}
       ${row('recreate', 'Recreate a shot', 'Find upcoming sessions that match a photo.')}
     </div>
 
@@ -344,6 +347,7 @@ export async function renderAlerts() {
       <label class="check"><input type="checkbox" name="confident" ${a.confident !== false ? 'checked' : ''}> Skip colour alerts when the weather models disagree (fewer false alarms)</label>
       <label class="check"><input type="checkbox" name="crew" ${a.crew !== false ? 'checked' : ''}> Tell me when someone in my crew plans a shoot</label>
       <label class="check"><input type="checkbox" name="calledOff" ${a.calledOff ? 'checked' : ''}> Tell me if a session I was alerted about falls through</label>
+      <label class="check"><input type="checkbox" name="rate" ${a.rate !== false ? 'checked' : ''}> The morning after a planned shoot, ask how the light was (one tap to answer)</label>
       <label class="check"><input type="checkbox" name="digest" ${a.digest ? 'checked' : ''}> Weekly digest of the best 3 sessions, every
         <select name="digestDay" aria-label="Digest day">${DAYS.map((d, i) => opt(i, a.digestDay, d)).join('')}</select>
         at <select name="digestHour" aria-label="Digest time">${[7, 8, 12, 17, 18, 19, 20].map(h => opt(h, a.digestHour, hourLabel(h))).join('')}</select></label>
@@ -400,7 +404,7 @@ export async function renderAlerts() {
     update(s => {
       s.settings.alerts = {
         go: !!f.get('go'), threshold: parseInt(f.get('threshold'), 10),
-        calledOff: !!f.get('calledOff'), confident: !!f.get('confident'), crew: !!f.get('crew'),
+        calledOff: !!f.get('calledOff'), confident: !!f.get('confident'), crew: !!f.get('crew'), rate: !!f.get('rate'),
         digest: !!f.get('digest'), digestDay: parseInt(f.get('digestDay'), 10), digestHour: parseInt(f.get('digestHour'), 10),
         quietStart: qs < 0 ? 0 : qs, quietEnd: qs < 0 ? 0 : qe,
       };

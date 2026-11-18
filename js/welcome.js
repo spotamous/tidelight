@@ -1,23 +1,31 @@
 // Tidelight: First run and testers: What's new, the five-card tour and the welcome.
-import { APP_VERSION } from './version.js?v=7.0';
-import { esc, toast, getPosition, uid } from './util.js?v=7.0';
-import { openSkyAR } from './skyar.js?v=7.0';
-import { isConfigured, currentUser, createAccount, signInWithPassword, syncNow, joinCrew } from './sync.js?v=7.0';
-import { HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.0';
-import { searchPlaces, placeName } from './api.js?v=7.0';
-import { update } from './storage.js?v=7.0';
-import { $, $$, S, closeSheet, forecasts, openSheet, ui } from './core.js?v=7.0';
-import { render, setTab } from './app.js?v=7.0';
-import { openAligner, openTideWindows } from './planners.js?v=7.0';
-import { G, avatar, bandFill, bandInk, bandSky, day3am, demoSkyDay, lightBand, toneDot } from './forecast.js?v=7.0';
-import { PIN_ICON } from './here.js?v=7.0';
-import { loadCrew } from './crews.js?v=7.0';
+import { openAccuracy } from './accuracy.js?v=7.1';
+import { APP_VERSION } from './version.js?v=7.1';
+import { esc, toast, getPosition, uid } from './util.js?v=7.1';
+import { openSkyAR } from './skyar.js?v=7.1';
+import { isConfigured, currentUser, createAccount, signInWithPassword, syncNow, joinCrew } from './sync.js?v=7.1';
+import { HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.1';
+import { searchPlaces, placeName } from './api.js?v=7.1';
+import { update } from './storage.js?v=7.1';
+import { $, $$, S, closeSheet, forecasts, openSheet, ui } from './core.js?v=7.1';
+import { render, setTab } from './app.js?v=7.1';
+import { openAligner, openTideWindows } from './planners.js?v=7.1';
+import { G, avatar, bandFill, bandInk, bandSky, day3am, demoSkyDay, lightBand, toneDot } from './forecast.js?v=7.1';
+import { PIN_ICON } from './here.js?v=7.1';
+import { loadCrew } from './crews.js?v=7.1';
 
 /* ================= first-run welcome ================= */
 /* ================= what's new ================= */
 // For testers: what changed in each update. Opens once after an update, and any time from You.
 export const SEEN_VERSION = 'tidelight:seenVersion';
 export const WHATS_NEW = [
+  { v: '7.1', date: '19 Nov', title: 'How accurate is Tidelight?', items: [
+    'The morning after a planned shoot, Tidelight asks how the light was. One tap: Epic, Good, Okay or Flat (More detail still has the 0 to 10 slider).',
+    'Every shoot now keeps a record: the score when you planned, the last forecast, what the weather actually did, and your rating. Tap a shoot under Plans, History to see it.',
+    'Each miss is checked against the real weather, so you can see whether the forecast was off or the score was.',
+    'New in You: How accurate is Tidelight? How often it called it right, by kind of shoot, and whether your personal score is helping.',
+    'Turn the morning-after notification on or off in You, Alerts.',
+  ], tryIt: ['accuracy', 'See how accurate it is'] },
   { v: '7.0', date: '18 Nov', title: 'Under the hood', items: [
     'No new features this time: Tidelight has been reorganised and tested screen by screen, online, offline and on a slow connection.',
     'If something goes wrong on your phone, Tidelight now quietly tells Tyson what broke (just the error and the screen, never your spots or location), so you don\'t need to send screenshots.',
@@ -92,6 +100,7 @@ export function openWhatsNew() {
     if (k === 'sky') openSkyAR({});
     else if (k === 'tide') openTideWindows();
     else if (k === 'moon') openAligner();
+    else if (k === 'accuracy') openAccuracy();
   });
   const badge = $('.you-badge'); if (badge) badge.remove();
 }

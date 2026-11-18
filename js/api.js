@@ -1,6 +1,6 @@
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
-import { nearestIndex, tideInfo } from './scoring.js?v=7.0';
-import { huntsOf, DAY_HUNTS } from './hunts.js?v=7.0';
+import { nearestIndex, tideInfo } from './scoring.js?v=7.1';
+import { huntsOf, DAY_HUNTS } from './hunts.js?v=7.1';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
@@ -133,9 +133,8 @@ function destPoint(lat, lon, bearing, km) {
   return { lat: p2 * 180 / Math.PI, lon: ((l2 * 180 / Math.PI + 540) % 360) - 180 };
 }
 
-function horizonPoints(spot) {
+function horizonPoints(spot, now = new Date()) {
   if (!window.SunCalc) return null;
-  const now = new Date();
   const times = window.SunCalc.getTimes(now, spot.lat, spot.lon);
   const azAt = d => (window.SunCalc.getPosition(d, spot.lat, spot.lon).azimuth * 180 / Math.PI + 180 + 360) % 360;
   const ok = d => d instanceof Date && !isNaN(d);
@@ -154,10 +153,11 @@ function horizonFrom({ dirs, pts }, arr) {
   return out.sunrise.points.length || out.sunset.points.length ? out : null;
 }
 const HZ_PARAMS = { hourly: 'cloud_cover_low,cloud_cover_mid,cloud_cover_high', timezone: 'auto', timeformat: 'unixtime', forecast_days: 7, past_days: 2 };
-async function fetchHorizon(spot) {
-  const hp = horizonPoints(spot);
+async function fetchHorizon(spot, past = null) {
+  const hp = horizonPoints(spot, past ? new Date(past.t * 1000) : undefined);
   if (!hp) return null;
-  const j = await getJSON(`${FORECAST}?${qs({ latitude: hp.pts.map(p => p.lat.toFixed(3)).join(','), longitude: hp.pts.map(p => p.lon.toFixed(3)).join(','), ...HZ_PARAMS })}`, 10000);
+  const when = past ? { hourly: HZ_PARAMS.hourly, timezone: 'auto', timeformat: 'unixtime', ...past.range } : HZ_PARAMS;
+  const j = await getJSON(`${FORECAST}?${qs({ latitude: hp.pts.map(p => p.lat.toFixed(3)).join(','), longitude: hp.pts.map(p => p.lon.toFixed(3)).join(','), ...when })}`, 10000);
   return horizonFrom(hp, Array.isArray(j) ? j : [j]);
 }
 
@@ -472,4 +472,41 @@ export async function placeName(lat, lon) {
     const a = j.address || {};
     return a.suburb || a.town || a.village || a.city || a.hamlet || a.county || null;
   } catch { return null; }
+}
+
+/* ---------- what the weather actually did, for a shoot that's happened ---------- */
+// The forecast service also answers for past dates (about three months back) with its best record of
+// what happened. Same variables and the same normalised shape as a live forecast, so the app's own
+// scoring can be run on it: "what Tidelight would have said with the real weather".
+export const PAST_LIMIT_DAYS = 90;
+export async function fetchPast(spot, t) {
+  const ymd = sec => new Date(sec * 1000).toISOString().slice(0, 10);
+  const range = { start_date: ymd(t - 36 * 3600), end_date: ymd(t + 30 * 3600) };   // a margin either side, whatever the time zone
+  const common = { latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime', ...range };
+  let wx;
+  for (const hourly of HOURLY_SETS) {
+    try { wx = await getJSON(`${FORECAST}?${qs({ ...common, hourly, daily: 'sunrise,sunset' })}`); break; }
+    catch (e) { if (e instanceof SlowError || /connection/i.test(e.message)) throw e; }
+  }
+  if (!wx) {   // older than the forecast service keeps: the archive has the core variables
+    wx = await getJSON(`${ARCHIVE}?${qs({ ...common, hourly: 'cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,precipitation,wind_speed_10m,temperature_2m,relative_humidity_2m,dew_point_2m,weather_code', daily: 'sunrise,sunset' })}`)
+      .catch(() => null);
+  }
+  if (!wx) throw new Error('No weather records for that shoot');
+  const getMarine = async () => {
+    if (!spot.coastal) return null;
+    const mr = await getJSON(`${MARINE}?${qs({ ...common, hourly: 'wave_height,swell_wave_height,sea_level_height_msl' })}`, 10000);
+    return (mr.hourly?.wave_height || []).some(v => v != null) || (mr.hourly?.sea_level_height_msl || []).some(v => v != null) ? mr : null;
+  };
+  const getRainDaily = async () => {
+    if (!isDayHunter(spot)) return null;
+    const j = await getJSON(`${FORECAST}?${qs({ latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime', daily: 'precipitation_sum', start_date: ymd(t - 15 * 86400), end_date: range.end_date })}`);
+    return (j.daily?.time || []).map((tt, i) => ({ t: tt, mm: j.daily.precipitation_sum?.[i] ?? 0 }));
+  };
+  const [mr, hz, rd] = await Promise.allSettled([getMarine(), wantsColourOf(spot) ? fetchHorizon(spot, { t, range }) : null, getRainDaily()]);
+  const data = normalize(wx, mr.status === 'fulfilled' ? mr.value : null);
+  data.horizon = hz.status === 'fulfilled' ? hz.value : null;
+  data.models = null;   // no disagreement to weigh: this is what happened
+  data.rainDaily = rd.status === 'fulfilled' ? rd.value : null;
+  return data;
 }

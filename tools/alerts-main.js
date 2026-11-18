@@ -9,7 +9,7 @@ const { setKp, HUNT_LABEL, HUNT_VERB } = M_hunts;
 const { fetchSpotForecast, fetchKp, clearCache } = M_api;
 const { fmtTime, fmtDay } = M_util;
 
-const DEFAULT_ALERTS = { go: true, threshold: 80, confident: true, calledOff: true, crew: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 };
+const DEFAULT_ALERTS = { go: true, threshold: 80, confident: true, calledOff: true, crew: true, rate: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 };
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
@@ -73,7 +73,7 @@ async function checkUser(admin, uid) {
   if (!d || !d.spots?.length) return { sent: 0 };
   const prefs = { ...DEFAULT_ALERTS, ...(d.settings?.alerts || {}) };
   const settings = { driveSpeedKmh: 60, arriveBeforeMin: 30, ...(d.settings || {}) };
-  if (!prefs.go && !prefs.calledOff && !prefs.digest) return { sent: 0 };
+  if (!prefs.go && !prefs.calledOff && !prefs.digest && !prefs.rate) return { sent: 0 };
 
   if (d.spots.some(s => (s.hunts || []).includes('aurora'))) { try { setKp(await fetchKp()); } catch { setKp([]); } }
   const events = [];
@@ -130,6 +130,24 @@ async function checkUser(admin, uid) {
       tag: 'off-group', url: './',
     });
     off.forEach(({ e }) => toLog.push({ kind: 'off', key: e.key, score: e.score }));
+  }
+
+  // The morning after: how was the light? Sunrise and daytime shoots from two hours after, evening and
+  // night shoots from 7am the next day. Once per shoot, never in quiet hours; several waiting become one.
+  if (prefs.rate && !quiet && hour >= 7 && hour <= 20) {
+    const startOfDay = (t, off) => Math.floor((t + off) / 86400) * 86400 - off;
+    const due = (d.plans || []).filter(p => {
+      if (p.rating || !p.t || p.t < now - 30 * 3600 || done.has(`rate|${p.id}`)) return false;
+      if (p.type === 'sunrise' || p.type === 'day') return now >= p.t + 2 * 3600;
+      return now >= Math.max(p.t + 2 * 3600, startOfDay(p.t - 12 * 3600, p.offset || offset) + 86400 + 7 * 3600);
+    }).sort((a, b) => b.t - a.t);
+    if (due.length) {
+      const p = due[0], what = (p.type === 'sunrise' ? 'sunrise' : p.type === 'sunset' ? 'sunset' : p.type === 'night' ? 'night' : 'shoot');
+      toSend.push(due.length === 1
+        ? { title: `How was the light at ${p.spotName}?`, body: `${p.type === 'sunset' || p.type === 'night' ? 'Last night' : 'This morning'}'s ${what}${p.score != null ? ` scored ${p.score}` : ''}. Tap to rate it in one go.`, tag: `rate-${p.id}`, url: `./#rate-${p.id}` }
+        : { title: 'How was the light?', body: `${due.length} shoots to rate, starting with ${p.spotName}. One tap each.`, tag: 'rate-group', url: `./#rate-${p.id}` });
+      due.forEach(x => toLog.push({ kind: 'rate', key: x.id, score: x.score ?? null }));
+    }
   }
 
   // Weekly digest: the best 3 sessions in the next 3 days, on your chosen day and hour.

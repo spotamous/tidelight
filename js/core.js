@@ -1,12 +1,12 @@
 // Tidelight: Shared by every screen: screen state (ui), forecasts, the rule-based briefing, shared fragments and the sheet.
-import { getState } from './storage.js?v=7.0';
-import { clearCache, savedForecast, FORECAST_TTL, fetchKp, fetchForecasts } from './api.js?v=7.0';
-import { huntsOf, setKp, HUNT_VERB, HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.0';
-import { evaluateSpot, hikeMinutes, hikeIsEstimate } from './scoring.js?v=7.0';
-import { fmtDay, fmtTime, compass, esc, cap } from './util.js?v=7.0';
-import { huntPhrase, savedAgo, toneDot } from './forecast.js?v=7.0';
-import { fieldState } from './field.js?v=7.0';
-import { render } from './app.js?v=7.0';
+import { getState } from './storage.js?v=7.1';
+import { clearCache, savedForecast, FORECAST_TTL, fetchKp, fetchForecasts } from './api.js?v=7.1';
+import { huntsOf, setKp, HUNT_VERB, HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.1';
+import { evaluateSpot, hikeMinutes, hikeIsEstimate } from './scoring.js?v=7.1';
+import { fmtDay, fmtTime, compass, esc, cap } from './util.js?v=7.1';
+import { huntPhrase, savedAgo, toneDot } from './forecast.js?v=7.1';
+import { fieldState } from './field.js?v=7.1';
+import { render } from './app.js?v=7.1';
 
 export function $(sel, el = document) { return el.querySelector(sel); }
 export function $$(sel, el = document) { return [...el.querySelectorAll(sel)]; }
@@ -50,7 +50,7 @@ export async function loadForecasts(force = false) {
   if (missing.length) {
     const [{ out, failed: bad }] = await Promise.all([fetchForecasts(missing, { force, all: spots }), kp]);
     Object.assign(forecasts, out);
-    if (Object.keys(out).length) { try { localStorage.setItem('tidelight:lastFetch', String(Date.now())); } catch {} }
+    if (Object.keys(out).length) { try { localStorage.setItem('tidelight:lastFetch', String(Date.now())); } catch {} forecastsLanded(); }
     failed = bad.map(f => `${f.spot.name} (${f.error?.message || 'error'})`);
   }
   if (old.length) refreshInBackground(old);
@@ -59,6 +59,10 @@ export async function loadForecasts(force = false) {
 // Fresh forecasts for spots that are showing saved ones. Redraws the page you're on when they land,
 // unless you're in the middle of something (a sheet or field mode is open).
 export let bgRefresh = null;
+// Things that want to know when fresh forecasts arrive (shoot records note the latest score of upcoming plans).
+// (A function, not a const, so modules can register while the app is still loading.)
+export function freshHooks() { return freshHooks.list || (freshHooks.list = []); }
+export function forecastsLanded() { freshHooks().forEach(f => { try { f(); } catch (e) { console.error(e); } }); }
 export function refreshInBackground(spots) {
   if (bgRefresh || !navigator.onLine) return bgRefresh;
   document.body.classList.add('refreshing');
@@ -68,6 +72,7 @@ export function refreshInBackground(spots) {
       if (!Object.keys(out).length) return;
       Object.assign(forecasts, out);
       try { localStorage.setItem('tidelight:lastFetch', String(Date.now())); } catch {}
+      forecastsLanded();
       const busy = !$('#sheet').classList.contains('hidden') || fieldState;
       if (!busy && (ui.tab === 'forecast' || ui.tab === 'spots')) render();
     })

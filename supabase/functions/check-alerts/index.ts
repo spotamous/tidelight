@@ -1240,9 +1240,8 @@ function destPoint(lat, lon, bearing, km) {
   return { lat: p2 * 180 / Math.PI, lon: ((l2 * 180 / Math.PI + 540) % 360) - 180 };
 }
 
-function horizonPoints(spot) {
+function horizonPoints(spot, now = new Date()) {
   if (!window.SunCalc) return null;
-  const now = new Date();
   const times = window.SunCalc.getTimes(now, spot.lat, spot.lon);
   const azAt = d => (window.SunCalc.getPosition(d, spot.lat, spot.lon).azimuth * 180 / Math.PI + 180 + 360) % 360;
   const ok = d => d instanceof Date && !isNaN(d);
@@ -1261,10 +1260,11 @@ function horizonFrom({ dirs, pts }, arr) {
   return out.sunrise.points.length || out.sunset.points.length ? out : null;
 }
 const HZ_PARAMS = { hourly: 'cloud_cover_low,cloud_cover_mid,cloud_cover_high', timezone: 'auto', timeformat: 'unixtime', forecast_days: 7, past_days: 2 };
-async function fetchHorizon(spot) {
-  const hp = horizonPoints(spot);
+async function fetchHorizon(spot, past = null) {
+  const hp = horizonPoints(spot, past ? new Date(past.t * 1000) : undefined);
   if (!hp) return null;
-  const j = await getJSON(`${FORECAST}?${qs({ latitude: hp.pts.map(p => p.lat.toFixed(3)).join(','), longitude: hp.pts.map(p => p.lon.toFixed(3)).join(','), ...HZ_PARAMS })}`, 10000);
+  const when = past ? { hourly: HZ_PARAMS.hourly, timezone: 'auto', timeformat: 'unixtime', ...past.range } : HZ_PARAMS;
+  const j = await getJSON(`${FORECAST}?${qs({ latitude: hp.pts.map(p => p.lat.toFixed(3)).join(','), longitude: hp.pts.map(p => p.lon.toFixed(3)).join(','), ...when })}`, 10000);
   return horizonFrom(hp, Array.isArray(j) ? j : [j]);
 }
 
@@ -1581,7 +1581,44 @@ async function placeName(lat, lon) {
   } catch { return null; }
 }
 
-return { clearCache, restoreForecasts, savedForecast, FORECAST_TTL, fetchSpotForecast, fetchForecasts, fetchHistorical, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, coastalCheck, placeName };
+/* ---------- what the weather actually did, for a shoot that's happened ---------- */
+// The forecast service also answers for past dates (about three months back) with its best record of
+// what happened. Same variables and the same normalised shape as a live forecast, so the app's own
+// scoring can be run on it: "what Tidelight would have said with the real weather".
+const PAST_LIMIT_DAYS = 90;
+async function fetchPast(spot, t) {
+  const ymd = sec => new Date(sec * 1000).toISOString().slice(0, 10);
+  const range = { start_date: ymd(t - 36 * 3600), end_date: ymd(t + 30 * 3600) };   // a margin either side, whatever the time zone
+  const common = { latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime', ...range };
+  let wx;
+  for (const hourly of HOURLY_SETS) {
+    try { wx = await getJSON(`${FORECAST}?${qs({ ...common, hourly, daily: 'sunrise,sunset' })}`); break; }
+    catch (e) { if (e instanceof SlowError || /connection/i.test(e.message)) throw e; }
+  }
+  if (!wx) {   // older than the forecast service keeps: the archive has the core variables
+    wx = await getJSON(`${ARCHIVE}?${qs({ ...common, hourly: 'cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,precipitation,wind_speed_10m,temperature_2m,relative_humidity_2m,dew_point_2m,weather_code', daily: 'sunrise,sunset' })}`)
+      .catch(() => null);
+  }
+  if (!wx) throw new Error('No weather records for that shoot');
+  const getMarine = async () => {
+    if (!spot.coastal) return null;
+    const mr = await getJSON(`${MARINE}?${qs({ ...common, hourly: 'wave_height,swell_wave_height,sea_level_height_msl' })}`, 10000);
+    return (mr.hourly?.wave_height || []).some(v => v != null) || (mr.hourly?.sea_level_height_msl || []).some(v => v != null) ? mr : null;
+  };
+  const getRainDaily = async () => {
+    if (!isDayHunter(spot)) return null;
+    const j = await getJSON(`${FORECAST}?${qs({ latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime', daily: 'precipitation_sum', start_date: ymd(t - 15 * 86400), end_date: range.end_date })}`);
+    return (j.daily?.time || []).map((tt, i) => ({ t: tt, mm: j.daily.precipitation_sum?.[i] ?? 0 }));
+  };
+  const [mr, hz, rd] = await Promise.allSettled([getMarine(), wantsColourOf(spot) ? fetchHorizon(spot, { t, range }) : null, getRainDaily()]);
+  const data = normalize(wx, mr.status === 'fulfilled' ? mr.value : null);
+  data.horizon = hz.status === 'fulfilled' ? hz.value : null;
+  data.models = null;   // no disagreement to weigh: this is what happened
+  data.rainDaily = rd.status === 'fulfilled' ? rd.value : null;
+  return data;
+}
+
+return { clearCache, restoreForecasts, savedForecast, FORECAST_TTL, fetchSpotForecast, fetchForecasts, fetchHistorical, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, coastalCheck, placeName, PAST_LIMIT_DAYS, fetchPast };
 })();
 
 /* ===== Tidelight hourly alerts (Supabase Edge Function) =====
@@ -1595,7 +1632,7 @@ const { setKp, HUNT_LABEL, HUNT_VERB } = M_hunts;
 const { fetchSpotForecast, fetchKp, clearCache } = M_api;
 const { fmtTime, fmtDay } = M_util;
 
-const DEFAULT_ALERTS = { go: true, threshold: 80, confident: true, calledOff: true, crew: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 };
+const DEFAULT_ALERTS = { go: true, threshold: 80, confident: true, calledOff: true, crew: true, rate: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 };
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
@@ -1659,7 +1696,7 @@ async function checkUser(admin, uid) {
   if (!d || !d.spots?.length) return { sent: 0 };
   const prefs = { ...DEFAULT_ALERTS, ...(d.settings?.alerts || {}) };
   const settings = { driveSpeedKmh: 60, arriveBeforeMin: 30, ...(d.settings || {}) };
-  if (!prefs.go && !prefs.calledOff && !prefs.digest) return { sent: 0 };
+  if (!prefs.go && !prefs.calledOff && !prefs.digest && !prefs.rate) return { sent: 0 };
 
   if (d.spots.some(s => (s.hunts || []).includes('aurora'))) { try { setKp(await fetchKp()); } catch { setKp([]); } }
   const events = [];
@@ -1716,6 +1753,24 @@ async function checkUser(admin, uid) {
       tag: 'off-group', url: './',
     });
     off.forEach(({ e }) => toLog.push({ kind: 'off', key: e.key, score: e.score }));
+  }
+
+  // The morning after: how was the light? Sunrise and daytime shoots from two hours after, evening and
+  // night shoots from 7am the next day. Once per shoot, never in quiet hours; several waiting become one.
+  if (prefs.rate && !quiet && hour >= 7 && hour <= 20) {
+    const startOfDay = (t, off) => Math.floor((t + off) / 86400) * 86400 - off;
+    const due = (d.plans || []).filter(p => {
+      if (p.rating || !p.t || p.t < now - 30 * 3600 || done.has(`rate|${p.id}`)) return false;
+      if (p.type === 'sunrise' || p.type === 'day') return now >= p.t + 2 * 3600;
+      return now >= Math.max(p.t + 2 * 3600, startOfDay(p.t - 12 * 3600, p.offset || offset) + 86400 + 7 * 3600);
+    }).sort((a, b) => b.t - a.t);
+    if (due.length) {
+      const p = due[0], what = (p.type === 'sunrise' ? 'sunrise' : p.type === 'sunset' ? 'sunset' : p.type === 'night' ? 'night' : 'shoot');
+      toSend.push(due.length === 1
+        ? { title: `How was the light at ${p.spotName}?`, body: `${p.type === 'sunset' || p.type === 'night' ? 'Last night' : 'This morning'}'s ${what}${p.score != null ? ` scored ${p.score}` : ''}. Tap to rate it in one go.`, tag: `rate-${p.id}`, url: `./#rate-${p.id}` }
+        : { title: 'How was the light?', body: `${due.length} shoots to rate, starting with ${p.spotName}. One tap each.`, tag: 'rate-group', url: `./#rate-${p.id}` });
+      due.forEach(x => toLog.push({ kind: 'rate', key: x.id, score: x.score ?? null }));
+    }
   }
 
   // Weekly digest: the best 3 sessions in the next 3 days, on your chosen day and hour.

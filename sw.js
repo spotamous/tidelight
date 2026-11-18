@@ -3,7 +3,7 @@
 // - Forecast, tide and aurora data: network first, falling back to the last saved copy.
 // - Map tiles you've viewed are kept for offline use; live radar is never cached.
 // Bump VERSION with each release (matches APP_VERSION in js/version.js).
-const VERSION = '7.0';
+const VERSION = '7.1';
 const SHELL = `tidelight-shell-${VERSION}`;
 const DATA = 'tidelight-data';
 const TILES = 'tidelight-tiles';
@@ -12,7 +12,7 @@ const MAX_TILES = 600;
 // The whole app, saved as soon as an update installs, so it all works offline even if you never
 // reopened it on a connection. Add new js/ files here (the release check in README catches a missing one).
 const CODE = ['app', 'core', 'forecast', 'event', 'crews', 'plans', 'spots', 'field', 'here', 'planners', 'tools', 'you', 'welcome',
-  'report', 'version', 'skyar', 'api', 'scoring', 'hunts', 'storage', 'sync', 'photos', 'gear', 'ai', 'util', 'config'];
+  'records', 'accuracy', 'report', 'version', 'skyar', 'api', 'scoring', 'hunts', 'storage', 'sync', 'photos', 'gear', 'ai', 'util', 'config'];
 const STYLES = ['styles', 'glass', 'daylight'];
 const SHELL_FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon.svg', './icons/icon-180.png', './icons/icon-192.png',
   ...CODE.map(f => `./js/${f}.js?v=${VERSION}`), ...STYLES.map(f => `./css/${f}.css?v=${VERSION}`)];

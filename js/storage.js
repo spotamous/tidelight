@@ -16,7 +16,7 @@ const DEFAULTS = {
     crewAutoShare: true,      // Plans → Crew: share every new plan with your crews
     textSize: 'standard',     // You → Display (this device only, not synced)
     motion: 'full',           // You → Display: 'full' or 'reduced' (this device only)
-    alerts: { go: true, threshold: 80, confident: true, calledOff: true, crew: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 },
+    alerts: { go: true, threshold: 80, confident: true, calledOff: true, crew: true, rate: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 },
   },
   spots: [],                  // { id, name, lat, lon, events[], coastal, tide, driveMin, facing, notes }
   keepers: [],                // { id, label: keeper|dud, source, date(ms), lat, lon, spotName, features[], thumb }
