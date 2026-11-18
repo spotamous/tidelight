@@ -1,6 +1,6 @@
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
-import { nearestIndex, tideInfo } from './scoring.js?v=6.14';
-import { huntsOf, DAY_HUNTS } from './hunts.js?v=6.14';
+import { nearestIndex, tideInfo } from './scoring.js?v=7.0';
+import { huntsOf, DAY_HUNTS } from './hunts.js?v=7.0';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
@@ -462,7 +462,7 @@ export async function coastalCheck(lat, lon) {
   try {
     const j = await getJSON(`${MARINE}?${qs({ latitude: lat, longitude: lon, hourly: 'wave_height', forecast_days: 1, timezone: 'auto' })}`, 8000);
     return (j.hourly?.wave_height || []).some(v => v != null);
-  } catch { return false; }
+  } catch { return null; }   // couldn't ask (offline): unknown, not inland
 }
 
 // A short place name for a coordinate ("Cowes"), or null.

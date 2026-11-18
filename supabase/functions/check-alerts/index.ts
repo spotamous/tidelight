@@ -1569,7 +1569,7 @@ async function coastalCheck(lat, lon) {
   try {
     const j = await getJSON(`${MARINE}?${qs({ latitude: lat, longitude: lon, hourly: 'wave_height', forecast_days: 1, timezone: 'auto' })}`, 8000);
     return (j.hourly?.wave_height || []).some(v => v != null);
-  } catch { return false; }
+  } catch { return null; }   // couldn't ask (offline): unknown, not inland
 }
 
 // A short place name for a coordinate ("Cowes"), or null.

@@ -6,6 +6,8 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 
 ## What it does
 
+**New in 7.0: stability.** No new features: the app's code is split into focused files (one per tab or tool) so changes are safer; errors on testers' phones are reported to Supabase automatically; a failed update shows a *Couldn't start* screen with Reload instead of a blank page; the whole app is saved for offline use as soon as an update installs; every module is fetched in parallel, so opening is as quick as before; Right here no longer calls a place *Inland* just because it couldn't check offline; and a spot's fog history uses its last saved tally when offline.
+
 **New in 6.14: steadier Sky view.** On iPhone, Sky view learns the compass only while the camera is near the horizon, where iOS's heading is reliable, and ignores single-reading jumps; tipped well up toward the core or the moon it holds direction on the gyro instead of spinning. On Android it ignores the relative orientation stream once the absolute one is running.
 
 **New in 6.12: smoother, with a tour and What's new.** Tabs slide in the direction you're moving along the tab bar (the header and tab bar hold still), each tab remembers where you'd scrolled to, and tapping the tab you're on scrolls back to the top. New users get a five-card tour of how Tidelight works after the welcome's first page (the score, the light bar, planning, rating and learning, the tools); anyone can replay it from You, *How Tidelight works*. *What's new* (You) lists what changed in each update for testers, opens once after each update, and has *Try it* buttons. The welcome now matches the glass look, and the share card's buttons and figures are tidied.
@@ -176,13 +178,18 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=6.14`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` (two places) and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=7.0`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:
-1. `?v=` tags in `index.html` and in the `import` lines at the top of each file in `js/`
-2. `APP_VERSION` in `js/app.js`
+1. `?v=` tags in `index.html` (stylesheets, the module preloads and `app.js`) and in the `import` lines at the top of each file in `js/`
+2. `APP_VERSION` in `js/version.js`
 3. `VERSION` in `sw.js`
+
+If you add a new file to `js/`, also add it to the `CODE` list in `sw.js` (so it's saved for offline use) and a `modulepreload` line in `index.html`. **Upload every file in the zip**: if one is missing, the app shows a "Tidelight couldn't start" screen with a Reload button rather than a blank page, and reports which file.
+
+### Error reports
+When something breaks on a tester's phone, the app quietly sends the error to Supabase (table `app_errors`, set up by `supabase/errors.sql`): the message and where in the code, the version, the screen, and the phone type. Never emails, spots, plans or locations. Offline errors wait on the phone and send later. Read them in Supabase, Table editor, `app_errors`.
 
 ## Run it locally
 
@@ -250,7 +257,22 @@ Tune any of this in `js/scoring.js`. It's commented and self-contained.
 index.html            App shell, loads CDN libraries (Leaflet, SunCalc, exifr)
 manifest.webmanifest  Home-screen install
 css/styles.css        All styling, matched to tysonwaldron.com
-js/app.js             Views: forecast, spots, plans, coach, settings
+js/app.js             Entry point: the tab router and start-up
+js/core.js            Shared screen state (ui), forecasts, the rule-based briefing, the sheet
+js/forecast.js        Forecast tab: session card, score gauge, light band, week strip, pictures
+js/event.js           A session's full briefing
+js/crews.js           Crews, shared plans and spots
+js/plans.js           Plans tab: upcoming, crew, history, gear, rating
+js/spots.js           Spots tab: library, map, spot form
+js/field.js           Right now, field compass, phone heading, field mode
+js/here.js            Right here and Anywhere, the place picker
+js/planners.js        Moon planner, tide windows, through the year, share card
+js/tools.js           Tools tab: scouting, light dial, exposure, lightning timer, coach
+js/you.js             You tab: profile, account, alerts, settings, kit, data, feedback
+js/welcome.js         Welcome, tour and What's new
+js/skyar.js           Sky view
+js/report.js          Error reports
+js/version.js         APP_VERSION
 js/scoring.js         Colour score, tide analysis, personal model, event builder
 js/hunts.js           Fog, storm, lightning, rainbow, aurora and Milky Way scores
 js/api.js             Open-Meteo forecast, marine and archive calls
@@ -262,6 +284,7 @@ js/config.js          Supabase project URL and anon key
 supabase/schema.sql   Table, photo bucket and security rules to run in Supabase
 supabase/alerts.sql   Alert tables and the hourly schedule
 supabase/crews.sql    Crew tables, security rules and functions (already applied to your project)
+supabase/errors.sql   Error reports table (already applied to your project)
 supabase/email-templates/   Branded reset-password and confirm-signup emails
 js/gear.js            Gear checklists
 supabase/functions/check-alerts/index.ts   The hourly alerts function (generated)

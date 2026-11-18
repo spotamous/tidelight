@@ -8,6 +8,68 @@
   <meta name="theme-color" content="#0B0D12">
   <script>/* set the theme before anything paints, so daylight doesn't flash dark */
     try { var t = localStorage.getItem('tidelight:theme') || 'dark'; if (t === 'auto') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; document.documentElement.dataset.theme = t; } catch (e) {}</script>
+  <script>/* Catch errors from the very start. If the app can't start (say a file didn't finish updating),
+     show a way out instead of a blank screen, and report it. Once the app is running, js/report.js takes over. */
+    window.__tl = { errs: [], booted: false };
+    (function () {
+      var shown = false;
+      function rescue() {
+        if (window.__tl.booted || shown || !document.body) return;
+        shown = true;
+        var d = document.createElement('div');
+        d.className = 'boot-fail';
+        d.innerHTML = '<h1>Tidelight couldn’t start</h1><p>Usually a file didn’t finish updating. Your spots, plans and photos are safe on this phone.</p>' +
+          '<button id="bfReload">Reload</button><button id="bfClean">Clear the saved app and reload</button>' +
+          '<p class="bf-small">If it keeps happening, tell Tyson. This has been reported.</p>';
+        document.body.appendChild(d);
+        document.getElementById('bfReload').onclick = function () { location.reload(); };
+        document.getElementById('bfClean').onclick = function () {
+          // the app's code only; your data lives elsewhere and is kept
+          var jobs = [];
+          if (window.caches) jobs.push(caches.keys().then(function (k) { return Promise.all(k.filter(function (n) { return n.indexOf('tidelight-shell') === 0; }).map(function (n) { return caches.delete(n); })); }));
+          if (navigator.serviceWorker) jobs.push(navigator.serviceWorker.getRegistrations().then(function (r) { return Promise.all(r.map(function (x) { return x.unregister(); })); }));
+          Promise.all(jobs).then(function () { location.reload(); }, function () { location.reload(); });
+        };
+        send();
+      }
+      function send() {
+        // the app's own reporter never loaded, so post straight to Supabase with the public key
+        import('./js/config.js').then(function (c) {
+          if (!c.SUPABASE_URL || !c.SUPABASE_ANON_KEY) return;
+          var e = window.__tl.errs[0] || {};
+          return fetch(c.SUPABASE_URL + '/rest/v1/app_errors', { method: 'POST', headers: { apikey: c.SUPABASE_ANON_KEY, Authorization: 'Bearer ' + c.SUPABASE_ANON_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+            body: JSON.stringify({ kind: 'startup', message: String(e.message || 'Could not start').slice(0, 500), source: e.source ? String(e.source).slice(0, 200) : null, stack: e.stack ? String(e.stack).slice(0, 2000) : null,
+              screen: 'start-up', device: (navigator.userAgent.slice(0, 170) + ' | ' + innerWidth + 'x' + innerHeight).slice(0, 240) }) });
+        }).catch(function () {});
+      }
+      function soon() { setTimeout(rescue, 1500); }
+      addEventListener('error', function (e) {
+        if (window.__tl.booted) return;
+        var el = e.target;
+        if (el && el !== window) {
+          if (!/^(SCRIPT|LINK)$/.test(el.tagName)) return;   // a missing image isn't fatal
+          if (String(el.src || el.href).indexOf(location.origin) !== 0) return;   // a library or font on another site: offline, not a bug
+          window.__tl.errs.push({ kind: 'startup', message: 'Could not load ' + String(el.src || el.href).replace(location.origin, '') });
+          if (el.type === 'module') soon();
+          return;
+        }
+        window.__tl.errs.push({ kind: 'startup', message: String(e.message || 'error'), source: (e.filename || '').replace(location.origin, '') + ':' + (e.lineno || 0) + ':' + (e.colno || 0), stack: e.error && e.error.stack });
+        soon();
+      }, true);
+      addEventListener('unhandledrejection', function (e) {
+        if (window.__tl.booted) return;
+        var r = e.reason; window.__tl.errs.push({ kind: 'startup', message: String((r && r.message) || r), stack: r && r.stack });
+      });
+    })();</script>
+  <style>
+    .boot-fail { position: fixed; inset: 0; z-index: 9999; display: grid; place-content: center; gap: 12px; padding: 32px 24px; text-align: center;
+      background: #0F1111; color: #EDE8E1; font: 16px/1.5 -apple-system, system-ui, sans-serif; }
+    .boot-fail h1 { font-size: 1.4rem; margin: 0; }
+    .boot-fail p { margin: 0; color: #B9B2A8; max-width: 32ch; justify-self: center; }
+    .boot-fail button { justify-self: center; min-width: 240px; padding: 12px 20px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.08); color: inherit; font: 600 1rem system-ui, sans-serif; }
+    .boot-fail #bfReload { background: #D9A066; color: #1B1209; border-color: transparent; }
+    .boot-fail .bf-small { font-size: .85rem; }
+  </style>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Tidelight">
@@ -19,9 +81,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="stylesheet" href="css/styles.css?v=6.14">
-  <link rel="stylesheet" href="css/glass.css?v=6.14">
-  <link rel="stylesheet" href="css/daylight.css?v=6.14">
+  <link rel="stylesheet" href="css/styles.css?v=7.0">
+  <link rel="stylesheet" href="css/glass.css?v=7.0">
+  <link rel="stylesheet" href="css/daylight.css?v=7.0">
 </head>
 <body>
   <header class="topbar">
@@ -80,6 +142,32 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-  <script type="module" src="js/app.js?v=6.14"></script>
+  <!-- fetch every module at once rather than discovering them one import at a time -->
+  <link rel="modulepreload" href="js/core.js?v=7.0">
+  <link rel="modulepreload" href="js/forecast.js?v=7.0">
+  <link rel="modulepreload" href="js/event.js?v=7.0">
+  <link rel="modulepreload" href="js/crews.js?v=7.0">
+  <link rel="modulepreload" href="js/plans.js?v=7.0">
+  <link rel="modulepreload" href="js/spots.js?v=7.0">
+  <link rel="modulepreload" href="js/field.js?v=7.0">
+  <link rel="modulepreload" href="js/here.js?v=7.0">
+  <link rel="modulepreload" href="js/planners.js?v=7.0">
+  <link rel="modulepreload" href="js/tools.js?v=7.0">
+  <link rel="modulepreload" href="js/you.js?v=7.0">
+  <link rel="modulepreload" href="js/welcome.js?v=7.0">
+  <link rel="modulepreload" href="js/report.js?v=7.0">
+  <link rel="modulepreload" href="js/version.js?v=7.0">
+  <link rel="modulepreload" href="js/skyar.js?v=7.0">
+  <link rel="modulepreload" href="js/api.js?v=7.0">
+  <link rel="modulepreload" href="js/scoring.js?v=7.0">
+  <link rel="modulepreload" href="js/hunts.js?v=7.0">
+  <link rel="modulepreload" href="js/storage.js?v=7.0">
+  <link rel="modulepreload" href="js/sync.js?v=7.0">
+  <link rel="modulepreload" href="js/photos.js?v=7.0">
+  <link rel="modulepreload" href="js/gear.js?v=7.0">
+  <link rel="modulepreload" href="js/ai.js?v=7.0">
+  <link rel="modulepreload" href="js/util.js?v=7.0">
+  <link rel="modulepreload" href="js/config.js?v=7.0">
+  <script type="module" src="js/app.js?v=7.0"></script>
 </body>
 </html>

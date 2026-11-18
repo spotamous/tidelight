@@ -2,9 +2,9 @@
 // Local-first: the app always works from this device's copy. When signed in, it merges with your
 // private copy in Supabase record by record (newest change wins, deletions are remembered), then
 // uploads the result. Spot photos sync through a private storage bucket. The Claude key never syncs.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=6.14';
-import { getState, applyMerged, onLocalChange, COLLECTIONS, syncedSettings } from './storage.js?v=6.14';
-import { getPhotoBlob, putPhotoBlob, hasPhoto } from './photos.js?v=6.14';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=7.0';
+import { getState, applyMerged, onLocalChange, COLLECTIONS, syncedSettings } from './storage.js?v=7.0';
+import { getPhotoBlob, putPhotoBlob, hasPhoto } from './photos.js?v=7.0';
 
 const TABLE = 'user_state';
 const BUCKET = 'photos';
@@ -344,4 +344,12 @@ export async function myFeedback() {
   const { data, error } = await client.from('feedback').select('kind, message, created_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(10);
   if (error) throw new Error(error.message);
   return data || [];
+}
+
+// An error report from js/report.js. Works signed in or out; false when Supabase isn't ready yet.
+export async function reportError(row) {
+  if (!client) return false;
+  const { error } = await client.from('app_errors').insert({ ...row, user_id: session?.user?.id || null });
+  if (error) throw new Error(error.message);
+  return true;
 }
