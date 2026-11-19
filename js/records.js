@@ -1,10 +1,10 @@
 // Tidelight: shoot records. For every planned shoot: what was forecast when you planned it, the last
 // forecast before it, what the weather actually did, and how Tidelight's call compared with your rating.
 // This is what lets the score be checked (and improved) against real shoots rather than guesswork.
-import { update } from './storage.js?v=7.1';
-import { fetchPast, PAST_LIMIT_DAYS } from './api.js?v=7.1';
-import { evaluateSpot, ratingScore, labelFor } from './scoring.js?v=7.1';
-import { S, allEvents, freshHooks } from './core.js?v=7.1';
+import { update } from './storage.js?v=7.1.1';
+import { fetchPast, PAST_LIMIT_DAYS } from './api.js?v=7.1.1';
+import { evaluateSpot, ratingScore, labelFor } from './scoring.js?v=7.1.1';
+import { S, allEvents, freshHooks } from './core.js?v=7.1.1';
 
 /* ---------- the calls ---------- */
 // The same cut-offs as everywhere else: Go 75+, Maybe 50 to 74, Skip under 50; and for your rating,

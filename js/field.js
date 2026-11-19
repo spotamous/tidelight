@@ -1,13 +1,15 @@
 // Tidelight: In the field: right now, the field compass, phone heading, sun line-ups with a view, and field mode.
-import { fmtTime, dayKey, fmtDay, esc, getPosition, haversineKm, toast, compass, angleDiff, cap } from './util.js?v=7.1';
-import { WEATHER_TEXT, placeName, fetchHourly, searchPlaces, fetchCurrent, fetchRadarFrames } from './api.js?v=7.1';
-import { nearestIndex, tideInfo } from './scoring.js?v=7.1';
-import { coverUrl } from './photos.js?v=7.1';
-import { HUNT_LABEL } from './hunts.js?v=7.1';
-import { $, $$, BEHIND_SHEET, S, closeSheet, eventIndex, forecasts, openSheet, sessionName, ui } from './core.js?v=7.1';
-import { TYPE_NAME, spotTile } from './forecast.js?v=7.1';
-import { syncAgo } from './you.js?v=7.1';
-import { openExposure } from './tools.js?v=7.1';
+import { fmtTime, dayKey, fmtDay, esc, getPosition, haversineKm, toast, compass, angleDiff, cap } from './util.js?v=7.1.1';
+import { WEATHER_TEXT, placeName, fetchHourly, searchPlaces, fetchCurrent, fetchRadarFrames } from './api.js?v=7.1.1';
+import { nearestIndex, tideInfo } from './scoring.js?v=7.1.1';
+import { coverUrl } from './photos.js?v=7.1.1';
+import { HUNT_LABEL } from './hunts.js?v=7.1.1';
+import { $, $$, BEHIND_SHEET, S, closeSheet, eventIndex, forecasts, openSheet, sessionName, ui } from './core.js?v=7.1.1';
+import { TYPE_NAME, spotTile } from './forecast.js?v=7.1.1';
+import { syncAgo } from './you.js?v=7.1.1';
+import { openExposure } from './tools.js?v=7.1.1';
+import { QUICK, dueToAsk, markAsked, openQuickRate } from './accuracy.js?v=7.1.1';
+import { ratePlan } from './plans.js?v=7.1.1';
 
 /* ================= right now ================= */
 
@@ -514,15 +516,37 @@ export function drawField() {
   const st = fieldState;
   const el = $('#field');
   if (!st || !el) return;
-  const e = eventIndex.get(st.key);
+  // (Keep our own copy: a session drops off the forecast soon after it ends, but field mode stays
+  // open through the afterglow and blue hour, and asks how it was at the end.)
+  const e = eventIndex.get(st.key) || st.e;
   if (!e) { closeField(); return; }
+  st.e = e;
   const now = Date.now() / 1000;
   const moments = fieldMoments(e);
   const next = moments.find(m => m.t > now);
+  // The light's done and this was a planned shoot: ask how it was, right here, while it's fresh.
+  const plan = S().plans.find(x => x.key === st.key);
+  if (st.rating) { /* the rating card (or its thanks) is showing: leave it be */ }
+  else if (plan && !plan.rating && (!next || dueToAsk(plan, now))) {
+    st.rating = true;
+    markAsked(plan.id);
+    const box = el.querySelector('#fmNext');
+    box.innerHTML = `<p class="fm-next-label">The light's done. How was it?</p>
+      <div class="qr-grid fm-rate">${QUICK.map((q, i) => `<button class="qr-btn ${i === 0 ? 'best' : ''}" data-fmq="${q.s10}">${q.ic}<span class="qr-t">${q.t}</span><span class="qr-s">${q.s}</span></button>`).join('')}</div>
+      <div class="qr-more"><span>One tap is enough.</span><button class="link-btn" id="fmRateMore">More detail ›</button></div>`;
+    box.querySelectorAll('[data-fmq]').forEach(b => b.onclick = async () => {
+      box.querySelectorAll('[data-fmq]').forEach(x => { x.disabled = true; });
+      b.classList.add('sel');
+      await ratePlan(plan.id, Number(b.dataset.fmq), plan.tags || [], document.createElement('button'), { quiet: true });
+      const word = QUICK.find(q => String(q.s10) === b.dataset.fmq)?.t || 'Rated';
+      box.innerHTML = `<p class="fm-next-label">Rated: ${esc(word)}</p><p class="fm-at">Thanks. Your score learns from this. The real weather is checked in a few hours.</p>`;
+    });
+    box.querySelector('#fmRateMore').onclick = () => openQuickRate(plan.id);
+  }
   const nextHtml = next
     ? `<p class="fm-next-label">${esc(next.label)} in</p><p class="fm-count num ${next.cls}">${untilText(next.t - now, true)}</p><p class="fm-at">at ${fmtTime(next.t, e.offset)}</p>`
-    : `<p class="fm-next-label">That's the session done.</p><p class="fm-at">Rate it later in Plans so your personal score learns.</p>`;
-  el.querySelector('#fmNext').innerHTML = nextHtml;
+    : `<p class="fm-next-label">That's the session done.</p><p class="fm-at">${plan?.rating ? 'Rated. Thanks.' : 'Plan a session before you go and Tidelight asks how it was, right here.'}</p>`;
+  if (!st.rating) el.querySelector('#fmNext').innerHTML = nextHtml;
   // Announce only when the next moment changes, never every second.
   const said = next ? `Next: ${next.label} at ${fmtTime(next.t, e.offset)}.` : "That's the session done.";
   const sr = el.querySelector('#fmSay');

@@ -1,17 +1,17 @@
 // Tidelight: rating a shoot in one tap, what happened at a shoot, and How accurate is Tidelight?
-import { update } from './storage.js?v=7.1';
-import { esc, fmtTime, toast } from './util.js?v=7.1';
-import { tuningReport } from './scoring.js?v=7.1';
-import { $, $$, S, closeSheet, openSheet, ui } from './core.js?v=7.1';
-import { TYPE_NAME } from './forecast.js?v=7.1';
-import { openRating, planWhen, ratePlan } from './plans.js?v=7.1';
-import { render, setTab } from './app.js?v=7.1';
-import { youHead } from './you.js?v=7.1';
-import { CALL_WORD, KIND_LABEL, accuracyReport, callOf, fillActuals, forecastOf, isRated, missWords, notLightsFault, ratedS10, verdict, weatherRows } from './records.js?v=7.1';
+import { update } from './storage.js?v=7.1.1';
+import { esc, fmtTime, toast } from './util.js?v=7.1.1';
+import { tuningReport } from './scoring.js?v=7.1.1';
+import { $, $$, S, closeSheet, openSheet, ui } from './core.js?v=7.1.1';
+import { TYPE_NAME } from './forecast.js?v=7.1.1';
+import { openRating, planWhen, ratePlan } from './plans.js?v=7.1.1';
+import { render, setTab } from './app.js?v=7.1.1';
+import { youHead } from './you.js?v=7.1.1';
+import { CALL_WORD, KIND_LABEL, accuracyReport, callOf, fillActuals, forecastOf, isRated, missWords, notLightsFault, ratedS10, verdict, weatherRows } from './records.js?v=7.1.1';
 
 const svg = (d, w = 26) => `<svg class="qr-ic" viewBox="0 0 24 24" width="${w}" height="${w}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 // One tap each. The numbers are what they mean on the 0 to 10 scale.
-const QUICK = [
+export const QUICK = [
   { k: 'epic', s10: 9, t: 'Epic', s: 'One of the good ones', ic: svg('<circle cx="12" cy="14" r="4"/><path d="M12 5v2M5.6 7.6l1.4 1.4M18.4 7.6 17 9M3 14h2M19 14h2M3 19h18"/>') },
   { k: 'good', s10: 7, t: 'Good', s: 'Worth the trip', ic: svg('<path d="M7 17a5 5 0 0 1 10 0"/><path d="M12 9v2M6.3 11.3l1.4 1.4M17.7 11.3l-1.4 1.4M3 17h18"/>') },
   { k: 'okay', s10: 5, t: 'Okay', s: 'Something, not much', ic: svg('<path d="M7 18h10a4 4 0 0 0 .5-8 5.5 5.5 0 0 0-10.6 1.5A3.3 3.3 0 0 0 7 18z"/>') },
@@ -20,7 +20,7 @@ const QUICK = [
 const sessionWord = p => (TYPE_NAME[p.type] || p.type).toLowerCase();
 const dayWord = p => {
   const days = Math.round((startOfDay(Date.now() / 1000, p.offset) - startOfDay(p.t, p.offset)) / 86400);
-  return days <= 0 ? 'Today' : days === 1 ? (p.type === 'sunrise' || p.type === 'day' ? 'Yesterday' : 'Last night') : `${days} days ago`;
+  return days <= 0 ? (p.type === 'sunset' || p.type === 'night' ? 'Tonight' : p.type === 'sunrise' ? 'This morning' : 'Today') : days === 1 ? (p.type === 'sunrise' || p.type === 'day' ? 'Yesterday' : 'Last night') : `${days} days ago`;
 };
 const startOfDay = (t, off = 0) => Math.floor((t + off) / 86400) * 86400;
 
@@ -52,23 +52,49 @@ export function openQuickRate(id) {
 }
 
 // The morning after: offer to rate a shoot once, when the app opens (the notification does the same).
+// When to ask, while it's still fresh: once the light has finished. Sunset: 45 minutes after (the
+// afterglow and blue hour are done). Sunrise: an hour after. Daytime: two hours after the window opens.
+// Night and Milky Way shoots run late, so those wait for 6am the next morning (local time at the spot).
+// If you don't answer, one more ask the next morning, then never again.
 const PROMPTED = 'tidelight:ratePrompted';
-function prompted() { try { return new Set(JSON.parse(localStorage.getItem(PROMPTED) || '[]')); } catch { return new Set(); } }
-function markPrompted(id) { try { const s = prompted(); s.add(id); localStorage.setItem(PROMPTED, JSON.stringify([...s].slice(-60))); } catch {} }
-// When to ask: sunrise and daytime shoots from two hours after; evening and night shoots from 6am the
-// next morning (local time at the spot). Only shoots from the last three days, and each one only once.
+function prompted() {
+  try {
+    const v = JSON.parse(localStorage.getItem(PROMPTED) || '{}');
+    return Array.isArray(v) ? Object.fromEntries(v.map(id => [id, [2, 0]])) : v;   // (7.1 kept a plain list: count those as asked twice)
+  } catch { return {}; }
+}
+export function markAsked(id) { markPrompted(id); }
+function markPrompted(id) {
+  try {
+    const all = prompted(), [n] = all[id] || [0];
+    all[id] = [n + 1, Math.round(Date.now() / 1000)];
+    const keep = Object.entries(all).sort((a, b) => b[1][1] - a[1][1]).slice(0, 60);
+    localStorage.setItem(PROMPTED, JSON.stringify(Object.fromEntries(keep)));
+  } catch {}
+}
+const nextMorning = p => startOfDay(p.t - 12 * 3600, p.offset) - (p.offset || 0) + 86400 + 6 * 3600;   // 6am local, the day after
+export function lightDone(p) {
+  if (p.type === 'sunset') return p.t + 45 * 60;
+  if (p.type === 'sunrise') return p.t + 60 * 60;
+  if (p.type === 'day') return p.t + 2 * 3600;
+  return nextMorning(p);   // night
+}
 export function dueToAsk(p, now = Date.now() / 1000) {
   if (p.rating || !p.t || p.t < now - 3 * 86400) return false;
-  if (p.type === 'sunrise' || p.type === 'day') return now >= p.t + 2 * 3600;
-  const nextMorning = startOfDay(p.t - 12 * 3600, p.offset) - (p.offset || 0) + 86400 + 6 * 3600;   // 6am local, the day after
-  return now >= Math.max(p.t + 2 * 3600, nextMorning);
+  return now >= lightDone(p);
 }
-export function shootToRate() {
-  const seen = prompted();
-  return S().plans.filter(p => !seen.has(p.id) && dueToAsk(p)).sort((a, b) => b.t - a.t)[0] || null;
+export function shootToRate(now = Date.now() / 1000) {
+  const asked = prompted();
+  return S().plans.filter(p => {
+    if (!dueToAsk(p, now)) return false;
+    const [n, at] = asked[p.id] || [0, 0];
+    if (n === 0) return true;
+    // the one follow-up: the next morning, if the first ask was the evening before
+    return n === 1 && now >= nextMorning(p) && at < nextMorning(p);
+  }).sort((a, b) => b.t - a.t)[0] || null;
 }
 export function maybePromptRating() {
-  if (!$('#sheet').classList.contains('hidden') || $('#welcome') || $('.skyar')) return false;
+  if (!$('#sheet').classList.contains('hidden') || $('#welcome') || $('.skyar') || $('#field')) return false;   // (field mode asks in its own card)
   const p = shootToRate();
   if (!p) return false;
   openQuickRate(p.id);

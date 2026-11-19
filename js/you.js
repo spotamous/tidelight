@@ -1,20 +1,20 @@
 // Tidelight: The You tab: light profile, account, alerts, settings, kit, data and feedback.
-import { syncStatus, syncNow, signOut, sendPasswordReset, createAccount, signInWithPassword, savePushSubscription, removePushSubscription, sendTestAlert, currentUser, sendFeedback, myFeedback } from './sync.js?v=7.1';
-import { pageAccuracy } from './accuracy.js?v=7.1';
-import { accuracyReport } from './records.js?v=7.1';
-import { esc, fmtDate, uid, toast, fmtDay, getPosition, cap, downloadFile } from './util.js?v=7.1';
-import { MIN_KEEPERS, spotFloor, personalModelSummary, featureVector, similarity, tuningReport, colourRatings, ratingScore } from './scoring.js?v=7.1';
-import { hasAI, readExif, resizeImage, aiAnalyzeReference, aiResultToFeatures, testKey } from './ai.js?v=7.1';
-import { APP_VERSION } from './version.js?v=7.1';
-import { update, exportData, importData, resetAll } from './storage.js?v=7.1';
-import { fetchHistorical } from './api.js?v=7.1';
-import { VAPID_PUBLIC_KEY } from './config.js?v=7.1';
-import { exportPhotos, importPhotos, clearPhotos } from './photos.js?v=7.1';
-import { $, $$, S, allEvents, ensureForecasts, eventRow, forecasts, ui } from './core.js?v=7.1';
-import { THEMES, applyMotion, applyTheme, next3Days } from './forecast.js?v=7.1';
-import { hasNews, openTour, openWelcome, openWhatsNew } from './welcome.js?v=7.1';
-import { openSpotDetail } from './spots.js?v=7.1';
-import { render, setTab } from './app.js?v=7.1';
+import { syncStatus, syncNow, signOut, sendPasswordReset, createAccount, signInWithPassword, savePushSubscription, removePushSubscription, sendTestAlert, currentUser, sendFeedback, myFeedback } from './sync.js?v=7.1.1';
+import { pageAccuracy } from './accuracy.js?v=7.1.1';
+import { accuracyReport } from './records.js?v=7.1.1';
+import { esc, fmtDate, uid, toast, fmtDay, getPosition, cap, downloadFile } from './util.js?v=7.1.1';
+import { MIN_KEEPERS, spotFloor, personalModelSummary, featureVector, similarity, tuningReport, colourRatings, ratingScore } from './scoring.js?v=7.1.1';
+import { hasAI, readExif, resizeImage, aiAnalyzeReference, aiResultToFeatures, testKey } from './ai.js?v=7.1.1';
+import { APP_VERSION } from './version.js?v=7.1.1';
+import { update, exportData, importData, resetAll } from './storage.js?v=7.1.1';
+import { fetchHistorical } from './api.js?v=7.1.1';
+import { VAPID_PUBLIC_KEY } from './config.js?v=7.1.1';
+import { exportPhotos, importPhotos, clearPhotos } from './photos.js?v=7.1.1';
+import { $, $$, S, allEvents, ensureForecasts, eventRow, forecasts, ui } from './core.js?v=7.1.1';
+import { THEMES, applyMotion, applyTheme, next3Days } from './forecast.js?v=7.1.1';
+import { hasNews, openTour, openWelcome, openWhatsNew } from './welcome.js?v=7.1.1';
+import { openSpotDetail } from './spots.js?v=7.1.1';
+import { render, setTab } from './app.js?v=7.1.1';
 
 /* ================= coach ================= */
 
@@ -347,7 +347,7 @@ export async function renderAlerts() {
       <label class="check"><input type="checkbox" name="confident" ${a.confident !== false ? 'checked' : ''}> Skip colour alerts when the weather models disagree (fewer false alarms)</label>
       <label class="check"><input type="checkbox" name="crew" ${a.crew !== false ? 'checked' : ''}> Tell me when someone in my crew plans a shoot</label>
       <label class="check"><input type="checkbox" name="calledOff" ${a.calledOff ? 'checked' : ''}> Tell me if a session I was alerted about falls through</label>
-      <label class="check"><input type="checkbox" name="rate" ${a.rate !== false ? 'checked' : ''}> The morning after a planned shoot, ask how the light was (one tap to answer)</label>
+      <label class="check"><input type="checkbox" name="rate" ${a.rate !== false ? 'checked' : ''}> After a planned shoot, ask how the light was, once it's finished (one tap to answer; comes through quiet hours, never after 11pm)</label>
       <label class="check"><input type="checkbox" name="digest" ${a.digest ? 'checked' : ''}> Weekly digest of the best 3 sessions, every
         <select name="digestDay" aria-label="Digest day">${DAYS.map((d, i) => opt(i, a.digestDay, d)).join('')}</select>
         at <select name="digestHour" aria-label="Digest time">${[7, 8, 12, 17, 18, 19, 20].map(h => opt(h, a.digestHour, hourLabel(h))).join('')}</select></label>

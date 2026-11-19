@@ -2181,3 +2181,10 @@ html[data-tabdir="back"] #view.view-in { animation-name: view-in-l; }
 :root[data-theme="light"] .rec-table td.off, :root[data-theme="light"] .rec-scores .miss b, :root[data-theme="light"] .hist-v.sc { color: #B0433A; }
 :root[data-theme="light"] .acc-plot .dot-miss { stroke: #B0433A; }
 :root[data-theme="light"] .acc-split .bar i.weak { background: #C9634C; }
+
+/* v7.1.1: rating in field mode */
+.fm-rate { margin: 10px 0 2px; text-align: left; }
+.fm-rate .qr-btn { min-height: 96px; padding: 14px; }
+.field .qr-more { justify-content: space-between; }
+.field.nightvision .qr-btn, .field.nightvision .qr-btn.best { background: transparent !important; border-color: #5A1A15 !important; color: #E0453A !important; box-shadow: none; }
+.field.nightvision .qr-btn .qr-ic, .field.nightvision .qr-btn .qr-s, .field.nightvision .qr-more, .field.nightvision .qr-more .link-btn { color: #B8362D !important; }

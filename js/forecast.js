@@ -1,17 +1,17 @@
 // Tidelight: The Forecast tab: the session card, score gauge and What if?, the light band, week strip, little pictures (horizon scenes, spot tiles, avatars) and gestures.
-import { dayKey, esc, fmtTime, toast, fmtWeekday, fmtDayDate, cap } from './util.js?v=7.1';
-import { nearestIndex, horizonBlock, spotFloor, baseScore, tideInfo } from './scoring.js?v=7.1';
-import { HUNT_LABEL, HUNT_VERB, huntsOf, forestAt, waterfallAt, stormAt, setKp } from './hunts.js?v=7.1';
-import { update } from './storage.js?v=7.1';
-import { unshareFromCrew, syncNow } from './sync.js?v=7.1';
-import { coverUrl } from './photos.js?v=7.1';
-import { fetchForecasts, fetchKp } from './api.js?v=7.1';
-import { $, $$, S, allEvents, bgRefresh, ensureForecasts, eventIndex, forecasts, forecastsLanded, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.1';
-import { render } from './app.js?v=7.1';
-import { openSpotForm } from './spots.js?v=7.1';
-import { untilText } from './field.js?v=7.1';
-import { crewGoing, goingText, loadCrew } from './crews.js?v=7.1';
-import { PIN_ICON, openHere } from './here.js?v=7.1';
+import { dayKey, esc, fmtTime, toast, fmtWeekday, fmtDayDate, cap } from './util.js?v=7.1.1';
+import { nearestIndex, horizonBlock, spotFloor, baseScore, tideInfo } from './scoring.js?v=7.1.1';
+import { HUNT_LABEL, HUNT_VERB, huntsOf, forestAt, waterfallAt, stormAt, setKp } from './hunts.js?v=7.1.1';
+import { update } from './storage.js?v=7.1.1';
+import { unshareFromCrew, syncNow } from './sync.js?v=7.1.1';
+import { coverUrl } from './photos.js?v=7.1.1';
+import { fetchForecasts, fetchKp } from './api.js?v=7.1.1';
+import { $, $$, S, allEvents, bgRefresh, ensureForecasts, eventIndex, forecasts, forecastsLanded, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.1.1';
+import { render } from './app.js?v=7.1.1';
+import { openSpotForm } from './spots.js?v=7.1.1';
+import { untilText } from './field.js?v=7.1.1';
+import { crewGoing, goingText, loadCrew } from './crews.js?v=7.1.1';
+import { PIN_ICON, openHere } from './here.js?v=7.1.1';
 
 /* ================= forecast ================= */
 

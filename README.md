@@ -6,6 +6,8 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 
 ## What it does
 
+**New in 7.1.1: rate it while it's fresh.** The rating prompt (in the app and as a notification) now comes once the light has finished: sunset + 45 min, sunrise + 1 h, daytime + 2 h; night shoots the next morning. The first notification goes through quiet hours (never after 11pm or before 5am); if it isn't answered, one follow-up the next morning, then none. Field mode shows the one-tap rating on screen when the light's done, and stays open after the session ends.
+
 **New in 7.1: how accurate is Tidelight?** The morning after a planned shoot, Tidelight asks how the light was (in the app, and as a notification once the alerts function is redeployed): one tap for Epic, Good, Okay or Flat. Every plan now keeps a shoot record (`js/records.js`): the forecast when planned, the last forecast before the shoot, and, a few hours after, what the weather actually did, fetched from Open-Meteo's records and scored with the app's own engine (leaving out that shoot's own rating). Each miss is labelled *the forecast missed* (with the real weather the call would have been right) or *the score missed*. You, *How accurate is Tidelight?* shows the hit rate, a predicted-vs-rated chart, why misses happened, accuracy by kind of shoot and standard vs personal score; Plans, History rows open each shoot's record.
 
 **New in 7.0: stability.** No new features: the app's code is split into focused files (one per tab or tool) so changes are safer; errors on testers' phones are reported to Supabase automatically; a failed update shows a *Couldn't start* screen with Reload instead of a blank page; the whole app is saved for offline use as soon as an update installs; every module is fetched in parallel, so opening is as quick as before; Right here no longer calls a place *Inland* just because it couldn't check offline; and a spot's fog history uses its last saved tally when offline.
@@ -180,7 +182,7 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=7.1`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=7.1.1`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:

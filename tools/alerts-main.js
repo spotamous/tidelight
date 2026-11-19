@@ -132,21 +132,39 @@ async function checkUser(admin, uid) {
     off.forEach(({ e }) => toLog.push({ kind: 'off', key: e.key, score: e.score }));
   }
 
-  // The morning after: how was the light? Sunrise and daytime shoots from two hours after, evening and
-  // night shoots from 7am the next day. Once per shoot, never in quiet hours; several waiting become one.
-  if (prefs.rate && !quiet && hour >= 7 && hour <= 20) {
+  // How was the light? Asked once the light has finished, while it's fresh: sunset + 45 min, sunrise + 1 h,
+  // daytime + 2 h. This first ask goes through quiet hours (you've just been out shooting), but never
+  // after 11pm or before 5am. Night shoots wait for 7am. If it's not answered, one follow-up the next
+  // morning (7am to 8pm, outside quiet hours), then never again. Several waiting at once become one.
+  if (prefs.rate) {
     const startOfDay = (t, off) => Math.floor((t + off) / 86400) * 86400 - off;
-    const due = (d.plans || []).filter(p => {
-      if (p.rating || !p.t || p.t < now - 30 * 3600 || done.has(`rate|${p.id}`)) return false;
-      if (p.type === 'sunrise' || p.type === 'day') return now >= p.t + 2 * 3600;
-      return now >= Math.max(p.t + 2 * 3600, startOfDay(p.t - 12 * 3600, p.offset || offset) + 86400 + 7 * 3600);
-    }).sort((a, b) => b.t - a.t);
-    if (due.length) {
-      const p = due[0], what = (p.type === 'sunrise' ? 'sunrise' : p.type === 'sunset' ? 'sunset' : p.type === 'night' ? 'night' : 'shoot');
-      toSend.push(due.length === 1
-        ? { title: `How was the light at ${p.spotName}?`, body: `${p.type === 'sunset' || p.type === 'night' ? 'Last night' : 'This morning'}'s ${what}${p.score != null ? ` scored ${p.score}` : ''}. Tap to rate it in one go.`, tag: `rate-${p.id}`, url: `./#rate-${p.id}` }
-        : { title: 'How was the light?', body: `${due.length} shoots to rate, starting with ${p.spotName}. One tap each.`, tag: 'rate-group', url: `./#rate-${p.id}` });
-      due.forEach(x => toLog.push({ kind: 'rate', key: x.id, score: x.score ?? null }));
+    const morningAfter = p => startOfDay(p.t - 12 * 3600, p.offset ?? offset) + 86400 + 7 * 3600;
+    const lightDone = p => p.type === 'sunset' ? p.t + 45 * 60 : p.type === 'sunrise' ? p.t + 3600 : p.type === 'day' ? p.t + 2 * 3600 : morningAfter(p);
+    const daytime = !quiet && hour >= 7 && hour <= 20;
+    const fresh = [], again = [];
+    for (const p of d.plans || []) {
+      if (p.rating || !p.t || p.t < now - 30 * 3600) continue;
+      const asked = done.has(`rate|${p.id}`), followed = done.has(`rate|${p.id}|am`);
+      if (!asked) {
+        if (now < lightDone(p)) continue;
+        const stillFresh = now <= lightDone(p) + 3 * 3600 && hour >= 5 && hour < 23;
+        if (stillFresh || (now >= morningAfter(p) && daytime)) fresh.push(p);
+      } else if (!followed && p.type !== 'night' && now >= morningAfter(p) && daytime) {
+        again.push(p);
+      }
+    }
+    const word = p => (p.type === 'sunrise' ? 'sunrise' : p.type === 'sunset' ? 'sunset' : p.type === 'night' ? 'night shoot' : 'shoot');
+    const all = [...fresh, ...again].sort((a, b) => b.t - a.t);
+    if (all.length) {
+      const p = all[0];
+      const isFresh = fresh.includes(p) && now <= lightDone(p) + 3 * 3600;
+      toSend.push(all.length > 1
+        ? { title: 'How was the light?', body: `${all.length} shoots to rate, starting with ${p.spotName}. One tap each.`, tag: 'rate-group', url: `./#rate-${p.id}` }
+        : isFresh
+          ? { title: `How was the light at ${p.spotName}?`, body: `${p.type === 'sunset' ? "Tonight's" : p.type === 'sunrise' ? "This morning's" : "Today's"} ${word(p)}${p.score != null ? ` scored ${p.score}` : ''}. Tap to rate it while it's fresh.`, tag: `rate-${p.id}`, url: `./#rate-${p.id}` }
+          : { title: `How was the light at ${p.spotName}?`, body: `${p.type === 'sunrise' || p.type === 'day' ? "Yesterday's" : "Last night's"} ${word(p)}${p.score != null ? ` scored ${p.score}` : ''}. One tap to rate it.`, tag: `rate-${p.id}`, url: `./#rate-${p.id}` });
+      fresh.forEach(x => toLog.push({ kind: 'rate', key: x.id, score: x.score ?? null }));
+      again.forEach(x => toLog.push({ kind: 'rate', key: `${x.id}|am`, score: x.score ?? null }));
     }
   }
 

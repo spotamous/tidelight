@@ -1,16 +1,16 @@
 // Tidelight: The planners: moon planner, tide windows, through the year, and the shareable plan card.
-import { esc, haversineKm, fmtWeekday, fmtDayDate, cap, fmtTime, compass, getPosition, toast, downloadFile, dayKey, fmtDay, angleDiff } from './util.js?v=7.1';
-import { openSkyAR } from './skyar.js?v=7.1';
-import { fetchSpotForecast } from './api.js?v=7.1';
-import { tideInfo, evaluateSpot } from './scoring.js?v=7.1';
-import { update } from './storage.js?v=7.1';
-import { huntsOf } from './hunts.js?v=7.1';
-import { coverUrl } from './photos.js?v=7.1';
-import { $, $$, S, forecasts, indexEvents, openSheet, ui, verdict } from './core.js?v=7.1';
-import { moonSvg } from './tools.js?v=7.1';
-import { pickPlace } from './here.js?v=7.1';
-import { G, TYPE_NAME, horizonScene, huntPhrase, skeleton, skyOf, toneDot } from './forecast.js?v=7.1';
-import { openEvent } from './event.js?v=7.1';
+import { esc, haversineKm, fmtWeekday, fmtDayDate, cap, fmtTime, compass, getPosition, toast, downloadFile, dayKey, fmtDay, angleDiff } from './util.js?v=7.1.1';
+import { openSkyAR } from './skyar.js?v=7.1.1';
+import { fetchSpotForecast } from './api.js?v=7.1.1';
+import { tideInfo, evaluateSpot } from './scoring.js?v=7.1.1';
+import { update } from './storage.js?v=7.1.1';
+import { huntsOf } from './hunts.js?v=7.1.1';
+import { coverUrl } from './photos.js?v=7.1.1';
+import { $, $$, S, forecasts, indexEvents, openSheet, ui, verdict } from './core.js?v=7.1.1';
+import { moonSvg } from './tools.js?v=7.1.1';
+import { pickPlace } from './here.js?v=7.1.1';
+import { G, TYPE_NAME, horizonScene, huntPhrase, skeleton, skyOf, toneDot } from './forecast.js?v=7.1.1';
+import { openEvent } from './event.js?v=7.1.1';
 
 /* ================= moon planner ================= */
 // When does the moon (or the sun) rise or set right behind something: a lighthouse, an arch, a peak?
