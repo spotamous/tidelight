@@ -1,13 +1,13 @@
 // Tidelight: rating a shoot in one tap, what happened at a shoot, and How accurate is Tidelight?
-import { update } from './storage.js?v=7.2';
-import { esc, fmtTime, toast } from './util.js?v=7.2';
-import { tuningReport } from './scoring.js?v=7.2';
-import { $, $$, S, closeSheet, openSheet, ui } from './core.js?v=7.2';
-import { TYPE_NAME } from './forecast.js?v=7.2';
-import { openRating, planWhen, ratePlan } from './plans.js?v=7.2';
-import { render, setTab } from './app.js?v=7.2';
-import { youHead } from './you.js?v=7.2';
-import { CALL_WORD, KIND_LABEL, accuracyReport, callOf, fillActuals, forecastOf, isRated, missWords, notLightsFault, ratedS10, verdict, weatherRows } from './records.js?v=7.2';
+import { update } from './storage.js?v=7.2.1';
+import { esc, fmtTime, toast } from './util.js?v=7.2.1';
+import { tuningReport } from './scoring.js?v=7.2.1';
+import { $, $$, S, closeSheet, openSheet, ui } from './core.js?v=7.2.1';
+import { TYPE_NAME } from './forecast.js?v=7.2.1';
+import { openRating, planWhen, ratePlan } from './plans.js?v=7.2.1';
+import { render, setTab } from './app.js?v=7.2.1';
+import { youHead } from './you.js?v=7.2.1';
+import { CALL_WORD, KIND_LABEL, accuracyReport, callOf, fillActuals, forecastOf, isRated, missWords, notLightsFault, ratedS10, verdict, weatherRows } from './records.js?v=7.2.1';
 
 const svg = (d, w = 26) => `<svg class="qr-ic" viewBox="0 0 24 24" width="${w}" height="${w}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 // One tap each. The numbers are what they mean on the 0 to 10 scale.

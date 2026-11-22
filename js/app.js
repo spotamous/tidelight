@@ -1,22 +1,22 @@
 // Tidelight: The entry point: the tab router and start-up. Everything else lives in the modules it imports.
-import { startErrorReports, flushErrors, report } from './report.js?v=7.2';
-import { fillActuals } from './records.js?v=7.2';
-import { maybePromptRating, openQuickRate } from './accuracy.js?v=7.2';
-import { esc, toast, fmtTime, uid } from './util.js?v=7.2';
-import { setNewPassword, onPasswordRecovery, initSync, currentUser, onSyncStatus } from './sync.js?v=7.2';
-import { update } from './storage.js?v=7.2';
-import { loadAllPhotos } from './photos.js?v=7.2';
-import { restoreForecasts } from './api.js?v=7.2';
-import { $, $$, S, closeSheet, eventIndex, forecasts, openSheet, refreshInBackground, ui } from './core.js?v=7.2';
-import { TYPE_NAME, applyMotion, applyTheme, commitPanel, homeTimer, motionOK, openLab, renderForecast, undoPlan } from './forecast.js?v=7.2';
-import { addPlan, downloadIcs, openGear, plansTimer, renderPlans } from './plans.js?v=7.2';
-import { openSpotForm, renderSpots } from './spots.js?v=7.2';
-import { openLightDial, openLightningTimer, renderTools } from './tools.js?v=7.2';
-import { applyTextSize, renderAccount, renderAlerts, renderYou } from './you.js?v=7.2';
-import { afterPlanned, crewState, loadCrew, openSharedSpot } from './crews.js?v=7.2';
-import { closeField, openCompass, openField, openNow } from './field.js?v=7.2';
-import { openEvent } from './event.js?v=7.2';
-import { closeWelcome, hasNews, maybeWelcome, openWhatsNew, welcome } from './welcome.js?v=7.2';
+import { startErrorReports, flushErrors, report } from './report.js?v=7.2.1';
+import { fillActuals } from './records.js?v=7.2.1';
+import { maybePromptRating, openQuickRate } from './accuracy.js?v=7.2.1';
+import { esc, toast, fmtTime, uid } from './util.js?v=7.2.1';
+import { setNewPassword, onPasswordRecovery, initSync, currentUser, onSyncStatus } from './sync.js?v=7.2.1';
+import { update } from './storage.js?v=7.2.1';
+import { loadAllPhotos } from './photos.js?v=7.2.1';
+import { restoreForecasts } from './api.js?v=7.2.1';
+import { $, $$, S, closeSheet, eventIndex, forecasts, openSheet, refreshInBackground, ui } from './core.js?v=7.2.1';
+import { TYPE_NAME, applyMotion, applyTheme, commitPanel, homeTimer, motionOK, openLab, renderForecast, undoPlan } from './forecast.js?v=7.2.1';
+import { addPlan, downloadIcs, openGear, plansTimer, renderPlans } from './plans.js?v=7.2.1';
+import { openSpotForm, renderSpots } from './spots.js?v=7.2.1';
+import { openLightDial, openLightningTimer, renderTools } from './tools.js?v=7.2.1';
+import { applyTextSize, renderAccount, renderAlerts, renderYou } from './you.js?v=7.2.1';
+import { afterPlanned, crewState, loadCrew, openSharedSpot } from './crews.js?v=7.2.1';
+import { closeField, openCompass, openField, openNow } from './field.js?v=7.2.1';
+import { openEvent } from './event.js?v=7.2.1';
+import { closeWelcome, hasNews, maybeWelcome, openWhatsNew, welcome } from './welcome.js?v=7.2.1';
 
 /* ================= router ================= */
 
