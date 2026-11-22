@@ -118,5 +118,5 @@ body.skyar-open .festive-lights, body.skyar-open .festive-snow, body:has(#field)
 :root[data-theme="festive"] .now-btn::after { top: -15px; right: -8px; transform: rotate(18deg); }
 :root[data-theme="festive"] .wk-d.on::after { top: -14px; right: -9px; width: 28px; height: 23px; transform: rotate(16deg); }
 :root[data-theme="festive"] .here-pill::after { top: -15px; left: -10px; transform: rotate(-20deg) scaleX(-1); }
-:root[data-theme="festive"] .call-score::after { top: -12px; left: -14px; width: 44px; height: 36px; transform: rotate(-22deg) scaleX(-1); }
+:root[data-theme="festive"] .call-score::after { top: -11px; left: -38px; width: 40px; height: 33px; transform: rotate(-26deg) scaleX(-1); }   /* off to the side of the number, so it never covers a digit */
 :root[data-theme="festive"] .you-list:not(.you-list ~ .you-list)::after { top: -16px; right: 10px; transform: rotate(14deg); }
