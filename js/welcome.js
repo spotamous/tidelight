@@ -1,24 +1,27 @@
 // Tidelight: First run and testers: What's new, the five-card tour and the welcome.
-import { openAccuracy } from './accuracy.js?v=7.2.1';
-import { APP_VERSION } from './version.js?v=7.2.1';
-import { esc, toast, getPosition, uid } from './util.js?v=7.2.1';
-import { openSkyAR } from './skyar.js?v=7.2.1';
-import { isConfigured, currentUser, createAccount, signInWithPassword, syncNow, joinCrew } from './sync.js?v=7.2.1';
-import { HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.2.1';
-import { searchPlaces, placeName } from './api.js?v=7.2.1';
-import { update } from './storage.js?v=7.2.1';
-import { $, $$, S, closeSheet, forecasts, openSheet, ui } from './core.js?v=7.2.1';
-import { render, setTab } from './app.js?v=7.2.1';
-import { openAligner, openTideWindows } from './planners.js?v=7.2.1';
-import { G, avatar, bandFill, bandInk, bandSky, day3am, demoSkyDay, lightBand, toneDot } from './forecast.js?v=7.2.1';
-import { PIN_ICON } from './here.js?v=7.2.1';
-import { loadCrew } from './crews.js?v=7.2.1';
+import { openAccuracy } from './accuracy.js?v=7.2.2';
+import { APP_VERSION } from './version.js?v=7.2.2';
+import { esc, toast, getPosition, uid } from './util.js?v=7.2.2';
+import { openSkyAR } from './skyar.js?v=7.2.2';
+import { isConfigured, currentUser, createAccount, signInWithPassword, syncNow, joinCrew } from './sync.js?v=7.2.2';
+import { HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.2.2';
+import { searchPlaces, placeName } from './api.js?v=7.2.2';
+import { update } from './storage.js?v=7.2.2';
+import { $, $$, S, closeSheet, forecasts, openSheet, ui } from './core.js?v=7.2.2';
+import { render, setTab } from './app.js?v=7.2.2';
+import { openAligner, openTideWindows } from './planners.js?v=7.2.2';
+import { G, avatar, bandFill, bandInk, bandSky, day3am, demoSkyDay, lightBand, toneDot } from './forecast.js?v=7.2.2';
+import { PIN_ICON } from './here.js?v=7.2.2';
+import { loadCrew } from './crews.js?v=7.2.2';
 
 /* ================= first-run welcome ================= */
 /* ================= what's new ================= */
 // For testers: what changed in each update. Opens once after an update, and any time from You.
 export const SEEN_VERSION = 'tidelight:seenVersion';
 export const WHATS_NEW = [
+  { v: '7.2.2', date: '23 Nov', title: 'Smoother rain', items: [
+    'The rain on the light bar now falls in one smooth, endless loop, instead of jumping back every second.',
+  ] },
   { v: '7.2.1', date: '22 Nov', title: 'A tidier hat', items: [
     'In the Festive theme, the Santa hat on the big score no longer sits over the number.',
   ] },

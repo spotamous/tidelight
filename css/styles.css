@@ -1057,13 +1057,17 @@ input[type="range"], .form input[type="range"], label input[type="range"] { bord
 @keyframes sky-drift-far  { from { transform: translateX(0); } to { transform: translateX(-260px); } }
 @keyframes sky-drift-near { from { transform: translateX(0); } to { transform: translateX(-340px); } }
 /* rain: dark rain cloud along the top, drops falling from its base */
-.sky-rain .storm { top: -6px; height: 40px; background-image: var(--cloud-storm); background-size: 300px 40px; animation: sky-drift-near 90s linear infinite; z-index: 2; }
+.sky-rain .storm { top: -6px; height: 40px; background-image: var(--cloud-storm); background-size: 300px 40px; animation: sky-drift-storm 79s linear infinite; z-index: 2; }
+@keyframes sky-drift-storm { from { transform: translateX(0); } to { transform: translateX(-300px); } }   /* one tile, so the loop is seamless */
 .sky-rain .drops-far, .sky-rain .drops-near, .sky-heavy .drops-near { top: 22px; bottom: 0; width: 100%; background-repeat: repeat; }
-.sky-rain .drops-far  { background-image: var(--rain-far);  background-size: 40px 24px; opacity: .75; animation: rain-fall-far .9s linear infinite; }
-.sky-rain .drops-near { background-image: var(--rain-near); background-size: 60px 30px; animation: rain-fall-near .6s linear infinite; }
-.sky-heavy .drops-near { top: 18px; background-image: var(--rain-near); background-size: 34px 22px; animation: rain-fall-near .45s linear infinite; }
-@keyframes rain-fall-far  { from { background-position: 0 0; } to { background-position: -7px 24px; } }
-@keyframes rain-fall-near { from { background-position: 0 0; } to { background-position: -8px 30px; } }
+/* Each loop ends exactly where it began: a whole number of tiles down and exactly one tile across,
+   so the rain falls on a slant with no jump when it repeats. Same speed and slant as before. */
+.sky-rain .drops-far  { background-image: var(--rain-far);  background-size: 40px 24px; opacity: .75; animation: rain-fall-far 5.4s linear infinite; }
+.sky-rain .drops-near { background-image: var(--rain-near); background-size: 60px 30px; animation: rain-fall-near 4.8s linear infinite; }
+.sky-heavy .drops-near { top: 18px; background-image: var(--rain-near); background-size: 34px 22px; animation: rain-fall-heavy 1.98s linear infinite; }
+@keyframes rain-fall-far   { from { background-position: 0 0; } to { background-position: -40px 144px; } }   /* 6 tiles down, 1 across */
+@keyframes rain-fall-near  { from { background-position: 0 0; } to { background-position: -60px 240px; } }   /* 8 down, 1 across */
+@keyframes rain-fall-heavy { from { background-position: 0 0; } to { background-position: -34px 132px; } }   /* 6 down, 1 across */
 /* legend icons */
 .key-icon { display: inline-block; width: 18px; height: 12px; background-repeat: no-repeat; background-position: center; background-size: contain; }
 .sky-key-cloud { background-image: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2246%22 height=%2226%22 viewBox=%220 0 46 26%22%3E%3Cdefs%3E%3ClinearGradient id=%22c0%22 gradientUnits=%22userSpaceOnUse%22 x1=%220%22 y1=%220.0%22 x2=%220%22 y2=%2222.8%22%3E%3Cstop offset=%220%22 stop-color=%22%23FFFFFF%22/%3E%3Cstop offset=%22.62%22 stop-color=%22%23FFFFFF%22 stop-opacity=%22.96%22/%3E%3Cstop offset=%221%22 stop-color=%22%23AEB4B9%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg fill=%22url(%23c0)%22%3E%3Ccircle cx=%2212.2%22 cy=%2216.0%22 r=%227.6%22/%3E%3Ccircle cx=%2221.8%22 cy=%2210.8%22 r=%2210.4%22/%3E%3Ccircle cx=%2232.2%22 cy=%2214.8%22 r=%228.0%22/%3E%3Crect x=%225.4%22 y=%2215.2%22 width=%2234.4%22 height=%227.6%22 rx=%223.8%22/%3E%3C/g%3E%3C/svg%3E"); }

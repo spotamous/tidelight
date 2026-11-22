@@ -1,20 +1,20 @@
 // Tidelight: The You tab: light profile, account, alerts, settings, kit, data and feedback.
-import { syncStatus, syncNow, signOut, sendPasswordReset, createAccount, signInWithPassword, savePushSubscription, removePushSubscription, sendTestAlert, currentUser, sendFeedback, myFeedback } from './sync.js?v=7.2.1';
-import { pageAccuracy } from './accuracy.js?v=7.2.1';
-import { accuracyReport } from './records.js?v=7.2.1';
-import { esc, fmtDate, uid, toast, fmtDay, getPosition, cap, downloadFile } from './util.js?v=7.2.1';
-import { MIN_KEEPERS, spotFloor, personalModelSummary, featureVector, similarity, tuningReport, colourRatings, ratingScore } from './scoring.js?v=7.2.1';
-import { hasAI, readExif, resizeImage, aiAnalyzeReference, aiResultToFeatures, testKey } from './ai.js?v=7.2.1';
-import { APP_VERSION } from './version.js?v=7.2.1';
-import { update, exportData, importData, resetAll } from './storage.js?v=7.2.1';
-import { fetchHistorical } from './api.js?v=7.2.1';
-import { VAPID_PUBLIC_KEY } from './config.js?v=7.2.1';
-import { exportPhotos, importPhotos, clearPhotos } from './photos.js?v=7.2.1';
-import { $, $$, S, allEvents, ensureForecasts, eventRow, forecasts, ui } from './core.js?v=7.2.1';
-import { THEMES, applyMotion, applyTheme, next3Days } from './forecast.js?v=7.2.1';
-import { hasNews, openTour, openWelcome, openWhatsNew } from './welcome.js?v=7.2.1';
-import { openSpotDetail } from './spots.js?v=7.2.1';
-import { render, setTab } from './app.js?v=7.2.1';
+import { syncStatus, syncNow, signOut, sendPasswordReset, createAccount, signInWithPassword, savePushSubscription, removePushSubscription, sendTestAlert, currentUser, sendFeedback, myFeedback } from './sync.js?v=7.2.2';
+import { pageAccuracy } from './accuracy.js?v=7.2.2';
+import { accuracyReport } from './records.js?v=7.2.2';
+import { esc, fmtDate, uid, toast, fmtDay, getPosition, cap, downloadFile } from './util.js?v=7.2.2';
+import { MIN_KEEPERS, spotFloor, personalModelSummary, featureVector, similarity, tuningReport, colourRatings, ratingScore } from './scoring.js?v=7.2.2';
+import { hasAI, readExif, resizeImage, aiAnalyzeReference, aiResultToFeatures, testKey } from './ai.js?v=7.2.2';
+import { APP_VERSION } from './version.js?v=7.2.2';
+import { update, exportData, importData, resetAll } from './storage.js?v=7.2.2';
+import { fetchHistorical } from './api.js?v=7.2.2';
+import { VAPID_PUBLIC_KEY } from './config.js?v=7.2.2';
+import { exportPhotos, importPhotos, clearPhotos } from './photos.js?v=7.2.2';
+import { $, $$, S, allEvents, ensureForecasts, eventRow, forecasts, ui } from './core.js?v=7.2.2';
+import { THEMES, applyMotion, applyTheme, next3Days } from './forecast.js?v=7.2.2';
+import { hasNews, openTour, openWelcome, openWhatsNew } from './welcome.js?v=7.2.2';
+import { openSpotDetail } from './spots.js?v=7.2.2';
+import { render, setTab } from './app.js?v=7.2.2';
 
 /* ================= coach ================= */
 

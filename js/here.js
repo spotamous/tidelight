@@ -1,14 +1,14 @@
 // Tidelight: Right here and Anywhere: a forecast where you stand or any place you pick, and the place picker.
-import { evaluateSpot } from './scoring.js?v=7.2.1';
-import { dayKey, getPosition, esc, haversineKm, fmtDayDate, fmtWeekday, cap, toast, uid } from './util.js?v=7.2.1';
-import { FORECAST_TTL, placeName, coastalCheck, fetchSpotForecast, searchPlaces } from './api.js?v=7.2.1';
-import { HUNT_LABEL, HUNT_ORDER, DAY_HUNTS } from './hunts.js?v=7.2.1';
-import { update } from './storage.js?v=7.2.1';
-import { $, $$, S, closeSheet, forecasts, indexEvents, openSheet, sessionName, ui } from './core.js?v=7.2.1';
-import { TYPE_NAME, huntPhrase, runCounts, scoreTone, sessionWhen, shortWhen, skeleton, skyClass, skyGlyph, skyOf, toneDot, whyLine } from './forecast.js?v=7.2.1';
-import { openCompassHere } from './tools.js?v=7.2.1';
-import { render } from './app.js?v=7.2.1';
-import { openSpotDetail } from './spots.js?v=7.2.1';
+import { evaluateSpot } from './scoring.js?v=7.2.2';
+import { dayKey, getPosition, esc, haversineKm, fmtDayDate, fmtWeekday, cap, toast, uid } from './util.js?v=7.2.2';
+import { FORECAST_TTL, placeName, coastalCheck, fetchSpotForecast, searchPlaces } from './api.js?v=7.2.2';
+import { HUNT_LABEL, HUNT_ORDER, DAY_HUNTS } from './hunts.js?v=7.2.2';
+import { update } from './storage.js?v=7.2.2';
+import { $, $$, S, closeSheet, forecasts, indexEvents, openSheet, sessionName, ui } from './core.js?v=7.2.2';
+import { TYPE_NAME, huntPhrase, runCounts, scoreTone, sessionWhen, shortWhen, skeleton, skyClass, skyGlyph, skyOf, toneDot, whyLine } from './forecast.js?v=7.2.2';
+import { openCompassHere } from './tools.js?v=7.2.2';
+import { render } from './app.js?v=7.2.2';
+import { openSpotDetail } from './spots.js?v=7.2.2';
 
 /* ================= right here ================= */
 // Scores and the week's sessions for wherever you're standing, without saving it as a spot.
