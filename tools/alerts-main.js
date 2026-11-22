@@ -7,7 +7,7 @@
 const { evaluateSpot } = M_scoring;
 const { setKp, HUNT_LABEL, HUNT_VERB } = M_hunts;
 const { fetchSpotForecast, fetchKp, clearCache } = M_api;
-const { fmtTime, fmtDay } = M_util;
+const { fmtTime, fmtDay, tzOffset } = M_util;
 
 const DEFAULT_ALERTS = { go: true, threshold: 80, confident: true, calledOff: true, crew: true, rate: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 };
 const CORS = {
@@ -88,7 +88,10 @@ async function checkUser(admin, uid) {
   if (offset == null) return { sent: 0 };
 
   const now = Date.now() / 1000;
-  const local = new Date((now + offset) * 1000);
+  // Your hour of the day (quiet hours, the digest, morning asks) is where you are, from the phone's time
+  // zone; older app versions didn't send it, so fall back to your first spot's.
+  const userOff = tzOffset(settings.tz, now) ?? offset;
+  const local = new Date((now + userOff) * 1000);
   const hour = local.getUTCHours(), day = local.getUTCDay();
   const quiet = inQuiet(hour, prefs.quietStart, prefs.quietEnd);
   const { data: log } = await admin.from('alert_log').select('kind, key, score').eq('user_id', uid)

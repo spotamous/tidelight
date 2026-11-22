@@ -1,16 +1,16 @@
 // Tidelight: The planners: moon planner, tide windows, through the year, and the shareable plan card.
-import { esc, haversineKm, fmtWeekday, fmtDayDate, cap, fmtTime, compass, getPosition, toast, downloadFile, dayKey, fmtDay, angleDiff } from './util.js?v=7.1.1';
-import { openSkyAR } from './skyar.js?v=7.1.1';
-import { fetchSpotForecast } from './api.js?v=7.1.1';
-import { tideInfo, evaluateSpot } from './scoring.js?v=7.1.1';
-import { update } from './storage.js?v=7.1.1';
-import { huntsOf } from './hunts.js?v=7.1.1';
-import { coverUrl } from './photos.js?v=7.1.1';
-import { $, $$, S, forecasts, indexEvents, openSheet, ui, verdict } from './core.js?v=7.1.1';
-import { moonSvg } from './tools.js?v=7.1.1';
-import { pickPlace } from './here.js?v=7.1.1';
-import { G, TYPE_NAME, horizonScene, huntPhrase, skeleton, skyOf, toneDot } from './forecast.js?v=7.1.1';
-import { openEvent } from './event.js?v=7.1.1';
+import { esc, haversineKm, fmtWeekday, fmtDayDate, cap, fmtTime, compass, getPosition, toast, downloadFile, dayKey, fmtDay, angleDiff, localMidnight } from './util.js?v=7.2';
+import { openSkyAR } from './skyar.js?v=7.2';
+import { fetchSpotForecast } from './api.js?v=7.2';
+import { tideInfo, evaluateSpot } from './scoring.js?v=7.2';
+import { update } from './storage.js?v=7.2';
+import { huntsOf } from './hunts.js?v=7.2';
+import { coverUrl } from './photos.js?v=7.2';
+import { $, $$, forecasts, indexEvents, offsetFor, openSheet, placeTz, S, ui, verdict } from './core.js?v=7.2';
+import { moonSvg } from './tools.js?v=7.2';
+import { pickPlace } from './here.js?v=7.2';
+import { G, TYPE_NAME, horizonScene, huntPhrase, skeleton, skyOf, toneDot } from './forecast.js?v=7.2';
+import { openEvent } from './event.js?v=7.2';
 
 /* ================= moon planner ================= */
 // When does the moon (or the sun) rise or set right behind something: a lighthouse, an arch, a peak?
@@ -23,7 +23,9 @@ export function bearingTo(a, b) {
   const y = Math.sin(dl) * Math.cos(f2), x = Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl);
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
-export const localOffset = t => -new Date(t * 1000).getTimezoneOffset() * 60;   // the phone's time zone, daylight saving included
+// The local offset where you'd stand (its own time zone, daylight saving included), not the phone's:
+// planning a moonrise in Canada from Melbourne shows Canadian times.
+export const localOffset = (t, place = al?.stand) => offsetFor(place, t);
 export function alignState() {
   if (al) return al;
   const st = S();
@@ -40,12 +42,22 @@ export function findAlignments(a) {
   const { lat, lon } = a.stand;
   const pos = a.body === 'moon' ? (d => SC.getMoonPosition(d, lat, lon)) : (d => SC.getPosition(d, lat, lon));
   const out = [];
-  const day0 = new Date(); day0.setHours(12, 0, 0, 0);
+  // Days run midnight to midnight at the stand point, in its own time zone (not the phone's).
+  const nowS = Date.now() / 1000;
+  let mid = localMidnight(nowS, offsetFor(a.stand, nowS));
+  const moonIn = (from, to, key) => {   // a moonrise or moonset between two moments, searching whole UTC days
+    for (const dd of [from, from + 86400]) {
+      const m = SC.getMoonTimes(new Date(dd * 1000), lat, lon, true);
+      if (m[key] instanceof Date && m[key] / 1000 >= from && m[key] / 1000 < to) return m[key];
+    }
+    return null;
+  };
   for (let i = 0; i < AL_DAYS; i++) {
-    const day = new Date(day0.getTime() + i * 864e5);
+    const next = localMidnight(mid + 36 * 3600, offsetFor(a.stand, mid + 36 * 3600));   // (daylight saving changes keep the days whole)
     let rise, set;
-    if (a.body === 'moon') { const m = SC.getMoonTimes(day, lat, lon); rise = m.rise; set = m.set; }
-    else { const tm = SC.getTimes(day, lat, lon); rise = tm.sunrise; set = tm.sunset; }
+    if (a.body === 'moon') { rise = moonIn(mid, next, 'rise'); set = moonIn(mid, next, 'set'); }
+    else { const tm = SC.getTimes(new Date((mid + 12 * 3600) * 1000), lat, lon); rise = tm.sunrise; set = tm.sunset; }
+    mid = next;
     for (const [kind, t0] of [['rise', rise], ['set', set]]) {
       if (a.events !== 'both' && a.events !== kind) continue;
       if (!(t0 instanceof Date) || isNaN(t0)) continue;
@@ -107,7 +119,7 @@ export function openAligner() {
     return `<details class="al-row ${L.good ? 'good' : ''}" data-ai="${i}" ${a.open === i ? 'open' : ''}>
       <summary>
         <span class="al-icon" aria-hidden="true">${a.body === 'moon' ? moonSvg(r.ill.phase, a.stand.lat, 34) : '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#F2C27A" stroke-width="1.8" stroke-linecap="round"><path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0M12 9.5V8M7.6 11.6l-1.1-1.1M16.4 11.6l1.1-1.1"/></svg>'}</span>
-        <span class="al-main"><b>${fmtWeekday(r.t, o).slice(0, 3)} ${fmtDayDate(r.t, o).split(' ').slice(1).join(' ')} ${new Date(r.t * 1000).getFullYear()}</b>
+        <span class="al-main"><b>${fmtWeekday(r.t, o).slice(0, 3)} ${fmtDayDate(r.t, o).split(' ').slice(1).join(' ')} ${new Date((r.t + o) * 1000).getUTCFullYear()}</b>
           <small>${cap(body)}${r.kind} ${fmtTime(r.t, o)}${r.ill ? `, ${Math.round(r.ill.fraction * 100)}% full` : ''}. ${side}</small></span>
         <span class="al-light ${L.good ? 'good' : ''}">${L.word}</span>
       </summary>
@@ -174,7 +186,7 @@ export function openAligner() {
   $$('#sheetBody [data-full]').forEach(b => b.onclick = () => { a.full = b.dataset.full === '1'; a.open = null; redraw(); });
   $$('#sheetBody [data-ar]').forEach(b => b.onclick = () => {
     const r = results[Number(b.dataset.ar)];
-    openSkyAR({ time: r.t, focus: a.body === 'moon' ? 'moon' : 'sun' });   // uses where you're standing now
+    openSkyAR({ time: r.t, focus: a.body === 'moon' ? 'moon' : 'sun', lat: a.stand.lat, lon: a.stand.lon, name: a.stand.name, tz: placeTz(a.stand) });   // the sky from where you'd stand
   });
   $$('#sheetBody [data-ics]').forEach(b => b.onclick = () => {
     const r = results[Number(b.dataset.ics)];

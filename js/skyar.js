@@ -1,7 +1,7 @@
 // Sky view: the live camera with the sun's path, the moon's path and phase, and the Milky Way drawn
 // over it, at any time you scrub to. Uses the camera, the motion sensors and the compass; without
 // them (a computer, or sensors refused) you drag to look around a drawn sky instead.
-import { esc, fmtTime, toast, getPosition, compass } from './util.js?v=7.1.1';
+import { esc, fmtTime, toast, getPosition, compass, tzOffset, deviceOffset } from './util.js?v=7.2';
 
 const D2R = Math.PI / 180, R2D = 180 / Math.PI;
 const LENS_FOV = 67;                       // phone main camera, degrees across the long side of the frame
@@ -31,13 +31,53 @@ function galToEq(l, b) {
   return { ra: ((raNGP + Math.atan2(y, x)) * R2D + 360) % 360, dec: dec * R2D };
 }
 const CORE = galToEq(0, 0);
+
+/* ---------- the Milky Way's shape ---------- */
+// How wide (degrees either side of the plane) and how bright the band looks along galactic longitude l,
+// roughly as it does to the eye from a dark site: broad and bright through Sagittarius and Scorpius,
+// bright patches in Cygnus, Scutum and Carina, thin and faint towards Auriga.
+const wrapL = l => ((l + 540) % 360) - 180;
+const bump = (l, at, w) => Math.exp(-((wrapL(l - at) / w) ** 2));
+const mwBright = l => Math.min(1, 0.22 + 0.78 * bump(l, 0, 32) + 0.42 * bump(l, 78, 14) + 0.32 * bump(l, 27, 8) + 0.36 * bump(l, -72, 13) + 0.18 * bump(l, -50, 18));
+const mwWidth = l => 5 + 11 * bump(l, 0, 28) + 4 * bump(l, 78, 18) + 3 * bump(l, -72, 16);
+// Dark lanes: the Great Rift (Cygnus down through Aquila to Ophiuchus, just north of the plane) and the Coalsack.
+const RIFT = []; for (let l = 2; l <= 86; l += 2) RIFT.push([l, 1.6 + 1.2 * bump(l, 45, 30), (1.2 + 1.6 * bump(l, 30, 22)) * Math.sin(Math.PI * (l - 2) / 84)]);   // [l, centre b, half width], fading out at both ends
+// Landmarks people look for. g: galactic [l, b]; or q: equatorial [RA, Dec] degrees (J2000).
+const MW_SPOTS = [
+  { n: 'Sagittarius Star Cloud', g: [1.5, -4], kind: 'cloud' },
+  { n: 'Lagoon Nebula', g: [6.0, -1.2], kind: 'neb' },
+  { n: 'Scutum Star Cloud', g: [27, -2.5], kind: 'cloud' },
+  { n: 'Great Rift', g: [32, 3], kind: 'dark' },
+  { n: 'Dark Horse', g: [358, 5.5], kind: 'dark' },
+  { n: 'Antares, Rho Ophiuchi', q: [247.35, -26.43], kind: 'star' },
+  { n: 'Carina Nebula', g: [287.6, -0.6], kind: 'neb' },
+  { n: 'Southern Cross', q: [187.5, -60.0], kind: 'star' },
+  { n: 'Coalsack', g: [301, -1], kind: 'dark' },
+  { n: 'Alpha & Beta Centauri', q: [215.4, -60.6], kind: 'star' },
+  { n: 'Large Magellanic Cloud', q: [80.9, -69.8], kind: 'gal' },
+  { n: 'Small Magellanic Cloud', q: [13.2, -72.8], kind: 'gal' },
+  { n: 'Cygnus, Northern Cross', g: [78, 2], kind: 'cloud' },
+  { n: 'North America Nebula', g: [85.5, -1], kind: 'neb' },
+  { n: 'Andromeda Galaxy', q: [10.68, 41.27], kind: 'gal' },
+  { n: 'Galactic anticentre', g: [180, 0], kind: 'faint' },
+];
+for (const sp of MW_SPOTS) { const e = sp.g ? galToEq(sp.g[0], sp.g[1]) : { ra: sp.q[0], dec: sp.q[1] }; sp.ra = e.ra; sp.dec = e.dec; }
+const COALSACK = galToEq(301, -1);
 const coreAt = (d, lat, lon) => raDecToAltAz(CORE.ra, CORE.dec, d, lat, lon);
 
 // Magnetic declination, roughly, from reference points around Australia and New Zealand (degrees east).
 // Calibrating on the sun or moon replaces this with a measured correction.
 const DECL = [[-31.95, 115.86, -0.9], [-34.93, 138.6, 8.0], [-37.81, 144.96, 11.7], [-33.87, 151.21, 12.9], [-27.47, 153.03, 11.2],
   [-42.88, 147.33, 15.5], [-12.46, 130.84, 3.9], [-16.92, 145.77, 7.6], [-23.7, 133.88, 5.2], [-35.28, 149.13, 12.4],
-  [-36.85, 174.76, 20.0], [-43.53, 172.63, 24.0], [-20.73, 139.49, 6.6], [-19.26, 146.82, 8.0], [-38.15, 144.36, 11.4]];
+  [-36.85, 174.76, 20.0], [-43.53, 172.63, 24.0], [-20.73, 139.49, 6.6], [-19.26, 146.82, 8.0], [-38.15, 144.36, 11.4],
+  // further afield, for travellers (rounded; calibrating on the sun or moon is still the way to be exact)
+  [43.65, -79.38, -10.0], [45.5, -73.57, -13.5], [44.65, -63.57, -16.5], [47.56, -52.71, -18.5], [49.9, -97.14, 1.5],
+  [51.05, -114.07, 13.5], [53.55, -113.49, 13.9], [49.28, -123.12, 15.5], [60.72, -135.06, 18.0], [62.45, -114.37, 15.0],
+  [61.2, -149.9, 14.5], [47.6, -122.33, 15.0], [37.77, -122.42, 12.9], [34.05, -118.24, 11.5], [39.74, -104.99, 7.5],
+  [32.78, -96.8, 2.5], [41.88, -87.63, -3.5], [40.71, -74.0, -12.7], [25.76, -80.19, -6.5], [19.43, -99.13, 4.0], [21.3, -157.86, 9.0],
+  [51.5, -0.13, 1.0], [48.86, 2.35, 1.8], [52.52, 13.4, 4.5], [40.4, -3.7, 0.5], [41.9, 12.5, 4.0], [59.9, 10.75, 4.0], [64.15, -21.94, -10.0],
+  [-33.9, 18.4, -25.5], [-26.2, 28.05, -19.0], [35.68, 139.69, -8.0], [1.35, 103.8, 0.2], [-8.65, 115.2, 1.0], [28.6, 77.2, 1.0],
+  [25.2, 55.3, 2.0], [-33.45, -70.67, 0.0], [-34.6, -58.4, -9.0], [-12.05, -77.04, -2.0], [-22.9, -43.2, -23.0]];
 function declinationAt(lat, lon) {
   let wsum = 0, v = 0, nearest = Infinity;
   for (const [a, b, d] of DECL) {
@@ -87,6 +127,7 @@ export async function openSkyAR(opts = {}) {
       <label><input type="checkbox" data-layer="sun" checked> Sun</label>
       <label><input type="checkbox" data-layer="moon" checked> Moon</label>
       <label><input type="checkbox" data-layer="mw" checked> Milky Way</label>
+      <label><input type="checkbox" data-layer="mwnames" checked> Milky Way names</label>
       <label><input type="checkbox" data-layer="grid" checked> Grid</label>
       <label class="sa-fov"><span>Lens field of view <b class="num"><span data-fovv></span>°</b></span><input type="range" min="40" max="110" step="1" data-fov></label>
       <p class="sa-hint" data-decl></p>
@@ -119,10 +160,11 @@ export async function openSkyAR(opts = {}) {
   const q = sel => root.querySelector(sel);
   const now = new Date();
   const start = opts.time ? new Date(opts.time * 1000) : now;
+  zone = opts.tz || null;   // the place's time zone (a spot far away); otherwise the phone's
   S = {
     root, q, video: q('.sa-video'), canvas: q('.sa-canvas'), ctx: q('.sa-canvas').getContext('2d'),
     lat: opts.lat ?? null, lon: opts.lon ?? null, place: opts.name || null,
-    layers: { sun: true, moon: true, mw: true, grid: true, ...(opts.layers || {}) },
+    layers: { sun: true, moon: true, mw: true, mwnames: localStorage.getItem('tidelight:arMwNames') !== '0', grid: true, ...(opts.layers || {}) },
     focus: opts.focus || null,          // 'moon' | 'sun' | 'core': open looking for it
     fov: Number(localStorage.getItem('tidelight:arFov')) || LENS_FOV,
     day: dayStart(start), minute: minuteOfWindow(start),
@@ -131,14 +173,14 @@ export async function openSkyAR(opts = {}) {
     calibrating: false, raf: 0, stream: null, cache: null, listeners: [],
   };
   // layers & lens
-  root.querySelectorAll('[data-layer]').forEach(cb => { cb.checked = S.layers[cb.dataset.layer]; cb.onchange = () => { S.layers[cb.dataset.layer] = cb.checked; }; });
+  root.querySelectorAll('[data-layer]').forEach(cb => { cb.checked = S.layers[cb.dataset.layer]; cb.onchange = () => { S.layers[cb.dataset.layer] = cb.checked; if (cb.dataset.layer === 'mwnames') { try { localStorage.setItem('tidelight:arMwNames', cb.checked ? '1' : '0'); } catch {} } }; });
   const fovIn = q('[data-fov]'); fovIn.value = S.fov; q('[data-fovv]').textContent = S.fov;
   fovIn.oninput = () => { S.fov = Number(fovIn.value); q('[data-fovv]').textContent = S.fov; try { localStorage.setItem('tidelight:arFov', S.fov); } catch {} };
   root.addEventListener('click', onClick);
   const sl = q('.sa-slider');
   sl.value = S.minute;
   sl.oninput = () => { S.minute = Number(sl.value); S.cache = null; updateTimeUI(); };
-  q('.sa-datepick').onchange = e => { const [y, m, d] = e.target.value.split('-').map(Number); if (y) { S.day = new Date(y, m - 1, d, 12); S.cache = null; updateTimeUI(); } };
+  q('.sa-datepick').onchange = e => { const [y, m, d] = e.target.value.split('-').map(Number); if (y) { const noon = Date.UTC(y, m - 1, d, 12) / 1000; S.day = new Date((noon - offAt(noon)) * 1000); S.cache = null; updateTimeUI(); } };
   // drag to look (no sensors), and to fine-tune after calibrating
   let drag = null;
   S.canvas.addEventListener('pointerdown', e => { if (!S.sensors) { drag = { x: e.clientX, y: e.clientY, az: S.manual.az, alt: S.manual.alt }; S.canvas.setPointerCapture(e.pointerId); } });
@@ -153,7 +195,18 @@ export async function openSkyAR(opts = {}) {
   if (opts.autostart) startAR();
 }
 
-function dayStart(d) { const x = new Date(d); if (x.getHours() < 12) x.setDate(x.getDate() - 1); x.setHours(12, 0, 0, 0); return x; }   // the night's window runs noon to noon
+// Times are shown in the place's own time zone: the phone's when you're standing there, the spot's
+// when you open Sky view for a spot somewhere else.
+let zone = null;
+const offAt = sec => tzOffset(zone, sec) ?? deviceOffset(sec);
+const hhmm = d => fmtTime(d.getTime() / 1000, offAt(d.getTime() / 1000));
+const localDay = d => new Date((d.getTime() / 1000 + offAt(d.getTime() / 1000)) * 1000);   // read with getUTC*
+function dayStart(d) {   // the night's window runs noon to noon, local to the place
+  const sec = d.getTime() / 1000, off = offAt(sec);
+  let mid = Math.floor((sec + off) / 86400) * 86400 - off;
+  if (sec - mid < 12 * 3600) mid -= 86400;
+  return new Date((mid + 12 * 3600) * 1000);
+}
 function minuteOfWindow(d) { return Math.max(0, Math.min(MIN_DAY - 5, Math.round((d - dayStart(d)) / 60000 / 5) * 5)); }
 const selTime = () => new Date(S.day.getTime() + S.minute * 60000);
 
@@ -313,6 +366,20 @@ function computePaths() {
     out.core.push({ ...coreAt(d, lat, lon), d, hour });
   }
   for (let l = -180; l <= 180; l += 3) { const eq = galToEq(l, 0); out.band.push({ ...raDecToAltAz(eq.ra, eq.dec, sel, lat, lon), l }); }
+  // the band's edges at three depths (for a soft falloff), the dark lanes, and the landmarks
+  const at = (l, b) => { const eq = galToEq(l, b); return raDecToAltAz(eq.ra, eq.dec, sel, lat, lon); };
+  // Each layer is one continuous shape (no joins to show): the whole band at five depths for a soft
+  // edge, plus the bright regions as extra shapes that taper away at their ends.
+  const strip = (from, to, wfn, alpha) => { const up = [], dn = []; for (let l = from; l <= to; l += 2) { const w = wfn(l); up.push(at(l, w)); dn.push(at(l, -w)); } return { up, dn, alpha }; };
+  const taper = (l, from, to) => Math.sin(Math.PI * Math.min(1, Math.max(0, (l - from) / (to - from))));
+  out.strips = [
+    ...[1.15, 0.9, 0.68, 0.48, 0.28].map(k => strip(-180, 180, l => mwWidth(l) * k, 0.022)),
+    strip(-42, 42, l => 13 * taper(l, -42, 42), 0.05), strip(-22, 22, l => 8 * taper(l, -22, 22), 0.05), strip(-4, 9, l => 6 * taper(l, -4, 9), 0.04),
+    strip(58, 98, l => 7 * taper(l, 58, 98), 0.05), strip(-96, -52, l => 6 * taper(l, -96, -52), 0.045), strip(21, 34, l => 4.5 * taper(l, 21, 34), 0.045),
+  ];
+  out.rift = RIFT.map(([l, b, w]) => ({ l, up: at(l, b + w), dn: at(l, b - w) }));
+  out.coalsack = raDecToAltAz(COALSACK.ra, COALSACK.dec, sel, lat, lon);
+  out.mwSpots = MW_SPOTS.map(sp => ({ ...sp, ...raDecToAltAz(sp.ra, sp.dec, sel, lat, lon) }));
   out.selSun = sunAt(sel, lat, lon); out.selMoon = moonAt(sel, lat, lon); out.selCore = coreAt(sel, lat, lon);
   out.illum = SC.getMoonIllumination(sel);
   out.sunDark = out.selSun.alt < -18;
@@ -359,7 +426,7 @@ function draw() {
     g.save(); g.font = `${opt.weight || 600} ${opt.size || 12}px Manrope, system-ui, sans-serif`; g.textAlign = opt.align || 'left'; g.textBaseline = 'middle';
     g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.55)'; g.strokeText(t, x, y); g.fillStyle = opt.color || '#F4EFE7'; g.fillText(t, x, y); g.restore();
   };
-  const hm = d => fmtTime(d.getTime() / 1000, -d.getTimezoneOffset() * 60).replace(':00', '');
+  const hm = d => hhmm(d).replace(':00', '');
 
   // grid: the horizon, altitude rings, compass points
   if (S.layers.grid) {
@@ -377,10 +444,74 @@ function draw() {
   }
   // the Milky Way: a soft band along the galactic plane, the core, and the core's path through the night
   if (S.layers.mw) {
+    // The band itself: soft layers whose width and brightness follow the real Milky Way. It's drawn
+    // brighter once it's properly dark, the way it actually appears.
+    const dark = P.sunDark ? 1 : P.selSun.alt < -6 ? 0.7 : 0.45;
+    // Drawn small on a hidden canvas, then scaled up: the scaling blurs it into a smooth glow
+    // with no seams between the pieces (and it's quicker to draw).
+    const K = 5, ow = Math.ceil(W / K), oh = Math.ceil(H / K);
+    const off = S.mwCanvas || (S.mwCanvas = document.createElement('canvas'));
+    if (off.width !== ow || off.height !== oh) { off.width = ow; off.height = oh; }
+    const o = off.getContext('2d');
+    o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, ow, oh); o.setTransform(1 / K, 0, 0, 1 / K, 0, 0);
+    const quad = (pts, col) => { o.fillStyle = col; o.beginPath(); o.moveTo(pts[0].x, pts[0].y); for (let i = 1; i < pts.length; i++) o.lineTo(pts[i].x, pts[i].y); o.closePath(); o.fill(); };
+    for (const st of P.strips) {
+      // split into runs that are all in front of the camera, and fill each run as one shape
+      o.fillStyle = `rgba(206,212,255,${(st.alpha * dark).toFixed(4)})`;
+      let run = [];
+      const flush = () => {
+        if (run.length > 1) { o.beginPath(); run.forEach(([u], i) => (i ? o.lineTo(u.x, u.y) : o.moveTo(u.x, u.y))); for (let i = run.length - 1; i >= 0; i--) o.lineTo(run[i][1].x, run[i][1].y); o.closePath(); o.fill(); }
+        run = [];
+      };
+      for (let i = 0; i < st.up.length; i++) {
+        const a = st.up[i], d = st.dn[i];
+        const pa = a.alt > -6 ? proj(a.az, a.alt) : null, pd = d.alt > -6 ? proj(d.az, d.alt) : null;
+        const prev = run[run.length - 1];
+        if (!pa || !pd || (prev && Math.hypot(pa.x - prev[0].x, pa.y - prev[0].y) > W)) { flush(); if (!pa || !pd) continue; }
+        run.push([pa, pd]);
+      }
+      flush();
+    }
+    // the dark lanes, cut out of the glow
+    o.globalCompositeOperation = 'destination-out';
+    { const ups = P.rift.map(r => (r.up.alt > -3 ? proj(r.up.az, r.up.alt) : null)), dns = P.rift.map(r => (r.dn.alt > -3 ? proj(r.dn.az, r.dn.alt) : null));
+      o.fillStyle = 'rgba(0,0,0,.4)'; o.beginPath(); let n = 0;
+      ups.forEach((u, i) => { if (u && dns[i]) { n ? o.lineTo(u.x, u.y) : o.moveTo(u.x, u.y); n++; } });
+      for (let i = dns.length - 1; i >= 0; i--) if (ups[i] && dns[i]) o.lineTo(dns[i].x, dns[i].y);
+      if (n > 1) { o.closePath(); o.fill(); } }
+    const cs = P.coalsack.alt > -2 ? proj(P.coalsack.az, P.coalsack.alt) : null;
+    if (cs && inView(cs)) { const r = fpx * Math.tan(3.2 * D2R); o.fillStyle = 'rgba(0,0,0,.6)'; o.beginPath(); o.ellipse(cs.x, cs.y, r, r * 0.8, 0, 0, Math.PI * 2); o.fill(); }
+    o.globalCompositeOperation = 'source-over';
+    g.save(); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.drawImage(off, 0, 0, ow * K, oh * K); g.restore();
     const band = P.band.map(b => (b.alt > -5 ? proj(b.az, b.alt) : null));
-    line(band, 'rgba(190,200,255,.10)', 54);
-    line(band, 'rgba(210,215,255,.16)', 22);
-    line(band, 'rgba(225,228,255,.35)', 1.5, [2, 5]);
+    line(band, 'rgba(225,228,255,.28)', 1.2, [2, 6]);   // the plane itself, faint
+    // the landmarks, named (Layers, Milky Way names)
+    if (S.layers.mwnames) {
+      const placed = [];
+      const cq0 = proj(P.selCore.az, P.selCore.alt);   // the core's own label is drawn below: keep clear of it
+      if (cq0 && inView(cq0)) placed.push({ l: cq0.x - 70, y: cq0.y - 26, w: 140 });
+      const ICON = { cloud: 'rgba(235,236,255,.95)', neb: '#FFB3C7', dark: 'rgba(160,165,200,.95)', star: '#FFE6B0', gal: '#C9F0FF', faint: 'rgba(210,215,255,.75)' };
+      for (const sp of P.mwSpots) {
+        if (sp.alt < 2) continue;
+        const q = proj(sp.az, sp.alt);
+        if (!q || q.x < 10 || q.x > W - 10 || q.y < 70 || q.y > H - 150) continue;
+        const col = ICON[sp.kind];
+        g.save(); g.strokeStyle = col; g.lineWidth = 1.6; g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 4;
+        if (sp.kind === 'dark') { g.setLineDash([3, 3]); g.beginPath(); g.arc(q.x, q.y, 7, 0, Math.PI * 2); g.stroke(); }
+        else if (sp.kind === 'star') { g.beginPath(); for (const [dx, dy] of [[0, -7], [0, 7], [-7, 0], [7, 0]]) { g.moveTo(q.x, q.y); g.lineTo(q.x + dx, q.y + dy); } g.stroke(); }
+        else { g.beginPath(); g.ellipse(q.x, q.y, sp.kind === 'gal' ? 9 : 7, sp.kind === 'gal' ? 5 : 7, sp.kind === 'gal' ? -0.5 : 0, 0, Math.PI * 2); g.stroke(); }
+        g.restore();
+        if (cq0 && Math.hypot(q.x - cq0.x, q.y - cq0.y) < 64) continue;   // right on the core: its label covers it
+        // keep names from piling on top of each other: try the right, then the left, then below
+        g.save(); g.font = '600 11px Manrope, system-ui, sans-serif'; const tw = g.measureText(sp.n).width; g.restore();
+        const tries = [[q.x + 11, q.y - 10, 'left'], [q.x - 11, q.y - 10, 'right'], [q.x, q.y + 18, 'center']];
+        const box = ([x, y, al]) => ({ l: al === 'left' ? x : al === 'right' ? x - tw : x - tw / 2, y });
+        const free = tries.find(tr => { const b = box(tr); return b.l > 4 && b.l + tw < W - 4 && !placed.some(p => b.l < p.l + p.w + 6 && b.l + tw + 6 > p.l && Math.abs(b.y - p.y) < 15); });
+        if (!free) continue;
+        placed.push({ ...box(free), w: tw });
+        label(sp.n, free[0], free[1], { size: 11, color: col, weight: 600, align: free[2] });
+      }
+    }
     const cpath = P.core.map(p => (p.alt > -2 ? proj(p.az, p.alt) : null));
     line(cpath, 'rgba(170,160,255,.55)', 2, [6, 5]);
     P.core.forEach((p, i) => { if (!p.hour || p.alt < 0 || i % 12) return; const q = proj(p.az, p.alt); if (q && inView(q)) { dotAt(g, q.x, q.y, 3, 'rgba(200,190,255,.9)'); label(hm(p.d), q.x + 7, q.y - 8, { size: 10, color: '#D8D2FF' }); } });
@@ -466,11 +597,11 @@ function drawMoon(g, x, y, r, frac, ang) {
 function updateTimeUI() {
   if (!S) return;
   const d = selTime();
-  S.q('.sa-time').textContent = fmtTime(d.getTime() / 1000, -d.getTimezoneOffset() * 60);
-  S.q('.sa-date').textContent = d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  S.q('.sa-time').textContent = hhmm(d);
+  S.q('.sa-date').textContent = d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: zone || undefined });
   S.q('.sa-slider').value = S.minute;
   S.q('.sa-slider').style.setProperty('--val', `${(S.minute / (MIN_DAY - 5) * 100).toFixed(1)}%`);
-  const dd = new Date(S.day); S.q('.sa-datepick').value = `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, '0')}-${String(dd.getDate()).padStart(2, '0')}`;
+  const dd = localDay(S.day); S.q('.sa-datepick').value = `${dd.getUTCFullYear()}-${String(dd.getUTCMonth() + 1).padStart(2, '0')}-${String(dd.getUTCDate()).padStart(2, '0')}`;
   if (S.lat == null || !window.SunCalc) return;
   // the night's moments, to jump to
   const SC = window.SunCalc, t0 = S.day, t1 = new Date(S.day.getTime() + 864e5);
@@ -479,7 +610,7 @@ function updateTimeUI() {
   const inWin = x => x instanceof Date && !isNaN(x) && x >= t0 && x < t1;
   const add = (x, l) => { if (inWin(x)) ev.push([x, l]); };
   add(T0.sunset, 'Sunset'); add(T0.night, 'Dark'); add(T1.nightEnd, 'First light'); add(T1.sunrise, 'Sunrise');
-  for (const day of [t0, t1]) { const m = SC.getMoonTimes(day, S.lat, S.lon); add(m.rise, 'Moonrise'); add(m.set, 'Moonset'); }
+  for (const day of [t0, t1, new Date(t1.getTime() + 864e5)]) { const m = SC.getMoonTimes(day, S.lat, S.lon, true); add(m.rise, 'Moonrise'); add(m.set, 'Moonset'); }
   // core rise and its highest point in the dark
   let best = null, rise = null, prev = null;
   for (let k = 0; k <= MIN_DAY; k += 10) {
@@ -492,7 +623,7 @@ function updateTimeUI() {
   if (best && best.a > 5) ev.push([best.x, 'Core highest in the dark']);
   ev.sort((a, b) => a[0] - b[0]);
   const box = S.q('.sa-events');
-  box.innerHTML = ev.map(([x, l]) => `<button class="sa-chip" data-at="${x.getTime()}">${esc(l)} <b class="num">${fmtTime(x.getTime() / 1000, -x.getTimezoneOffset() * 60)}</b></button>`).join('');
+  box.innerHTML = ev.map(([x, l]) => `<button class="sa-chip" data-at="${x.getTime()}">${esc(l)} <b class="num">${hhmm(x)}</b></button>`).join('');
   box.onclick = onEventChip;
 }
 
@@ -555,7 +686,7 @@ async function snapshot() {
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.font = '600 13px Manrope, system-ui, sans-serif'; g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(0, H - 34, W, 34);
   g.fillStyle = '#F4EFE7'; g.textBaseline = 'middle';
-  g.fillText(`${d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}, ${fmtTime(d.getTime() / 1000, -d.getTimezoneOffset() * 60)}  ·  Sky view, Tidelight`, 14, H - 17);
+  g.fillText(`${d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', timeZone: zone || undefined })}, ${hhmm(d)}  ·  Sky view, Tidelight`, 14, H - 17);
   const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9));
   if (!blob) return toast('Couldn\'t take the snapshot.');
   const file = new File([blob], `sky-view-${d.toISOString().slice(0, 16).replace(':', '')}.jpg`, { type: 'image/jpeg' });

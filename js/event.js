@@ -1,19 +1,19 @@
 // Tidelight: A session's briefing: the full detail sheet for one sunrise, sunset or night.
-import { cap, esc, fmtTime, toast } from './util.js?v=7.1.1';
-import { gearFor } from './gear.js?v=7.1.1';
-import { coverUrl } from './photos.js?v=7.1.1';
-import { HUNT_LABEL } from './hunts.js?v=7.1.1';
-import { currentUser } from './sync.js?v=7.1.1';
-import { MIN_KEEPERS, personalModelSummary } from './scoring.js?v=7.1.1';
-import { openSkyAR } from './skyar.js?v=7.1.1';
-import { hasAI, aiBriefing, briefingContext } from './ai.js?v=7.1.1';
-import { $, S, briefing, closeSheet, eventIndex, huntList, openSheet, sessionName } from './core.js?v=7.1.1';
-import { avatarStack, cloudChips, commitPanel, horizonScene, huntPhrase, labModel, partBar, phaseColor, runCounts, sessionWhen, skyClass, skyOf, toneDot, toneOf, whySentence } from './forecast.js?v=7.1.1';
-import { crewGoing, crewState, goingText, openShareSheet } from './crews.js?v=7.1.1';
-import { tideChart, wireTide } from './tools.js?v=7.1.1';
-import { drawHere, saveHere } from './here.js?v=7.1.1';
-import { openShareCard } from './planners.js?v=7.1.1';
-import { addPlan } from './plans.js?v=7.1.1';
+import { cap, esc, fmtTime, toast } from './util.js?v=7.2';
+import { gearFor } from './gear.js?v=7.2';
+import { coverUrl } from './photos.js?v=7.2';
+import { HUNT_LABEL } from './hunts.js?v=7.2';
+import { currentUser } from './sync.js?v=7.2';
+import { MIN_KEEPERS, personalModelSummary } from './scoring.js?v=7.2';
+import { openSkyAR } from './skyar.js?v=7.2';
+import { hasAI, aiBriefing, briefingContext } from './ai.js?v=7.2';
+import { $, briefing, closeSheet, eventIndex, huntList, openSheet, placeTz, S, sessionName } from './core.js?v=7.2';
+import { avatarStack, cloudChips, commitPanel, horizonScene, huntPhrase, labModel, partBar, phaseColor, runCounts, sessionWhen, skyClass, skyOf, toneDot, toneOf, whySentence } from './forecast.js?v=7.2';
+import { crewGoing, crewState, goingText, openShareSheet } from './crews.js?v=7.2';
+import { tideChart, wireTide } from './tools.js?v=7.2';
+import { drawHere, saveHere } from './here.js?v=7.2';
+import { openShareCard } from './planners.js?v=7.2';
+import { addPlan } from './plans.js?v=7.2';
 
 /* ================= event detail ================= */
 
@@ -115,7 +115,8 @@ export function openEvent(key) {
   wireTide(e);
   if (e.spot.here) { $('#hereBack').onclick = () => drawHere(); $('#hereSave').onclick = () => saveHere(); }
   $('#cardBtn').onclick = () => openShareCard(e);
-  $('#skyBtn').onclick = () => { closeSheet(); openSkyAR({ time: e.t, focus: e.type === 'night' || e.topHunt === 'astro' ? 'core' : 'sun' }); };
+  // the sky over this spot, in its own time zone (whether you're standing there or planning from home)
+  $('#skyBtn').onclick = () => { closeSheet(); openSkyAR({ time: e.t, focus: e.type === 'night' || e.topHunt === 'astro' ? 'core' : 'sun', lat: e.spot.lat, lon: e.spot.lon, name: e.spot.name, tz: placeTz(e.spot) }); };
   const sb = $('#shareBtn');
   if (sb) sb.onclick = () => {
     if (!S().plans.some(p => p.key === e.key)) addPlan(e);

@@ -100,3 +100,24 @@ export function getPosition() {
     );
   });
 }
+
+/* ---------- time zones ---------- */
+// The UTC offset (in seconds) of a named time zone ("America/Vancouver") at a moment, daylight saving
+// included. null when the zone isn't known. Spots carry their zone from the weather service, so times
+// come out right for a spot on the other side of the world, whatever time zone the phone is in.
+const tzFormats = {};
+export function tzOffset(tz, t = Date.now() / 1000) {
+  if (!tz) return null;
+  try {
+    const f = tzFormats[tz] || (tzFormats[tz] = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }));
+    const p = Object.fromEntries(f.formatToParts(new Date(Math.floor(t) * 1000)).map(x => [x.type, x.value]));
+    const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second) / 1000;
+    return Math.round((asUTC - Math.floor(t)) / 60) * 60;
+  } catch { return null; }
+}
+// The phone's own offset at a moment.
+export const deviceOffset = (t = Date.now() / 1000) => -new Date(t * 1000).getTimezoneOffset() * 60;
+// Midnight at the start of the local day containing t, as a UTC timestamp.
+export function localMidnight(t, offset) {
+  return Math.floor((t + offset) / 86400) * 86400 - offset;
+}

@@ -113,7 +113,28 @@ function getPosition() {
   });
 }
 
-return { clamp, haversineKm, esc, fmtTime, dayKey, fmtDay, fmtDayDate, fmtWeekday, fmtDate, compass, angleDiff, cap, uid, downloadFile, toast, getPosition };
+/* ---------- time zones ---------- */
+// The UTC offset (in seconds) of a named time zone ("America/Vancouver") at a moment, daylight saving
+// included. null when the zone isn't known. Spots carry their zone from the weather service, so times
+// come out right for a spot on the other side of the world, whatever time zone the phone is in.
+const tzFormats = {};
+function tzOffset(tz, t = Date.now() / 1000) {
+  if (!tz) return null;
+  try {
+    const f = tzFormats[tz] || (tzFormats[tz] = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }));
+    const p = Object.fromEntries(f.formatToParts(new Date(Math.floor(t) * 1000)).map(x => [x.type, x.value]));
+    const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second) / 1000;
+    return Math.round((asUTC - Math.floor(t)) / 60) * 60;
+  } catch { return null; }
+}
+// The phone's own offset at a moment.
+const deviceOffset = (t = Date.now() / 1000) => -new Date(t * 1000).getTimezoneOffset() * 60;
+// Midnight at the start of the local day containing t, as a UTC timestamp.
+function localMidnight(t, offset) {
+  return Math.floor((t + offset) / 86400) * 86400 - offset;
+}
+
+return { clamp, haversineKm, esc, fmtTime, dayKey, fmtDay, fmtDayDate, fmtWeekday, fmtDate, compass, angleDiff, cap, uid, downloadFile, toast, getPosition, tzOffset, deviceOffset, localMidnight };
 })();
 
 /* ===== js/hunts.js ===== */
@@ -1630,7 +1651,7 @@ return { clearCache, restoreForecasts, savedForecast, FORECAST_TTL, fetchSpotFor
 const { evaluateSpot } = M_scoring;
 const { setKp, HUNT_LABEL, HUNT_VERB } = M_hunts;
 const { fetchSpotForecast, fetchKp, clearCache } = M_api;
-const { fmtTime, fmtDay } = M_util;
+const { fmtTime, fmtDay, tzOffset } = M_util;
 
 const DEFAULT_ALERTS = { go: true, threshold: 80, confident: true, calledOff: true, crew: true, rate: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 };
 const CORS = {
@@ -1711,7 +1732,10 @@ async function checkUser(admin, uid) {
   if (offset == null) return { sent: 0 };
 
   const now = Date.now() / 1000;
-  const local = new Date((now + offset) * 1000);
+  // Your hour of the day (quiet hours, the digest, morning asks) is where you are, from the phone's time
+  // zone; older app versions didn't send it, so fall back to your first spot's.
+  const userOff = tzOffset(settings.tz, now) ?? offset;
+  const local = new Date((now + userOff) * 1000);
   const hour = local.getUTCHours(), day = local.getUTCDay();
   const quiet = inQuiet(hour, prefs.quietStart, prefs.quietEnd);
   const { data: log } = await admin.from('alert_log').select('kind, key, score').eq('user_id', uid)

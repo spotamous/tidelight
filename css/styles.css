@@ -2188,3 +2188,4 @@ html[data-tabdir="back"] #view.view-in { animation-name: view-in-l; }
 .field .qr-more { justify-content: space-between; }
 .field.nightvision .qr-btn, .field.nightvision .qr-btn.best { background: transparent !important; border-color: #5A1A15 !important; color: #E0453A !important; box-shadow: none; }
 .field.nightvision .qr-btn .qr-ic, .field.nightvision .qr-btn .qr-s, .field.nightvision .qr-more, .field.nightvision .qr-more .link-btn { color: #B8362D !important; }
+.band-tz { margin: 6px 2px 0; }

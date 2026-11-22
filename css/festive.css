@@ -1,0 +1,96 @@
+/* =================== Festive theme ===================
+   For the summer holidays. Switch it in You, Display. Built on the dark theme: a deep pine ground,
+   gold in place of caramel, cranberry accents, a string of fairy lights along the top, a holly sprig
+   on the logo and a little snow. Anything drawn on a sky or photo keeps its own colours, and the
+   lights and snow stop when Reduce motion is on (yours or your phone's). */
+:root[data-theme="festive"] {
+  --ground: #0B1511;
+  --surface: #11201A;
+  --surface-2: #172A22;
+  --line: #24392F;
+  --text: #F1ECE2;
+  --muted: #A9B3AB;
+  --caramel: #E6BA5E;        /* gold: accents, links, the main buttons */
+  --caramel-ink: #1C1405;
+  --berry: #D0414F;          /* cranberry */
+  --slate: #9DB8AE;
+  --danger: #E8707A;
+  --ok: #A6D394;
+  color-scheme: dark;
+
+  --glass: rgba(20, 38, 31, .46);
+  --glass-strong: rgba(17, 33, 27, .58);
+  --glass-rim: rgba(255, 236, 196, .16);
+}
+:root[data-theme="festive"] body {
+  background:
+    radial-gradient(110% 55% at 88% -12%, rgba(208, 65, 79, .20), transparent 60%),
+    radial-gradient(90% 50% at -12% 30%, rgba(60, 140, 96, .18), transparent 65%),
+    radial-gradient(100% 50% at 110% 96%, rgba(230, 186, 94, .10), transparent 60%),
+    var(--ground);
+  background-attachment: fixed;
+}
+:root[data-theme="festive"] .topbar::before { background: linear-gradient(to bottom, rgba(11, 21, 17, .92), rgba(11, 21, 17, .74) 60%, rgba(11, 21, 17, 0)); }
+
+/* The main buttons: warm gold, like tinsel */
+:root[data-theme="festive"] .btn.primary {
+  background: linear-gradient(180deg, #F2CF7E, #D9A646);
+  border-color: rgba(255, 233, 180, .6); color: #1C1405;
+  box-shadow: inset 0 1px 0 rgba(255, 248, 225, .8), inset 0 -2px 6px rgba(120, 80, 10, .25), 0 10px 24px -10px rgba(230, 186, 94, .6);
+}
+:root[data-theme="festive"] .chip-btn.on { background: rgba(208, 65, 79, .22); border-color: rgba(208, 65, 79, .6); }
+
+/* Tab bar: a candy-cane edge on the active tab */
+:root[data-theme="festive"] .tab-ind {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .15), rgba(255, 255, 255, .04));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), inset 0 -3px 0 0 transparent, 0 4px 12px -4px rgba(0, 0, 0, .5);
+}
+:root[data-theme="festive"] .tab-ind::after {
+  content: ''; position: absolute; left: 22%; right: 22%; bottom: 3px; height: 3px; border-radius: 2px;
+  background: repeating-linear-gradient(-45deg, #F1ECE2 0 4px, var(--berry) 4px 8px);
+}
+:root[data-theme="festive"] .tabbar button.active { color: var(--caramel); }
+
+/* A holly sprig on the logo */
+:root[data-theme="festive"] .topbar .brand { position: relative; }
+:root[data-theme="festive"] .topbar .brand::after {
+  content: ''; position: absolute; left: -9px; bottom: -7px; width: 28px; height: 24px; pointer-events: none; transform: rotate(-12deg);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 22'%3E%3Cpath d='M3 13c3-1 5-4 5-7 2 2 5 2 7 1-1 2-1 5 1 7-3 0-5 2-6 4-1-3-4-5-7-5z' fill='%233F9A62'/%3E%3Cpath d='M23 13c-3-1-5-4-5-7-2 2-5 2-7 1 1 2 1 5-1 7 3 0 5 2 6 4 1-3 4-5 7-5z' fill='%23317F50'/%3E%3Ccircle cx='11' cy='13' r='2.6' fill='%23D0414F'/%3E%3Ccircle cx='15' cy='14.5' r='2.6' fill='%23E2505D'/%3E%3Ccircle cx='13' cy='10.5' r='2.4' fill='%23B83343'/%3E%3C/svg%3E") no-repeat center / contain;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .5));
+}
+
+/* Fairy lights along the top of the screen (an element the theme adds; see applyTheme) */
+.festive-lights {
+  position: fixed; left: 0; right: 0; top: env(safe-area-inset-top); height: 22px; z-index: 31; pointer-events: none; overflow: hidden;
+}
+.festive-lights svg { height: 22px; display: block; }
+.festive-lights .bulb ellipse:first-of-type { filter: drop-shadow(0 0 3px currentColor); }
+.festive-lights .wire { fill: none; stroke: rgba(20, 30, 25, .9); stroke-width: 1.2; }
+.festive-lights .bulb { animation: festiveTwinkle 2.4s ease-in-out infinite; animation-delay: var(--d, 0s); transform-origin: center; transform-box: fill-box; }
+@keyframes festiveTwinkle { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* Snow: a few slow flakes, drifting behind everything */
+.festive-snow { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }   /* behind the page, in front of the background */
+.festive-snow i {
+  position: absolute; top: -12px; left: var(--x); width: var(--s); height: var(--s); border-radius: 50%;
+  background: rgba(255, 255, 255, .75); filter: blur(.4px); opacity: var(--o, .6);
+  animation: festiveFall var(--t, 16s) linear infinite; animation-delay: var(--d, 0s);
+}
+@keyframes festiveFall {
+  0% { transform: translate3d(0, -12px, 0); }
+  50% { transform: translate3d(var(--sway, 18px), 50vh, 0); }
+  100% { transform: translate3d(0, 104vh, 0); }
+}
+
+/* Reduce motion: the lights stay lit, the snow stops */
+:root[data-motion="reduced"] .festive-lights .bulb { animation: none; }
+:root[data-motion="reduced"] .festive-snow { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .festive-lights .bulb { animation: none; }
+  .festive-snow { display: none; }
+}
+/* Field mode and Sky view: no decorations over the night-time screens */
+body.skyar-open .festive-lights, body.skyar-open .festive-snow, body:has(#field) .festive-lights, body:has(#field) .festive-snow, body:has(#welcome) .festive-lights { display: none; }
+
+/* The theme's swatch in Display */
+.theme-swatch.festive { background: radial-gradient(circle at 30% 30%, #D0414F 0 5px, transparent 6px), radial-gradient(circle at 68% 62%, #E6BA5E 0 4px, transparent 5px), linear-gradient(160deg, #1F3A2E, #0B1511 65%); }

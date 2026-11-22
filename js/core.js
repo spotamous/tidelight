@@ -1,12 +1,12 @@
 // Tidelight: Shared by every screen: screen state (ui), forecasts, the rule-based briefing, shared fragments and the sheet.
-import { getState } from './storage.js?v=7.1.1';
-import { clearCache, savedForecast, FORECAST_TTL, fetchKp, fetchForecasts } from './api.js?v=7.1.1';
-import { huntsOf, setKp, HUNT_VERB, HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.1.1';
-import { evaluateSpot, hikeMinutes, hikeIsEstimate } from './scoring.js?v=7.1.1';
-import { fmtDay, fmtTime, compass, esc, cap } from './util.js?v=7.1.1';
-import { huntPhrase, savedAgo, toneDot } from './forecast.js?v=7.1.1';
-import { fieldState } from './field.js?v=7.1.1';
-import { render } from './app.js?v=7.1.1';
+import { getState } from './storage.js?v=7.2';
+import { clearCache, savedForecast, FORECAST_TTL, fetchKp, fetchForecasts } from './api.js?v=7.2';
+import { huntsOf, setKp, HUNT_VERB, HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.2';
+import { evaluateSpot, hikeMinutes, hikeIsEstimate } from './scoring.js?v=7.2';
+import { fmtDay, fmtTime, compass, esc, cap, haversineKm, tzOffset, deviceOffset } from './util.js?v=7.2';
+import { huntPhrase, savedAgo, toneDot } from './forecast.js?v=7.2';
+import { fieldState } from './field.js?v=7.2';
+import { render } from './app.js?v=7.2';
 
 export function $(sel, el = document) { return el.querySelector(sel); }
 export function $$(sel, el = document) { return [...el.querySelectorAll(sel)]; }
@@ -59,6 +59,27 @@ export async function loadForecasts(force = false) {
 // Fresh forecasts for spots that are showing saved ones. Redraws the page you're on when they land,
 // unless you're in the middle of something (a sheet or field mode is open).
 export let bgRefresh = null;
+// A place's time zone: a spot's comes with its forecast; for anywhere else (home, a moon planner
+// stand point) borrow the zone of the nearest spot within 250 km. null when nothing's close.
+export function placeTz(p) {
+  if (!p) return null;
+  const id = p.spotId || p.id;
+  if (id && forecasts[id]?.tz) return forecasts[id].tz;
+  let best = null, bestKm = 250;
+  for (const sp of S().spots) {
+    const tz = forecasts[sp.id]?.tz;
+    if (!tz) continue;
+    const km = haversineKm(p, sp);
+    if (km < bestKm) { best = tz; bestKm = km; }
+  }
+  return best;
+}
+// The UTC offset at a place at a moment: its own zone (daylight saving included), else its forecast's
+// offset, else the phone's.
+export function offsetFor(p, t = Date.now() / 1000) {
+  const id = p?.spotId || p?.id;
+  return tzOffset(placeTz(p), t) ?? (id && forecasts[id] ? forecasts[id].offset : null) ?? deviceOffset(t);
+}
 // Things that want to know when fresh forecasts arrive (shoot records note the latest score of upcoming plans).
 // (A function, not a const, so modules can register while the app is still loading.)
 export function freshHooks() { return freshHooks.list || (freshHooks.list = []); }

@@ -6,6 +6,8 @@ It's a static web app: no server, no build step, no accounts. It runs free on Gi
 
 ## What it does
 
+**New in 7.2: travellers, the Milky Way, festive.** Time zones: every spot keeps its IANA zone from Open-Meteo (`forecasts[id].tz`), and `tzOffset()` (js/util.js) and `placeTz()` / `offsetFor()` (js/core.js) give exact local times at any date, daylight saving included. The Forecast day is drawn for the chosen spot in its own zone, with other spots placed by their local clock; the moon planner and Sky view use the place's zone; the phone's zone is synced as `settings.tz` so alerts use your own quiet hours. Sky view draws the Milky Way's real shape (rendered small and scaled up for a soft glow), the Great Rift and Coalsack, and named landmarks (Layers, *Milky Way names*); magnetic declination now covers North America, Europe and more. New *Festive* theme (`css/festive.css`): pine and gold, fairy lights, a little snow.
+
 **New in 7.1.1: rate it while it's fresh.** The rating prompt (in the app and as a notification) now comes once the light has finished: sunset + 45 min, sunrise + 1 h, daytime + 2 h; night shoots the next morning. The first notification goes through quiet hours (never after 11pm or before 5am); if it isn't answered, one follow-up the next morning, then none. Field mode shows the one-tap rating on screen when the light's done, and stays open after the session ends.
 
 **New in 7.1: how accurate is Tidelight?** The morning after a planned shoot, Tidelight asks how the light was (in the app, and as a notification once the alerts function is redeployed): one tap for Epic, Good, Okay or Flat. Every plan now keeps a shoot record (`js/records.js`): the forecast when planned, the last forecast before the shoot, and, a few hours after, what the weather actually did, fetched from Open-Meteo's records and scored with the app's own engine (leaving out that shoot's own rating). Each miss is labelled *the forecast missed* (with the real weather the call would have been right) or *the score missed*. You, *How accurate is Tidelight?* shows the hit rate, a predicted-vs-rated chart, why misses happened, accuracy by kind of shoot and standard vs personal score; Plans, History rows open each shoot's record.
@@ -182,7 +184,7 @@ If you change the scoring code: run `node tools/build-alerts.mjs` (or ask for a 
 
 ## Updating without stale caches
 
-Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=7.1.1`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
+Phones, and especially home-screen web apps, cache files aggressively. Every file is loaded with a version tag (`?v=7.2`), so a new version always loads fresh. When you change the code yourself, bump the number in `index.html` and in the `import` lines at the top of each file in `js/`. The current version is shown at the bottom of **Settings**.
 
 ### Releasing a new version
 Bump the version in three places so phones pick it up straight away:

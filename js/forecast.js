@@ -1,17 +1,17 @@
 // Tidelight: The Forecast tab: the session card, score gauge and What if?, the light band, week strip, little pictures (horizon scenes, spot tiles, avatars) and gestures.
-import { dayKey, esc, fmtTime, toast, fmtWeekday, fmtDayDate, cap } from './util.js?v=7.1.1';
-import { nearestIndex, horizonBlock, spotFloor, baseScore, tideInfo } from './scoring.js?v=7.1.1';
-import { HUNT_LABEL, HUNT_VERB, huntsOf, forestAt, waterfallAt, stormAt, setKp } from './hunts.js?v=7.1.1';
-import { update } from './storage.js?v=7.1.1';
-import { unshareFromCrew, syncNow } from './sync.js?v=7.1.1';
-import { coverUrl } from './photos.js?v=7.1.1';
-import { fetchForecasts, fetchKp } from './api.js?v=7.1.1';
-import { $, $$, S, allEvents, bgRefresh, ensureForecasts, eventIndex, forecasts, forecastsLanded, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.1.1';
-import { render } from './app.js?v=7.1.1';
-import { openSpotForm } from './spots.js?v=7.1.1';
-import { untilText } from './field.js?v=7.1.1';
-import { crewGoing, goingText, loadCrew } from './crews.js?v=7.1.1';
-import { PIN_ICON, openHere } from './here.js?v=7.1.1';
+import { dayKey, esc, fmtTime, toast, fmtWeekday, fmtDayDate, cap } from './util.js?v=7.2';
+import { nearestIndex, horizonBlock, spotFloor, baseScore, tideInfo } from './scoring.js?v=7.2';
+import { HUNT_LABEL, HUNT_VERB, huntsOf, forestAt, waterfallAt, stormAt, setKp } from './hunts.js?v=7.2';
+import { update } from './storage.js?v=7.2';
+import { unshareFromCrew, syncNow } from './sync.js?v=7.2';
+import { coverUrl } from './photos.js?v=7.2';
+import { fetchForecasts, fetchKp } from './api.js?v=7.2';
+import { $, $$, S, allEvents, bgRefresh, ensureForecasts, eventIndex, forecasts, forecastsLanded, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.2';
+import { render } from './app.js?v=7.2';
+import { openSpotForm } from './spots.js?v=7.2';
+import { untilText } from './field.js?v=7.2';
+import { crewGoing, goingText, loadCrew } from './crews.js?v=7.2';
+import { PIN_ICON, openHere } from './here.js?v=7.2';
 
 /* ================= forecast ================= */
 
@@ -122,7 +122,7 @@ export function skeleton(kind, status) {
 /* ---------- motion ---------- */
 export const motionOK = () => (S().settings.motion || 'full') !== 'reduced' && !matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Theme: dark (the default), daylight, or match the phone's own light/dark setting.
-export const THEMES = [['dark', 'Dark', 'Easy on the eyes before dawn and after dark.'], ['light', 'Daylight', 'Bright and high-contrast, for reading in the sun.'], ['auto', 'Match my phone', "Follows your phone's light and dark setting."]];
+export const THEMES = [['dark', 'Dark', 'Easy on the eyes before dawn and after dark.'], ['light', 'Daylight', 'Bright and high-contrast, for reading in the sun.'], ['auto', 'Match my phone', "Follows your phone's light and dark setting."], ['festive', 'Festive', 'Pine and gold, fairy lights and a little snow, for the holidays.']];
 export const lightQuery = matchMedia('(prefers-color-scheme: light)');
 export function applyTheme() {
   const pref = S().settings.theme || 'dark';
@@ -130,9 +130,35 @@ export function applyTheme() {
   document.documentElement.dataset.theme = theme;
   try { localStorage.setItem('tidelight:theme', pref); } catch {}
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = theme === 'light' ? '#EEE9E1' : '#0B0D12';
+  if (meta) meta.content = theme === 'light' ? '#EEE9E1' : theme === 'festive' ? '#0B1511' : '#0B0D12';
+  festiveTrim(theme === 'festive');
 }
 lightQuery.addEventListener?.('change', () => { if ((S().settings.theme || 'dark') === 'auto') applyTheme(); });
+// The festive theme's fairy lights and snow (decorations only: hidden from screen readers).
+function festiveTrim(on) {
+  document.querySelector('.festive-lights')?.remove();
+  document.querySelector('.festive-snow')?.remove();
+  if (!on) return;
+  const COLS = ['#E8414F', '#F2C94C', '#4CC27A', '#F7F2E6', '#5AA9F0'];
+  const W = Math.max(320, innerWidth), gap = 30, n = Math.round(W / gap), step = W / n, bulbs = [];
+  let wire = 'M0 3';
+  for (let i = 1; i <= n; i++) wire += ` Q${(i - 0.5) * step} 13 ${i * step} 3`;   // the wire dips between hooks
+  for (let i = 0; i < n; i++) {
+    const x = (i + 0.5) * step, y = 9.5;   // a bulb hangs from the bottom of each dip
+    bulbs.push(`<g class="bulb" style="--d:${((i * 0.37) % 2.4).toFixed(2)}s"><rect x="${(x - 2).toFixed(1)}" y="${y - 2}" width="4" height="3" rx="1" fill="#2B3A33"/><ellipse cx="${x.toFixed(1)}" cy="${y + 5}" rx="3.6" ry="5" fill="${COLS[i % COLS.length]}"/><ellipse cx="${(x - 1.1).toFixed(1)}" cy="${y + 3.4}" rx="1" ry="1.6" fill="rgba(255,255,255,.55)"/></g>`);
+  }
+  const lights = document.createElement('div');
+  lights.className = 'festive-lights'; lights.setAttribute('aria-hidden', 'true');
+  lights.innerHTML = `<svg viewBox="0 0 ${W} 22" width="${W}" height="22"><path class="wire" d="${wire}"/>${bulbs.join('')}</svg>`;
+  if (!festiveTrim.wired) { festiveTrim.wired = true; addEventListener('resize', () => { if (document.querySelector('.festive-lights')) festiveTrim(true); }); }
+  const snow = document.createElement('div');
+  snow.className = 'festive-snow'; snow.setAttribute('aria-hidden', 'true');
+  snow.innerHTML = Array.from({ length: 22 }, (_, i) => {
+    const r = k => ((Math.sin((i + 1) * 12.9898 * k) * 43758.5453) % 1 + 1) % 1;   // the same scatter every time
+    return `<i style="--x:${(r(1) * 100).toFixed(1)}%;--s:${(2 + r(2) * 3).toFixed(1)}px;--t:${(14 + r(3) * 14).toFixed(1)}s;--d:${(-r(4) * 28).toFixed(1)}s;--o:${(0.3 + r(5) * 0.45).toFixed(2)};--sway:${((r(6) - 0.5) * 50).toFixed(0)}px"></i>`;
+  }).join('');
+  document.body.append(snow, lights);
+}
 export function applyMotion() {
   if ((S().settings.motion || 'full') === 'reduced') document.documentElement.dataset.motion = 'reduced';
   else delete document.documentElement.dataset.motion;
@@ -830,15 +856,20 @@ export async function renderForecast(v) {
   const noData = st.spots.every(sp => !forecasts[sp.id]);
   const stale = !!bgRefresh;
 
-  // The day's 3am-to-3am window in local time.
+  // The day is drawn for the place you're looking at: the chosen session's spot, in its own time zone,
+  // with its own sunrise and sunset. Other spots that day sit at their own local clock time, so a 6am
+  // sunrise in Canada and one in Victoria both show at 6am, whatever time zone the phone is in.
+  const view = sel || best;
+  const viewOff = view?.offset ?? offset;
+  const place = view?.spot || st.settings.home || st.spots[0];
   const dayRef = now + ui.homeDay * 86400;
-  const local = new Date((dayRef + offset) * 1000);
-  const midnight = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) / 1000 - offset;
-  const w0 = midnight + 3 * 3600;
-  const place = st.settings.home || st.spots[0];
+  const local = new Date((dayRef + viewOff) * 1000);
+  const midnight = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) / 1000 - viewOff;
+  const w0 = midnight + 3 * 3600;   // the day's 3am-to-3am window, local to that place
   const band = lightBand(w0, place);
-  const dateLine = fmtDayDate(dayRef, offset).split(' ').slice(1).join(' ');   // "11 Nov", in the spots' time zone
-  const weekday = fmtWeekday(dayRef, offset);
+  const at = (t, off) => band.pos(t + ((off ?? viewOff) - viewOff));   // a moment, placed by its own local clock
+  const dateLine = fmtDayDate(dayRef, viewOff).split(' ').slice(1).join(' ');   // "11 Nov"
+  const weekday = fmtWeekday(dayRef, viewOff);
   const dayName = ui.homeDay === 0 ? 'Today' : ui.homeDay === 1 ? 'Tomorrow' : weekday;
 
   // One marker per session type: the best spot for it. Daytime sessions also draw their window.
@@ -849,9 +880,9 @@ export async function renderForecast(v) {
     const H = e.hunts?.[e.topHunt];
     const hasSpan = e.type === 'day' && H?.from && H.to > H.from;
     if (hasSpan) spanTimes = `${fmtTime(H.from, e.offset).replace(':00', '')}–${fmtTime(H.to, e.offset).replace(':00', '')}`;
-    const span = hasSpan ? `<span class="band-span" style="left:${band.pos(H.from)}%; width:${Math.max(1, band.pos(H.to) - band.pos(H.from))}%"><b class="span-label">Good light ${spanTimes}</b></span>` : '';
+    const span = hasSpan ? `<span class="band-span" style="left:${at(H.from, e.offset)}%; width:${Math.max(1, at(H.to, e.offset) - at(H.from, e.offset))}%"><b class="span-label">Good light ${spanTimes}</b></span>` : '';
     const more = counts[e.type] > 1 ? `<span class="band-more" aria-hidden="true">+${counts[e.type] - 1}</span>` : '';
-    return `${span}<span class="band-pin" style="left:${band.pos(e.t)}%" aria-hidden="true"></span><button class="band-mark ${e.key === ui.homeSel ? 'on' : ''} ${plannedKeys.has(e.key) ? 'planned' : ''}" data-pos="${band.pos(e.t)}" style="left:${band.pos(e.t)}%; --i:${mi}; --fill:${bandFill(e.score)}; --ink:${bandInk(e.score)}" data-sel="${esc(e.key)}"
+    return `${span}<span class="band-pin" style="left:${at(e.t, e.offset)}%" aria-hidden="true"></span><button class="band-mark ${e.key === ui.homeSel ? 'on' : ''} ${plannedKeys.has(e.key) ? 'planned' : ''}" data-pos="${at(e.t, e.offset)}" style="left:${at(e.t, e.offset)}%; --i:${mi}; --fill:${bandFill(e.score)}; --ink:${bandInk(e.score)}" data-sel="${esc(e.key)}"
       aria-label="${TYPE_NAME[e.type]} at ${esc(e.spot.name)}, ${sessionWhen(e)}, score ${e.score}${counts[e.type] > 1 ? `, best of ${counts[e.type]} spots` : ''}${plannedKeys.has(e.key) ? ', planned' : ''}">${e.score}${more}</button>`;
   }).join('');
   const ticks = [[w0 + 3 * 3600, '6am'], [w0 + 9 * 3600, 'Noon'], [w0 + 15 * 3600, '6pm'], [w0 + 21 * 3600, 'Midnight']]
@@ -864,7 +895,7 @@ export async function renderForecast(v) {
 
   v.innerHTML = `
     ${forecastAlerts(st, failed)}
-    ${weekStrip(evs, offset)}
+    ${weekStrip(evs, viewOff)}
     <div class="home-grid ${ui.homeAnimate ? 'enter' : ''}">
     <header class="day-head-v2">
       <h1 class="day-title">${esc(dayName)}<span>${esc(ui.homeDay > 1 ? dateLine : `${weekday} ${dateLine}`)}</span></h1>
@@ -877,12 +908,13 @@ export async function renderForecast(v) {
     <figure class="band-wrap">
       <div class="band ${bandRevealed ? '' : 'reveal'}" style="background:${band.gradient}" tabindex="0" role="slider"
         aria-label="${esc(dayName)}'s light, 3am to 3am. Drag, or use the arrow keys, to see conditions at any time." aria-valuemin="0" aria-valuemax="1440" aria-valuenow="0">
-        ${bandSky(sel, w0, band.marks)}
+        ${bandSky(view, w0, band.marks)}
         ${nowLine}${markers}
         <span class="scrub-line" id="scrubLine" hidden></span>
         <div class="scrub" id="scrub" hidden></div>
       </div>
       <div class="band-ticks" aria-hidden="true">${ticks}</div>
+      ${new Set(dayEvs.map(e => e.offset)).size > 1 ? `<p class="small muted band-tz">Your spots span time zones: every time is local to its spot, and the band shows ${esc(place.name || 'the chosen spot')}'s day.</p>` : ''}
       <details class="band-help">
         <summary>Reading the band</summary>
         <div class="band-key">

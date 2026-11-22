@@ -1,15 +1,15 @@
 // Tidelight: In the field: right now, the field compass, phone heading, sun line-ups with a view, and field mode.
-import { fmtTime, dayKey, fmtDay, esc, getPosition, haversineKm, toast, compass, angleDiff, cap } from './util.js?v=7.1.1';
-import { WEATHER_TEXT, placeName, fetchHourly, searchPlaces, fetchCurrent, fetchRadarFrames } from './api.js?v=7.1.1';
-import { nearestIndex, tideInfo } from './scoring.js?v=7.1.1';
-import { coverUrl } from './photos.js?v=7.1.1';
-import { HUNT_LABEL } from './hunts.js?v=7.1.1';
-import { $, $$, BEHIND_SHEET, S, closeSheet, eventIndex, forecasts, openSheet, sessionName, ui } from './core.js?v=7.1.1';
-import { TYPE_NAME, spotTile } from './forecast.js?v=7.1.1';
-import { syncAgo } from './you.js?v=7.1.1';
-import { openExposure } from './tools.js?v=7.1.1';
-import { QUICK, dueToAsk, markAsked, openQuickRate } from './accuracy.js?v=7.1.1';
-import { ratePlan } from './plans.js?v=7.1.1';
+import { fmtTime, dayKey, fmtDay, esc, getPosition, haversineKm, toast, compass, angleDiff, cap } from './util.js?v=7.2';
+import { WEATHER_TEXT, placeName, fetchHourly, searchPlaces, fetchCurrent, fetchRadarFrames } from './api.js?v=7.2';
+import { nearestIndex, tideInfo } from './scoring.js?v=7.2';
+import { coverUrl } from './photos.js?v=7.2';
+import { HUNT_LABEL } from './hunts.js?v=7.2';
+import { $, $$, BEHIND_SHEET, closeSheet, eventIndex, forecasts, openSheet, placeTz, S, sessionName, ui } from './core.js?v=7.2';
+import { TYPE_NAME, spotTile } from './forecast.js?v=7.2';
+import { syncAgo } from './you.js?v=7.2';
+import { openExposure } from './tools.js?v=7.2';
+import { QUICK, dueToAsk, markAsked, openQuickRate } from './accuracy.js?v=7.2';
+import { ratePlan } from './plans.js?v=7.2';
 
 /* ================= right now ================= */
 
@@ -439,7 +439,7 @@ export function alignmentText(sp) {
   const runs = alignmentDates(sp.lat, sp.lon, sp.facing);
   if (runs == null) return '';
   if (!runs.length) return `The sun never rises or sets in this direction (${Math.round(Number(sp.facing))}° ${compass(Number(sp.facing))}), though it can still light the scene from the side.`;
-  const fmt = r => `${r.kind} around ${r.at.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`;
+  const fmt = r => `${r.kind} around ${r.at.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: placeTz(sp) || undefined })}`;   // (the spot's own calendar)
   return `The sun lines up with this view: ${runs.map(fmt).join(', ')}.`;
 }
 /* ================= field mode ================= */
