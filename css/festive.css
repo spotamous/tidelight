@@ -94,3 +94,29 @@ body.skyar-open .festive-lights, body.skyar-open .festive-snow, body:has(#field)
 
 /* The theme's swatch in Display */
 .theme-swatch.festive { background: radial-gradient(circle at 30% 30%, #D0414F 0 5px, transparent 6px), radial-gradient(circle at 68% 62%, #E6BA5E 0 4px, transparent 5px), linear-gradient(160deg, #1F3A2E, #0B1511 65%); }
+
+/* Santa hats, perched on the corners of a few things: the big score, the Now button, the chosen day,
+   Right here, and the first box in You. Decoration only; they never catch a tap. */
+:root[data-theme="festive"] {
+  --santa-hat: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 52'%3E%3Cpath d='M9 40C12 22 24 7 40 6c9-.5 14 6 16 15-5-5-10-6-14-3-6 5-8 13-8 22z' fill='%23C7313F'/%3E%3Cpath d='M40 6c9-.5 14 6 16 15-5-5-10-6-14-3-1-5-1-9-2-12z' fill='%23A82633'/%3E%3Cpath d='M18 30c6-12 13-18 22-20' stroke='%23E8505C' stroke-width='3' stroke-linecap='round' fill='none' opacity='.7'/%3E%3Crect x='4' y='37' width='38' height='11' rx='5.5' fill='%23F6F1E7'/%3E%3Cpath d='M8 42h30' stroke='%23DCD3C3' stroke-width='2' stroke-linecap='round' stroke-dasharray='1 4'/%3E%3Ccircle cx='56' cy='22' r='6.5' fill='%23F6F1E7'/%3E%3Ccircle cx='54.5' cy='20.5' r='2.2' fill='%23fff'/%3E%3C/svg%3E");
+}
+:root[data-theme="festive"] .now-btn,
+:root[data-theme="festive"] .wk-d.on,
+:root[data-theme="festive"] .here-pill,
+:root[data-theme="festive"] .call-score,
+:root[data-theme="festive"] .you-list:not(.you-list ~ .you-list) { position: relative; overflow: visible; }
+:root[data-theme="festive"] .now-btn::after,
+:root[data-theme="festive"] .wk-d.on::after,
+:root[data-theme="festive"] .here-pill::after,
+:root[data-theme="festive"] .call-score::after,
+:root[data-theme="festive"] .you-list:not(.you-list ~ .you-list)::after {
+  content: ''; position: absolute; z-index: 3; pointer-events: none;
+  width: 34px; height: 28px; background: var(--santa-hat) no-repeat center / contain;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .45));
+}
+/* each at its own corner and tilt */
+:root[data-theme="festive"] .now-btn::after { top: -15px; right: -8px; transform: rotate(18deg); }
+:root[data-theme="festive"] .wk-d.on::after { top: -14px; right: -9px; width: 28px; height: 23px; transform: rotate(16deg); }
+:root[data-theme="festive"] .here-pill::after { top: -15px; left: -10px; transform: rotate(-20deg) scaleX(-1); }
+:root[data-theme="festive"] .call-score::after { top: -12px; left: -14px; width: 44px; height: 36px; transform: rotate(-22deg) scaleX(-1); }
+:root[data-theme="festive"] .you-list:not(.you-list ~ .you-list)::after { top: -16px; right: 10px; transform: rotate(14deg); }

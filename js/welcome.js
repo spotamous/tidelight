@@ -24,7 +24,7 @@ export const WHATS_NEW = [
     'The moon planner and Sky view use the time zone of the place you\'re looking at, and alerts keep to your quiet hours wherever you are.',
     'Sky view draws the Milky Way properly: brighter and wider where it really is, with the Great Rift and the Coalsack, and names for what to look for (star clouds, nebulae, the Southern Cross, the Magellanic Clouds, Cygnus and more). Turn the names off in Layers.',
     'Sky view\'s compass now knows magnetic north in North America, Europe and beyond, not just Australia and New Zealand.',
-    'New Festive theme for the holidays: pine and gold, fairy lights and a little snow. You, Display.',
+    'New Festive theme for the holidays: pine and gold, fairy lights, a little snow and a few Santa hats. You, Display.',
   ], tryIt: ['sky', 'Open Sky view'] },
   { v: '7.1.1', date: '20 Nov', title: 'Rate it while it\'s fresh', items: [
     'Tidelight now asks how the light was as soon as it\'s finished: 45 minutes after sunset, an hour after sunrise. Night shoots still wait for the morning.',
