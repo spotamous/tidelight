@@ -1,10 +1,10 @@
 // Tidelight: shoot records. For every planned shoot: what was forecast when you planned it, the last
 // forecast before it, what the weather actually did, and how Tidelight's call compared with your rating.
 // This is what lets the score be checked (and improved) against real shoots rather than guesswork.
-import { update } from './storage.js?v=7.2.2';
-import { fetchPast, PAST_LIMIT_DAYS } from './api.js?v=7.2.2';
-import { evaluateSpot, ratingScore, labelFor } from './scoring.js?v=7.2.2';
-import { S, allEvents, freshHooks } from './core.js?v=7.2.2';
+import { update } from './storage.js?v=7.3';
+import { fetchPast, PAST_LIMIT_DAYS } from './api.js?v=7.3';
+import { evaluateSpot, ratingScore, labelFor } from './scoring.js?v=7.3';
+import { S, allEvents, freshHooks } from './core.js?v=7.3';
 
 /* ---------- the calls ---------- */
 // The same cut-offs as everywhere else: Go 75+, Maybe 50 to 74, Skip under 50; and for your rating,
@@ -23,7 +23,17 @@ const r0 = v => (v == null || isNaN(v) ? null : Math.round(v));
 const r1 = v => (v == null || isNaN(v) ? null : Math.round(v * 10) / 10);
 export function snap(e) {
   const h = e.hour || {};
-  return { low: r0(h.low), mid: r0(h.mid), high: r0(h.high), precip: r1(h.precip ?? 0), pp: r0(h.pp), wind: r0(h.wind), vis: h.vis != null ? r1(h.vis / 1000) : null };
+  const out = { low: r0(h.low), mid: r0(h.mid), high: r0(h.high), precip: r1(h.precip ?? 0), pp: r0(h.pp), wind: r0(h.wind), vis: h.vis != null ? r1(h.vis / 1000) : null };
+  // 7.3: the horizon, haze and humidity too, so later tuning can check those against your ratings
+  const k = e.sky;
+  if (k) {
+    if (k.near != null) out.hzNear = r0(k.near * 100);
+    if (k.far != null) out.hzFar = r0(k.far * 100);
+    if (k.aod != null) out.aod = Math.round(k.aod * 100) / 100;
+    if (k.clearing) out.clearing = true;
+  }
+  if (h.rh != null) out.rh = r0(h.rh);
+  return out;
 }
 // Plans made before 7.1 kept their forecast only as the scoring features: enough for cloud, rain and wind.
 export function forecastOf(p) {

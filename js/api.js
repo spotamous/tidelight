@@ -1,10 +1,11 @@
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
-import { nearestIndex, tideInfo } from './scoring.js?v=7.2.2';
-import { huntsOf, DAY_HUNTS } from './hunts.js?v=7.2.2';
+import { nearestIndex, tideInfo } from './scoring.js?v=7.3';
+import { huntsOf, DAY_HUNTS } from './hunts.js?v=7.3';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
 const ARCHIVE = 'https://archive-api.open-meteo.com/v1/archive';
+const AIR = 'https://air-quality-api.open-meteo.com/v1/air-quality';   // smoke and haze (CAMS)
 const TTL = 30 * 60 * 1000;
 const cache = new Map();
 
@@ -113,13 +114,14 @@ export async function fetchSpotForecast(spot) {
   };
   // The horizon and model-agreement checks only matter for sunrise and sunset colour.
   const wantsColour = wantsColourOf(spot);
-  const [mr, hz, md, rd] = await Promise.allSettled([getMarine(), wantsColour ? fetchHorizon(spot) : null, wantsColour ? fetchModels(spot) : null, getRainDaily()]);
+  const [mr, hz, md, rd, aq] = await Promise.allSettled([getMarine(), wantsColour ? fetchHorizon(spot) : null, wantsColour ? fetchModels(spot) : null, getRainDaily(), wantsColour ? fetchAir(spot) : null]);
   const marine = mr.status === 'fulfilled' ? mr.value : null;
 
   const data = normalize(wx, marine);
   data.horizon = hz.status === 'fulfilled' ? hz.value : null;   // cloud towards sunrise/sunset
   data.models = md.status === 'fulfilled' ? md.value : null;    // per-model cloud, for confidence
   data.rainDaily = rd.status === 'fulfilled' ? rd.value : null; // daily rain, 14 days back
+  data.air = aq.status === 'fulfilled' ? aq.value : null;       // smoke and haze
   const entry = { at: Date.now(), data };
   cache.set(key, entry); persist([[key, entry]]);
   return data;
@@ -140,7 +142,7 @@ function horizonPoints(spot, now = new Date()) {
   const ok = d => d instanceof Date && !isNaN(d);
   const dirs = { sunrise: ok(times.sunrise) ? azAt(times.sunrise) : 90, sunset: ok(times.sunset) ? azAt(times.sunset) : 270 };
   const pts = [];
-  for (const [kind, az] of Object.entries(dirs)) for (const km of [60, 120]) pts.push({ kind, km, az, ...destPoint(spot.lat, spot.lon, az, km) });
+  for (const [kind, az] of Object.entries(dirs)) for (const km of [60, 120, 200, 350]) pts.push({ kind, km, az, ...destPoint(spot.lat, spot.lon, az, km) });
   return { dirs, pts };
 }
 function horizonFrom({ dirs, pts }, arr) {
@@ -159,6 +161,17 @@ async function fetchHorizon(spot, past = null) {
   const when = past ? { hourly: HZ_PARAMS.hourly, timezone: 'auto', timeformat: 'unixtime', ...past.range } : HZ_PARAMS;
   const j = await getJSON(`${FORECAST}?${qs({ latitude: hp.pts.map(p => p.lat.toFixed(3)).join(','), longitude: hp.pts.map(p => p.lon.toFixed(3)).join(','), ...when })}`, 10000);
   return horizonFrom(hp, Array.isArray(j) ? j : [j]);
+}
+
+/* ---------- smoke and haze: aerosol optical depth from the air-quality forecast ---------- */
+const airFrom = j => {
+  const H = j?.hourly;
+  return H?.time?.length && (H.aerosol_optical_depth || []).some(v => v != null) ? { times: H.time, aod: H.aerosol_optical_depth } : null;
+};
+const AIR_PARAMS = { hourly: 'aerosol_optical_depth', timezone: 'auto', timeformat: 'unixtime', forecast_days: 6, past_days: 2 };
+async function fetchAir(spot, range = null) {
+  const j = await getJSON(`${AIR}?${qs({ latitude: spot.lat, longitude: spot.lon, ...(range ? { hourly: AIR_PARAMS.hourly, timezone: 'auto', timeformat: 'unixtime', ...range } : AIR_PARAMS) })}`, 10000);
+  return airFrom(j);
 }
 
 /* ---------- the same cloud from several weather models, for confidence ---------- */
@@ -244,7 +257,11 @@ export async function fetchForecasts(spots, { force = false, all = spots } = {})
     return colour.map(() => null);
   };
 
-  const [wx, mr, rd, hz, md] = await Promise.allSettled([wxAll(), marineAll(), rainAll(), hzAll(), modelsAll()]);
+  const airAll = async () => {
+    if (!colour.length) return [];
+    return many(colour, 50, part => getJSON(`${AIR}?${qs({ ...coords(part), ...AIR_PARAMS })}`, 12000).then(j => asList(j, part.length).map(airFrom)));
+  };
+  const [wx, mr, rd, hz, md, aq] = await Promise.allSettled([wxAll(), marineAll(), rainAll(), hzAll(), modelsAll(), airAll()]);
   if (wx.status !== 'fulfilled') {
     // The combined request didn't work (for example one place the service won't forecast): fall back to one spot at a time.
     if (wx.reason instanceof SlowError || /connection/i.test(wx.reason?.message || '')) {
@@ -262,6 +279,7 @@ export async function fetchForecasts(spots, { force = false, all = spots } = {})
       const data = normalize(wx.value[i], pick(mr, coastal, sp));
       data.horizon = wantsColourOf(sp) ? pick(hz, colour, sp) : null;
       data.models = wantsColourOf(sp) ? pick(md, colour, sp) : null;
+      data.air = wantsColourOf(sp) ? pick(aq, colour, sp) : null;
       data.rainDaily = isDayHunter(sp) ? pick(rd, dayHunters, sp) : null;
       const entry = { at: now, data };
       cache.set(keyOf(sp), entry); entries.push([keyOf(sp), entry]);
@@ -503,10 +521,11 @@ export async function fetchPast(spot, t) {
     const j = await getJSON(`${FORECAST}?${qs({ latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime', daily: 'precipitation_sum', start_date: ymd(t - 15 * 86400), end_date: range.end_date })}`);
     return (j.daily?.time || []).map((tt, i) => ({ t: tt, mm: j.daily.precipitation_sum?.[i] ?? 0 }));
   };
-  const [mr, hz, rd] = await Promise.allSettled([getMarine(), wantsColourOf(spot) ? fetchHorizon(spot, { t, range }) : null, getRainDaily()]);
+  const [mr, hz, rd, aq] = await Promise.allSettled([getMarine(), wantsColourOf(spot) ? fetchHorizon(spot, { t, range }) : null, getRainDaily(), wantsColourOf(spot) ? fetchAir(spot, range) : null]);
   const data = normalize(wx, mr.status === 'fulfilled' ? mr.value : null);
   data.horizon = hz.status === 'fulfilled' ? hz.value : null;
   data.models = null;   // no disagreement to weigh: this is what happened
+  data.air = aq.status === 'fulfilled' ? aq.value : null;
   data.rainDaily = rd.status === 'fulfilled' ? rd.value : null;
   return data;
 }

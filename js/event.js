@@ -1,19 +1,19 @@
 // Tidelight: A session's briefing: the full detail sheet for one sunrise, sunset or night.
-import { cap, esc, fmtTime, toast } from './util.js?v=7.2.2';
-import { gearFor } from './gear.js?v=7.2.2';
-import { coverUrl } from './photos.js?v=7.2.2';
-import { HUNT_LABEL } from './hunts.js?v=7.2.2';
-import { currentUser } from './sync.js?v=7.2.2';
-import { MIN_KEEPERS, personalModelSummary } from './scoring.js?v=7.2.2';
-import { openSkyAR } from './skyar.js?v=7.2.2';
-import { hasAI, aiBriefing, briefingContext } from './ai.js?v=7.2.2';
-import { $, briefing, closeSheet, eventIndex, huntList, openSheet, placeTz, S, sessionName } from './core.js?v=7.2.2';
-import { avatarStack, cloudChips, commitPanel, horizonScene, huntPhrase, labModel, partBar, phaseColor, runCounts, sessionWhen, skyClass, skyOf, toneDot, toneOf, whySentence } from './forecast.js?v=7.2.2';
-import { crewGoing, crewState, goingText, openShareSheet } from './crews.js?v=7.2.2';
-import { tideChart, wireTide } from './tools.js?v=7.2.2';
-import { drawHere, saveHere } from './here.js?v=7.2.2';
-import { openShareCard } from './planners.js?v=7.2.2';
-import { addPlan } from './plans.js?v=7.2.2';
+import { cap, esc, fmtTime, toast } from './util.js?v=7.3';
+import { gearFor } from './gear.js?v=7.3';
+import { coverUrl } from './photos.js?v=7.3';
+import { HUNT_LABEL } from './hunts.js?v=7.3';
+import { currentUser } from './sync.js?v=7.3';
+import { MIN_KEEPERS, personalModelSummary } from './scoring.js?v=7.3';
+import { openSkyAR } from './skyar.js?v=7.3';
+import { hasAI, aiBriefing, briefingContext } from './ai.js?v=7.3';
+import { $, briefing, closeSheet, eventIndex, huntList, openSheet, placeTz, S, sessionName } from './core.js?v=7.3';
+import { avatarStack, cloudChips, commitPanel, horizonScene, huntPhrase, labModel, partBar, phaseColor, runCounts, sessionWhen, skyClass, skyOf, toneDot, toneOf, whySentence } from './forecast.js?v=7.3';
+import { crewGoing, crewState, goingText, openShareSheet } from './crews.js?v=7.3';
+import { tideChart, wireTide } from './tools.js?v=7.3';
+import { drawHere, saveHere } from './here.js?v=7.3';
+import { openShareCard } from './planners.js?v=7.3';
+import { addPlan } from './plans.js?v=7.3';
 
 /* ================= event detail ================= */
 
@@ -42,6 +42,7 @@ export function openEvent(key) {
     ['Low cloud', `${Math.round(h.low ?? 0)}%`], ['Mid cloud', `${Math.round(h.mid ?? 0)}%`], ['High cloud', `${Math.round(h.high ?? 0)}%`],
     ['Rain chance', h.pp != null ? `${Math.round(h.pp)}%` : '–'], ['Wind', h.wind != null ? `${Math.round(h.wind)} km/h` : '–'],
     ['Visibility', h.vis != null ? `${(h.vis / 1000).toFixed(0)} km` : '–'],
+    ...(e.sky?.aod != null ? [['Smoke/haze', e.sky.aod >= 0.4 ? 'Hazy' : e.sky.aod <= 0.12 ? 'Clean air' : 'Light haze']] : []),
     ['Waves', h.wave != null ? `${h.wave.toFixed(1)} m` : '–'], ['Tide', e.tide ? `${Math.round(e.tide.pos * 100)}%` : '–'],
     ['Temp', h.temp != null ? `${Math.round(h.temp)}°C` : '–'],
     ['Dew point', h.dew != null ? `${Math.round(h.dew)}°C` : '–'], ['Humidity', h.rh != null ? `${Math.round(h.rh)}%` : '–'],

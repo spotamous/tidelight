@@ -1,17 +1,17 @@
 // Tidelight: The Forecast tab: the session card, score gauge and What if?, the light band, week strip, little pictures (horizon scenes, spot tiles, avatars) and gestures.
-import { dayKey, esc, fmtTime, toast, fmtWeekday, fmtDayDate, cap } from './util.js?v=7.2.2';
-import { nearestIndex, horizonBlock, spotFloor, baseScore, tideInfo } from './scoring.js?v=7.2.2';
-import { HUNT_LABEL, HUNT_VERB, huntsOf, forestAt, waterfallAt, stormAt, setKp } from './hunts.js?v=7.2.2';
-import { update } from './storage.js?v=7.2.2';
-import { unshareFromCrew, syncNow } from './sync.js?v=7.2.2';
-import { coverUrl } from './photos.js?v=7.2.2';
-import { fetchForecasts, fetchKp } from './api.js?v=7.2.2';
-import { $, $$, S, allEvents, bgRefresh, ensureForecasts, eventIndex, forecasts, forecastsLanded, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.2.2';
-import { render } from './app.js?v=7.2.2';
-import { openSpotForm } from './spots.js?v=7.2.2';
-import { untilText } from './field.js?v=7.2.2';
-import { crewGoing, goingText, loadCrew } from './crews.js?v=7.2.2';
-import { PIN_ICON, openHere } from './here.js?v=7.2.2';
+import { dayKey, esc, fmtTime, toast, fmtWeekday, fmtDayDate, cap } from './util.js?v=7.3';
+import { nearestIndex, horizonBlock, spotFloor, baseScore, tideInfo } from './scoring.js?v=7.3';
+import { HUNT_LABEL, HUNT_VERB, huntsOf, forestAt, waterfallAt, stormAt, setKp } from './hunts.js?v=7.3';
+import { update } from './storage.js?v=7.3';
+import { unshareFromCrew, syncNow } from './sync.js?v=7.3';
+import { coverUrl } from './photos.js?v=7.3';
+import { fetchForecasts, fetchKp } from './api.js?v=7.3';
+import { $, $$, S, allEvents, bgRefresh, ensureForecasts, eventIndex, forecasts, forecastsLanded, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.3';
+import { render } from './app.js?v=7.3';
+import { openSpotForm } from './spots.js?v=7.3';
+import { untilText } from './field.js?v=7.3';
+import { crewGoing, goingText, loadCrew } from './crews.js?v=7.3';
+import { PIN_ICON, openHere } from './here.js?v=7.3';
 
 /* ================= forecast ================= */
 
@@ -290,13 +290,14 @@ export function labModel(e) {
       { id: 'mid', label: 'Mid cloud', unit: '%', min: 0, max: 100, step: 1, value: Math.round(h.mid ?? 0) },
       { id: 'high', label: 'High cloud', unit: '%', min: 0, max: 100, step: 1, value: Math.round(h.high ?? 0) },
       ...(hz ? [{ id: 'hz', label: `Cloud on the horizon, towards the ${e.type}`, unit: '%', min: 0, max: 100, step: 1, value: Math.round(hz.blk * 100) }] : []),
+      ...(hz?.far != null ? [{ id: 'hzf', label: `Cloud 200–350 km towards the ${e.type}`, unit: '%', min: 0, max: 100, step: 1, value: Math.round(hz.far * 100) }] : []),
       { id: 'pp', label: 'Chance of rain', unit: '%', min: 0, max: 100, step: 1, value: Math.round(h.pp ?? 0) },
       { id: 'wind', label: 'Wind', unit: ' km/h', min: 0, max: 60, step: 1, value: Math.round(h.wind ?? 0) },
       ...(useTide ? [{ id: 'tide', label: `Tide height (you want ${sp.tide})`, unit: '%', min: 0, max: 100, step: 1, value: Math.round(e.tide.pos * 100) }] : []),
     ];
     const floor = spotFloor(sp, S().keepers, S().settings).floor;
     const run = v => baseScore({ ...h, low: v.low, mid: v.mid, high: v.high, pp: v.pp, wind: v.wind },
-      useTide ? { ...e.tide, pos: v.tide / 100 } : (e.tide || null), sp, { ...(hz ? { horizon: { ...hz, blk: v.hz / 100 } } : {}), canvasFloor: floor });
+      useTide ? { ...e.tide, pos: v.tide / 100 } : (e.tide || null), sp, { ...(hz ? { horizon: { ...hz, blk: v.hz / 100, far: hz.far != null ? v.hzf / 100 : null } } : {}), canvasFloor: floor, aod: e.sky?.aod ?? null, clearing: e.sky?.clearing });
     return { sliders, score: v => run(v).score, reason: v => { const f = run(v).factors; return (f.find(x => x.k === 'bad') || f.find(x => x.k === 'good') || {}).t || ''; } };
   }
   if (e.topHunt === 'forest' && H.extra) {
