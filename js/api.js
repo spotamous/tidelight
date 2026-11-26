@@ -1,6 +1,6 @@
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
-import { nearestIndex, tideInfo } from './scoring.js?v=7.3';
-import { huntsOf, DAY_HUNTS } from './hunts.js?v=7.3';
+import { nearestIndex, tideInfo } from './scoring.js?v=7.3.1';
+import { huntsOf, DAY_HUNTS } from './hunts.js?v=7.3.1';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
@@ -497,6 +497,29 @@ export async function placeName(lat, lon) {
 // what happened. Same variables and the same normalised shape as a live forecast, so the app's own
 // scoring can be run on it: "what Tidelight would have said with the real weather".
 export const PAST_LIMIT_DAYS = 90;
+// Extra sky signals around a past shoot (7.3.1), so the colour score can be tested against them:
+// humidity through the column (thin cirrus vs a deep deck), pressure trend (clean air behind a front),
+// wind shift, sunshine getting through, and the cloud either side of the time.
+const LEVELS = [850, 700, 600, 500, 400, 300, 250, 200];
+const SIGNAL_HOURLY = [...LEVELS.map(l => `relative_humidity_${l}hPa`), 'pressure_msl', 'direct_radiation', 'diffuse_radiation', 'wind_direction_10m', 'wind_speed_10m', 'cloud_cover_low', 'cloud_cover_mid', 'cloud_cover_high', 'relative_humidity_2m'].join(',');
+export async function fetchSignals(spot, t) {
+  const ymd = sec => new Date(sec * 1000).toISOString().slice(0, 10);
+  const range = { start_date: ymd(t - 36 * 3600), end_date: ymd(t + 30 * 3600) };
+  const [wx, hz, aq] = await Promise.allSettled([
+    (async () => {
+      const q = { latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime', hourly: SIGNAL_HOURLY, ...range };
+      // The best-match model may not carry every height; GFS does, everywhere.
+      const j = await getJSON(`${FORECAST}?${qs(q)}`, 15000).catch(e => { if (e instanceof SlowError || /connection/i.test(e.message)) throw e; return null; });
+      if (j && (j.hourly?.relative_humidity_300hPa || []).some(v => v != null)) return j;
+      return getJSON(`${FORECAST}?${qs({ ...q, models: 'gfs_seamless' })}`, 15000);
+    })(),
+    fetchHorizon(spot, { t, range }),
+    fetchAir(spot, range),
+  ]);
+  if (wx.status !== 'fulfilled') throw wx.reason;
+  return { H: wx.value.hourly, levels: LEVELS, horizon: hz.status === 'fulfilled' ? hz.value : null, air: aq.status === 'fulfilled' ? aq.value : null };
+}
+
 export async function fetchPast(spot, t) {
   const ymd = sec => new Date(sec * 1000).toISOString().slice(0, 10);
   const range = { start_date: ymd(t - 36 * 3600), end_date: ymd(t + 30 * 3600) };   // a margin either side, whatever the time zone

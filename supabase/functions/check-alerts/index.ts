@@ -1677,6 +1677,29 @@ async function placeName(lat, lon) {
 // what happened. Same variables and the same normalised shape as a live forecast, so the app's own
 // scoring can be run on it: "what Tidelight would have said with the real weather".
 const PAST_LIMIT_DAYS = 90;
+// Extra sky signals around a past shoot (7.3.1), so the colour score can be tested against them:
+// humidity through the column (thin cirrus vs a deep deck), pressure trend (clean air behind a front),
+// wind shift, sunshine getting through, and the cloud either side of the time.
+const LEVELS = [850, 700, 600, 500, 400, 300, 250, 200];
+const SIGNAL_HOURLY = [...LEVELS.map(l => `relative_humidity_${l}hPa`), 'pressure_msl', 'direct_radiation', 'diffuse_radiation', 'wind_direction_10m', 'wind_speed_10m', 'cloud_cover_low', 'cloud_cover_mid', 'cloud_cover_high', 'relative_humidity_2m'].join(',');
+async function fetchSignals(spot, t) {
+  const ymd = sec => new Date(sec * 1000).toISOString().slice(0, 10);
+  const range = { start_date: ymd(t - 36 * 3600), end_date: ymd(t + 30 * 3600) };
+  const [wx, hz, aq] = await Promise.allSettled([
+    (async () => {
+      const q = { latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime', hourly: SIGNAL_HOURLY, ...range };
+      // The best-match model may not carry every height; GFS does, everywhere.
+      const j = await getJSON(`${FORECAST}?${qs(q)}`, 15000).catch(e => { if (e instanceof SlowError || /connection/i.test(e.message)) throw e; return null; });
+      if (j && (j.hourly?.relative_humidity_300hPa || []).some(v => v != null)) return j;
+      return getJSON(`${FORECAST}?${qs({ ...q, models: 'gfs_seamless' })}`, 15000);
+    })(),
+    fetchHorizon(spot, { t, range }),
+    fetchAir(spot, range),
+  ]);
+  if (wx.status !== 'fulfilled') throw wx.reason;
+  return { H: wx.value.hourly, levels: LEVELS, horizon: hz.status === 'fulfilled' ? hz.value : null, air: aq.status === 'fulfilled' ? aq.value : null };
+}
+
 async function fetchPast(spot, t) {
   const ymd = sec => new Date(sec * 1000).toISOString().slice(0, 10);
   const range = { start_date: ymd(t - 36 * 3600), end_date: ymd(t + 30 * 3600) };   // a margin either side, whatever the time zone
@@ -1710,7 +1733,7 @@ async function fetchPast(spot, t) {
   return data;
 }
 
-return { clearCache, restoreForecasts, savedForecast, FORECAST_TTL, fetchSpotForecast, fetchForecasts, fetchHistorical, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, coastalCheck, placeName, PAST_LIMIT_DAYS, fetchPast };
+return { clearCache, restoreForecasts, savedForecast, FORECAST_TTL, fetchSpotForecast, fetchForecasts, fetchHistorical, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, coastalCheck, placeName, PAST_LIMIT_DAYS, fetchSignals, fetchPast };
 })();
 
 /* ===== Tidelight hourly alerts (Supabase Edge Function) =====

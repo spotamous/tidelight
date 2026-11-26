@@ -1,10 +1,10 @@
 // Tidelight: shoot records. For every planned shoot: what was forecast when you planned it, the last
 // forecast before it, what the weather actually did, and how Tidelight's call compared with your rating.
 // This is what lets the score be checked (and improved) against real shoots rather than guesswork.
-import { update } from './storage.js?v=7.3';
-import { fetchPast, PAST_LIMIT_DAYS } from './api.js?v=7.3';
-import { evaluateSpot, ratingScore, labelFor } from './scoring.js?v=7.3';
-import { S, allEvents, freshHooks } from './core.js?v=7.3';
+import { update } from './storage.js?v=7.3.1';
+import { fetchPast, fetchSignals, PAST_LIMIT_DAYS } from './api.js?v=7.3.1';
+import { evaluateSpot, ratingScore, labelFor, horizonBlock, aodAt } from './scoring.js?v=7.3.1';
+import { S, allEvents, freshHooks } from './core.js?v=7.3.1';
 
 /* ---------- the calls ---------- */
 // The same cut-offs as everywhere else: Go 75+, Maybe 50 to 74, Skip under 50; and for your rating,
@@ -112,6 +112,54 @@ export function fillActuals({ max = 8 } = {}) {
     return n;
   })().finally(() => { filling = null; });
   return filling;
+}
+
+/* ---------- sky signals: extra data around each sunrise/sunset shoot, for testing the colour score ---------- */
+// Kept compact: values at the shoot hour, plus short series for the trends. r = rounded.
+export function signalsFrom(sig, t, type) {
+  const H = sig.H, times = H?.time || [];
+  if (!times.length) throw new Error('No signal data');
+  let i = 0, bd = Infinity;
+  times.forEach((x, k) => { if (Math.abs(x - t) < bd) { bd = Math.abs(x - t); i = k; } });
+  if (bd > 3 * HOUR) throw new Error('No signal data for that hour');
+  const at = (key, k = i) => (H[key]?.[k] ?? null);
+  const span = (key, from, to) => { const out = []; for (let k = i + from; k <= i + to; k++) out.push(k >= 0 && k < times.length ? r0(H[key]?.[k]) : null); return out; };
+  const rh = {}; sig.levels.forEach(l => { rh[l] = r0(at(`relative_humidity_${l}hPa`)); });
+  const p = at('pressure_msl'), p6 = at('pressure_msl', i - 6), p12 = at('pressure_msl', i - 12);
+  const hz = horizonBlock({ horizon: sig.horizon }, type, t);
+  const aod = aodAt({ air: sig.air }, t);
+  return {
+    v: 1, rh, rh2m: r0(at('relative_humidity_2m')),
+    dp6: p != null && p6 != null ? r1(p - p6) : null, dp12: p != null && p12 != null ? r1(p - p12) : null,
+    wdir: r0(at('wind_direction_10m')), wdir12: r0(at('wind_direction_10m', i - 12)), wind: r0(at('wind_speed_10m')),
+    dir: span('direct_radiation', -2, 1), dif: span('diffuse_radiation', -2, 1),
+    low: span('cloud_cover_low', -2, 2), mid: span('cloud_cover_mid', -2, 2), high: span('cloud_cover_high', -2, 2),
+    hzNear: hz ? r0(hz.blk * 100) : null, hzFar: hz?.far != null ? r0(hz.far * 100) : null,
+    aod: aod != null ? Math.round(aod * 100) / 100 : null,
+  };
+}
+const wantsSignals = (p, now) => ['sunrise', 'sunset'].includes(p.type) && isRated(p) && !p.signals?.v && !(p.signals?.error && now - p.signals.at < 24 * HOUR)
+  && p.t < now - 2 * HOUR && p.t > now - (PAST_LIMIT_DAYS - 2) * 86400;
+let signalling = null;
+export function fillSignals({ max = 6 } = {}) {
+  if (signalling || !navigator.onLine) return signalling || Promise.resolve(0);
+  signalling = (async () => {
+    const now = Date.now() / 1000;
+    const todo = S().plans.filter(p => wantsSignals(p, now)).sort((a, b) => b.t - a.t).slice(0, max);
+    let n = 0;
+    for (const p of todo) {
+      let signals;
+      try { signals = { ...signalsFrom(await fetchSignals(spotFor(p), p.t), p.t, p.type), at: Math.round(now) }; }
+      catch (err) {
+        if (/connection|too long/i.test(err?.message || '')) break;
+        signals = { at: Math.round(now), error: true };
+      }
+      update(s => { const pl = s.plans.find(x => x.id === p.id); if (pl) pl.signals = signals; });
+      n++;
+    }
+    return n;
+  })().finally(() => { signalling = null; });
+  return signalling;
 }
 
 /* ---------- the verdict ---------- */

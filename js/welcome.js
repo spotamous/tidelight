@@ -1,24 +1,28 @@
 // Tidelight: First run and testers: What's new, the five-card tour and the welcome.
-import { openAccuracy } from './accuracy.js?v=7.3';
-import { APP_VERSION } from './version.js?v=7.3';
-import { esc, toast, getPosition, uid } from './util.js?v=7.3';
-import { openSkyAR } from './skyar.js?v=7.3';
-import { isConfigured, currentUser, createAccount, signInWithPassword, syncNow, joinCrew } from './sync.js?v=7.3';
-import { HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.3';
-import { searchPlaces, placeName } from './api.js?v=7.3';
-import { update } from './storage.js?v=7.3';
-import { $, $$, S, closeSheet, forecasts, openSheet, ui } from './core.js?v=7.3';
-import { render, setTab } from './app.js?v=7.3';
-import { openAligner, openTideWindows } from './planners.js?v=7.3';
-import { G, avatar, bandFill, bandInk, bandSky, day3am, demoSkyDay, lightBand, toneDot } from './forecast.js?v=7.3';
-import { PIN_ICON } from './here.js?v=7.3';
-import { loadCrew } from './crews.js?v=7.3';
+import { openAccuracy } from './accuracy.js?v=7.3.1';
+import { APP_VERSION } from './version.js?v=7.3.1';
+import { esc, toast, getPosition, uid } from './util.js?v=7.3.1';
+import { openSkyAR } from './skyar.js?v=7.3.1';
+import { isConfigured, currentUser, createAccount, signInWithPassword, syncNow, joinCrew } from './sync.js?v=7.3.1';
+import { HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.3.1';
+import { searchPlaces, placeName } from './api.js?v=7.3.1';
+import { update } from './storage.js?v=7.3.1';
+import { $, $$, S, closeSheet, forecasts, openSheet, ui } from './core.js?v=7.3.1';
+import { render, setTab } from './app.js?v=7.3.1';
+import { openAligner, openTideWindows } from './planners.js?v=7.3.1';
+import { G, avatar, bandFill, bandInk, bandSky, day3am, demoSkyDay, lightBand, toneDot } from './forecast.js?v=7.3.1';
+import { PIN_ICON } from './here.js?v=7.3.1';
+import { loadCrew } from './crews.js?v=7.3.1';
 
 /* ================= first-run welcome ================= */
 /* ================= what's new ================= */
 // For testers: what changed in each update. Opens once after an update, and any time from You.
 export const SEEN_VERSION = 'tidelight:seenVersion';
 export const WHATS_NEW = [
+  { v: '7.3.1', date: '26 Nov', title: 'Learning why the sky lit up', items: [
+    'For each sunrise or sunset you\'ve rated, Tidelight now quietly looks up more about the sky that evening: how moist the air was at each height (thin cirrus or a thick deck), whether pressure was rising behind a front, how much sun got through, haze, and the cloud on the horizon.',
+    'It\'s saved with the shoot and used to test which of these really predict colour, before any of them change the score.',
+  ] },
   { v: '7.3', date: '26 Nov', title: 'A smarter sunset score', items: [
     'The colour score has been rebuilt for sunrises and sunsets. Testers rated plenty of brilliant skies that it only gave 50 or less: it was marking down heavy high cloud and any chance of rain.',
     'Thin high cloud now counts as the best canvas, even when it covers the sky. A full mid-level deck scores well when there\'s a gap towards the sun to light it from below.',
