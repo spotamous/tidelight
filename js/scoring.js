@@ -1,5 +1,5 @@
-import { clamp, haversineKm, angleDiff, compass } from './util.js?v=7.3.1';
-import { computeHunts, computeNightHunts, computeDayHunts, huntsOf, NIGHT_HUNTS, DAY_HUNTS, HUNT_LABEL } from './hunts.js?v=7.3.1';
+import { clamp, haversineKm, angleDiff, compass } from './util.js?v=7.4';
+import { computeHunts, computeNightHunts, computeDayHunts, huntsOf, NIGHT_HUNTS, DAY_HUNTS, HUNT_LABEL } from './hunts.js?v=7.4';
 
 /* ---------- helpers ---------- */
 
@@ -115,12 +115,16 @@ export function colourCore(x, o = {}) {
   // Cloud on the near horizon (60–120 km) hides the sun as it sets; out at 200–350 km it stops the light
   // reaching the canvas overhead (that matters more the more canvas there is).
   const nearF = o.near == null ? 1 : 1 - 0.55 * clamp((o.near - 0.35) / 0.5);
-  const farF = o.far == null ? 1 : 1 - 0.45 * fill * clamp((o.far - 0.45) / 0.45);
+  // (7.4: softened. Rated shoots showed it often lights anyway, through gaps the model can't see.)
+  const farF = o.far == null ? 1 : 1 - 0.22 * fill * clamp((o.far - 0.45) / 0.45);
+  // A deep moist column (humid at two or more of 600, 500, 400 and 300 hPa, roughly 4–9 km): thick cloud
+  // the light struggles through, however thin the high-cloud number looks. (7.4, from rated shoots)
+  const deepF = x.deep == null ? 1 : 1 - 0.4 * clamp((x.deep - 1) / 2);
   const aodF = x.aod == null ? 1 : 1 - 0.45 * clamp((x.aod - 0.3) / 0.7);
   const rhF = x.rh == null ? 1 : 1 - 0.12 * clamp((x.rh - 85) / 15);
   const lift = o.clearing ? 1.1 : 1;
-  const score = clamp(canvas * block * rain * vis * windF * nearF * farF * aodF * rhF * lift) * 100;
-  return { score, cover, fill, canvas, deck, thick, block, rain, pp, vis, windF, nearF, farF, aodF, rhF };
+  const score = clamp(canvas * block * rain * vis * windF * nearF * farF * deepF * aodF * rhF * lift) * 100;
+  return { score, cover, fill, canvas, deck, thick, block, rain, pp, vis, windF, nearF, farF, deepF, aodF, rhF };
 }
 
 export function baseScore(h, tide, spot, ctx = {}) {
@@ -128,7 +132,7 @@ export function baseScore(h, tide, spot, ctx = {}) {
   const low = h.low ?? 0, mid = h.mid ?? 0, high = h.high ?? 0;
   const near = ctx.horizon ? ctx.horizon.blk : null, far = ctx.horizon?.far ?? null;
   const floor = ctx.canvasFloor ?? 0.35;
-  const c = colourCore({ ...h, aod: ctx.aod ?? null }, { floor, lowK: ctx.lowK, windK: ctx.windK, near, far, clearing: ctx.clearing });
+  const c = colourCore({ ...h, aod: ctx.aod ?? null, deep: ctx.deep ?? null }, { floor, lowK: ctx.lowK, windK: ctx.windK, near, far, clearing: ctx.clearing });
   const coverPct = Math.round(c.cover * 100);
 
   // The canvas
@@ -140,6 +144,7 @@ export function baseScore(h, tide, spot, ctx = {}) {
   else factors.push({ k: 'good', t: `Good canvas: about ${coverPct}% of the sky with mid/high cloud to catch colour` });
   if (c.deck >= 0.12 && far != null && far < 0.35) factors.push({ k: 'good', t: `Clear far out towards the ${ctx.horizon.kind}: the light can get under the deck and light it from below` });
 
+  if (ctx.deep >= 2 && c.fill > 0.3) factors.push({ k: 'bad', t: 'Moist air from about 4 to 9 km up: a thick cloud layer the light may not get through' });
   if (low >= 60) factors.push({ k: 'bad', t: `Low cloud ${Math.round(low)}%: the sky is likely blocked` });
   else if (low <= 20) factors.push({ k: 'good', t: 'Little low cloud overhead' });
 
@@ -182,6 +187,7 @@ export function baseScore(h, tide, spot, ctx = {}) {
   if (far != null) parts.push({ label: 'Light path', value: pct(1 - clamp((far - 0.25) / 0.6)), note: `Cloud 200–350 km towards the ${ctx.horizon.kind}` });
   parts.push({ label: 'Rain', value: pct(c.rain), note: ctx.clearing ? 'Clearing' : `${(+(h.precip ?? 0)).toFixed(1)} mm, ${Math.round(c.pp)}% chance` });
   if (ctx.aod != null || h.rh != null) parts.push({ label: 'Air', value: pct(c.aodF * c.rhF), note: [ctx.aod != null ? (ctx.aod >= 0.4 ? 'smoky or hazy' : ctx.aod <= 0.12 ? 'clean air' : 'light haze') : '', h.rh != null ? `${Math.round(h.rh)}% humidity` : ''].filter(Boolean).join(', ') });
+  if (ctx.deep != null) parts.push({ label: 'Cloud depth', value: pct(c.deepF), note: ctx.deep >= 2 ? 'Moist from about 4 to 9 km: thick' : 'No deep moist layer' });
   if (c.vis < 1) parts.push({ label: 'Visibility', value: pct(c.vis), note: 'Fog or mist' });
   if (spot.coastal && spot.tide !== 'any' && tide) parts.push({ label: 'Tide', value: pct((tideF - 0.6) / 0.4), note: `${Math.round(tide.pos * 100)}% of range, ${spot.tide} wanted` });
   parts.push({ label: 'Wind', value: pct((c.windF - 0.7) / 0.3), note: `${Math.round(wind)} km/h` });
@@ -382,6 +388,18 @@ export function clearingAt(hours, idx) {
   return (before >= 0.4 || (h.precip ?? 0) >= 0.3) && (next.precip ?? 0) <= 0.1 && (h.low ?? 0) < 60 && (next.low ?? 0) < 60;
 }
 
+// How deep the moist layer is at time t: of 600, 500, 400 and 300 hPa, how many are 75%+ humid.
+export function deepAt(data, t) {
+  const L = data.levels;
+  if (!L?.times?.length) return null;
+  let i = -1, bd = Infinity;
+  L.times.forEach((x, k) => { if (Math.abs(x - t) < bd) { bd = Math.abs(x - t); i = k; } });
+  if (bd > 3 * 3600) return null;
+  const vals = [600, 500, 400, 300].map(l => L.rh[l]?.[i]);
+  if (vals.some(v => v == null)) return null;
+  return vals.filter(v => v >= 75).length;
+}
+
 // Smoke and haze (aerosol optical depth) at time t, when the air-quality forecast is in.
 export function aodAt(data, t) {
   const A = data.air;
@@ -442,8 +460,8 @@ export function evaluateEvent({ spot, data, type, t, keepers, settings }) {
   const tide = spot.coastal ? tideInfo(data.hours, idx) : null;
   const hz = horizonBlock(data, type, t);
   const tune = spotFloor(spot, keepers, settings);
-  const aod = aodAt(data, t), clearing = clearingAt(data.hours, idx);
-  const ctx = { ...(hz ? { horizon: hz } : {}), canvasFloor: tune.floor, lowK: tune.lowK, windK: tune.windK, aod, clearing };
+  const aod = aodAt(data, t), clearing = clearingAt(data.hours, idx), deep = deepAt(data, t);
+  const ctx = { ...(hz ? { horizon: hz } : {}), canvasFloor: tune.floor, lowK: tune.lowK, windK: tune.windK, aod, clearing, deep };
   const base = baseScore(h, tide, spot, ctx);
   const confidence = modelConfidence(data, idx, h, tide, spot, ctx);
   if (confidence) {
@@ -492,7 +510,7 @@ export function evaluateEvent({ spot, data, type, t, keepers, settings }) {
     ? accessWindow(data.hours, idx, t, (Number(spot.accessPct) || 40) / 100, Number(spot.accessBuffer ?? 30)) : null;
 
   return {
-    key: `${spot.id}:${type}:${t}`, access, confidence, sky: { near: hz ? hz.blk : null, far: hz?.far ?? null, aod, clearing },
+    key: `${spot.id}:${type}:${t}`, access, confidence, sky: { near: hz ? hz.blk : null, far: hz?.far ?? null, aod, clearing, deep },
     spot, type, t, offset: data.offset, idx, hour: h, tide,
     base: top, colour: base.score, hunts, topHunt, personal, score, factors: hunts[topHunt]?.factors || base.factors,
     features, drive, hike, walkStart, leave, light, sunAz, alignment,

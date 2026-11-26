@@ -3,9 +3,9 @@
 // open, and the phone/browser type. Never your email, spots, plans or location.
 // Reports go to Supabase (table app_errors, write-only: nobody can read them back through the app).
 // Offline errors wait on this device (up to 10) and go when you're back online.
-import { APP_VERSION } from './version.js?v=7.3.1';
-import { reportError } from './sync.js?v=7.3.1';
-import { ui } from './core.js?v=7.3.1';
+import { APP_VERSION } from './version.js?v=7.4';
+import { reportError } from './sync.js?v=7.4';
+import { ui } from './core.js?v=7.4';
 
 const MAX_PER_SESSION = 8;
 const PENDING = 'tidelight:pendingErrors';

@@ -1,10 +1,10 @@
 // Tidelight: shoot records. For every planned shoot: what was forecast when you planned it, the last
 // forecast before it, what the weather actually did, and how Tidelight's call compared with your rating.
 // This is what lets the score be checked (and improved) against real shoots rather than guesswork.
-import { update } from './storage.js?v=7.3.1';
-import { fetchPast, fetchSignals, PAST_LIMIT_DAYS } from './api.js?v=7.3.1';
-import { evaluateSpot, ratingScore, labelFor, horizonBlock, aodAt } from './scoring.js?v=7.3.1';
-import { S, allEvents, freshHooks } from './core.js?v=7.3.1';
+import { update } from './storage.js?v=7.4';
+import { fetchPast, fetchSignals, PAST_LIMIT_DAYS } from './api.js?v=7.4';
+import { evaluateSpot, ratingScore, labelFor, horizonBlock, aodAt } from './scoring.js?v=7.4';
+import { S, allEvents, freshHooks } from './core.js?v=7.4';
 
 /* ---------- the calls ---------- */
 // The same cut-offs as everywhere else: Go 75+, Maybe 50 to 74, Skip under 50; and for your rating,
@@ -31,6 +31,7 @@ export function snap(e) {
     if (k.far != null) out.hzFar = r0(k.far * 100);
     if (k.aod != null) out.aod = Math.round(k.aod * 100) / 100;
     if (k.clearing) out.clearing = true;
+    if (k.deep != null) out.deep = k.deep;
   }
   if (h.rh != null) out.rh = r0(h.rh);
   return out;

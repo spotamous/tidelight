@@ -669,12 +669,16 @@ function colourCore(x, o = {}) {
   // Cloud on the near horizon (60–120 km) hides the sun as it sets; out at 200–350 km it stops the light
   // reaching the canvas overhead (that matters more the more canvas there is).
   const nearF = o.near == null ? 1 : 1 - 0.55 * clamp((o.near - 0.35) / 0.5);
-  const farF = o.far == null ? 1 : 1 - 0.45 * fill * clamp((o.far - 0.45) / 0.45);
+  // (7.4: softened. Rated shoots showed it often lights anyway, through gaps the model can't see.)
+  const farF = o.far == null ? 1 : 1 - 0.22 * fill * clamp((o.far - 0.45) / 0.45);
+  // A deep moist column (humid at two or more of 600, 500, 400 and 300 hPa, roughly 4–9 km): thick cloud
+  // the light struggles through, however thin the high-cloud number looks. (7.4, from rated shoots)
+  const deepF = x.deep == null ? 1 : 1 - 0.4 * clamp((x.deep - 1) / 2);
   const aodF = x.aod == null ? 1 : 1 - 0.45 * clamp((x.aod - 0.3) / 0.7);
   const rhF = x.rh == null ? 1 : 1 - 0.12 * clamp((x.rh - 85) / 15);
   const lift = o.clearing ? 1.1 : 1;
-  const score = clamp(canvas * block * rain * vis * windF * nearF * farF * aodF * rhF * lift) * 100;
-  return { score, cover, fill, canvas, deck, thick, block, rain, pp, vis, windF, nearF, farF, aodF, rhF };
+  const score = clamp(canvas * block * rain * vis * windF * nearF * farF * deepF * aodF * rhF * lift) * 100;
+  return { score, cover, fill, canvas, deck, thick, block, rain, pp, vis, windF, nearF, farF, deepF, aodF, rhF };
 }
 
 function baseScore(h, tide, spot, ctx = {}) {
@@ -682,7 +686,7 @@ function baseScore(h, tide, spot, ctx = {}) {
   const low = h.low ?? 0, mid = h.mid ?? 0, high = h.high ?? 0;
   const near = ctx.horizon ? ctx.horizon.blk : null, far = ctx.horizon?.far ?? null;
   const floor = ctx.canvasFloor ?? 0.35;
-  const c = colourCore({ ...h, aod: ctx.aod ?? null }, { floor, lowK: ctx.lowK, windK: ctx.windK, near, far, clearing: ctx.clearing });
+  const c = colourCore({ ...h, aod: ctx.aod ?? null, deep: ctx.deep ?? null }, { floor, lowK: ctx.lowK, windK: ctx.windK, near, far, clearing: ctx.clearing });
   const coverPct = Math.round(c.cover * 100);
 
   // The canvas
@@ -694,6 +698,7 @@ function baseScore(h, tide, spot, ctx = {}) {
   else factors.push({ k: 'good', t: `Good canvas: about ${coverPct}% of the sky with mid/high cloud to catch colour` });
   if (c.deck >= 0.12 && far != null && far < 0.35) factors.push({ k: 'good', t: `Clear far out towards the ${ctx.horizon.kind}: the light can get under the deck and light it from below` });
 
+  if (ctx.deep >= 2 && c.fill > 0.3) factors.push({ k: 'bad', t: 'Moist air from about 4 to 9 km up: a thick cloud layer the light may not get through' });
   if (low >= 60) factors.push({ k: 'bad', t: `Low cloud ${Math.round(low)}%: the sky is likely blocked` });
   else if (low <= 20) factors.push({ k: 'good', t: 'Little low cloud overhead' });
 
@@ -736,6 +741,7 @@ function baseScore(h, tide, spot, ctx = {}) {
   if (far != null) parts.push({ label: 'Light path', value: pct(1 - clamp((far - 0.25) / 0.6)), note: `Cloud 200–350 km towards the ${ctx.horizon.kind}` });
   parts.push({ label: 'Rain', value: pct(c.rain), note: ctx.clearing ? 'Clearing' : `${(+(h.precip ?? 0)).toFixed(1)} mm, ${Math.round(c.pp)}% chance` });
   if (ctx.aod != null || h.rh != null) parts.push({ label: 'Air', value: pct(c.aodF * c.rhF), note: [ctx.aod != null ? (ctx.aod >= 0.4 ? 'smoky or hazy' : ctx.aod <= 0.12 ? 'clean air' : 'light haze') : '', h.rh != null ? `${Math.round(h.rh)}% humidity` : ''].filter(Boolean).join(', ') });
+  if (ctx.deep != null) parts.push({ label: 'Cloud depth', value: pct(c.deepF), note: ctx.deep >= 2 ? 'Moist from about 4 to 9 km: thick' : 'No deep moist layer' });
   if (c.vis < 1) parts.push({ label: 'Visibility', value: pct(c.vis), note: 'Fog or mist' });
   if (spot.coastal && spot.tide !== 'any' && tide) parts.push({ label: 'Tide', value: pct((tideF - 0.6) / 0.4), note: `${Math.round(tide.pos * 100)}% of range, ${spot.tide} wanted` });
   parts.push({ label: 'Wind', value: pct((c.windF - 0.7) / 0.3), note: `${Math.round(wind)} km/h` });
@@ -936,6 +942,18 @@ function clearingAt(hours, idx) {
   return (before >= 0.4 || (h.precip ?? 0) >= 0.3) && (next.precip ?? 0) <= 0.1 && (h.low ?? 0) < 60 && (next.low ?? 0) < 60;
 }
 
+// How deep the moist layer is at time t: of 600, 500, 400 and 300 hPa, how many are 75%+ humid.
+function deepAt(data, t) {
+  const L = data.levels;
+  if (!L?.times?.length) return null;
+  let i = -1, bd = Infinity;
+  L.times.forEach((x, k) => { if (Math.abs(x - t) < bd) { bd = Math.abs(x - t); i = k; } });
+  if (bd > 3 * 3600) return null;
+  const vals = [600, 500, 400, 300].map(l => L.rh[l]?.[i]);
+  if (vals.some(v => v == null)) return null;
+  return vals.filter(v => v >= 75).length;
+}
+
 // Smoke and haze (aerosol optical depth) at time t, when the air-quality forecast is in.
 function aodAt(data, t) {
   const A = data.air;
@@ -996,8 +1014,8 @@ function evaluateEvent({ spot, data, type, t, keepers, settings }) {
   const tide = spot.coastal ? tideInfo(data.hours, idx) : null;
   const hz = horizonBlock(data, type, t);
   const tune = spotFloor(spot, keepers, settings);
-  const aod = aodAt(data, t), clearing = clearingAt(data.hours, idx);
-  const ctx = { ...(hz ? { horizon: hz } : {}), canvasFloor: tune.floor, lowK: tune.lowK, windK: tune.windK, aod, clearing };
+  const aod = aodAt(data, t), clearing = clearingAt(data.hours, idx), deep = deepAt(data, t);
+  const ctx = { ...(hz ? { horizon: hz } : {}), canvasFloor: tune.floor, lowK: tune.lowK, windK: tune.windK, aod, clearing, deep };
   const base = baseScore(h, tide, spot, ctx);
   const confidence = modelConfidence(data, idx, h, tide, spot, ctx);
   if (confidence) {
@@ -1046,7 +1064,7 @@ function evaluateEvent({ spot, data, type, t, keepers, settings }) {
     ? accessWindow(data.hours, idx, t, (Number(spot.accessPct) || 40) / 100, Number(spot.accessBuffer ?? 30)) : null;
 
   return {
-    key: `${spot.id}:${type}:${t}`, access, confidence, sky: { near: hz ? hz.blk : null, far: hz?.far ?? null, aod, clearing },
+    key: `${spot.id}:${type}:${t}`, access, confidence, sky: { near: hz ? hz.blk : null, far: hz?.far ?? null, aod, clearing, deep },
     spot, type, t, offset: data.offset, idx, hour: h, tide,
     base: top, colour: base.score, hunts, topHunt, personal, score, factors: hunts[topHunt]?.factors || base.factors,
     features, drive, hike, walkStart, leave, light, sunAz, alignment,
@@ -1174,7 +1192,7 @@ function evaluateDay({ spot, data, d, keepers, settings }) {
   };
 }
 
-return { nearestIndex, tideInfo, accessWindow, FEATURE_NAMES, featureVector, colourCore, baseScore, similarity, MIN_KEEPERS, CLEAN_FLOOR, RATING_TAGS, ratingScore, labelFor, colourRatings, spotFloor, colourFromFeatures, tuningReport, personalScore, personalModelSummary, horizonBlock, clearingAt, aodAt, modelConfidence, HIKE_SPEED, DIFFICULTIES, hikeMinutes, hikeIsEstimate, driveMinutes, evaluateEvent, evaluateSpot, evaluateNight, evaluateDay };
+return { nearestIndex, tideInfo, accessWindow, FEATURE_NAMES, featureVector, colourCore, baseScore, similarity, MIN_KEEPERS, CLEAN_FLOOR, RATING_TAGS, ratingScore, labelFor, colourRatings, spotFloor, colourFromFeatures, tuningReport, personalScore, personalModelSummary, horizonBlock, clearingAt, deepAt, aodAt, modelConfidence, HIKE_SPEED, DIFFICULTIES, hikeMinutes, hikeIsEstimate, driveMinutes, evaluateEvent, evaluateSpot, evaluateNight, evaluateDay };
 })();
 
 /* ===== js/api.js ===== */
@@ -1294,7 +1312,7 @@ async function fetchSpotForecast(spot) {
   };
   // The horizon and model-agreement checks only matter for sunrise and sunset colour.
   const wantsColour = wantsColourOf(spot);
-  const [mr, hz, md, rd, aq] = await Promise.allSettled([getMarine(), wantsColour ? fetchHorizon(spot) : null, wantsColour ? fetchModels(spot) : null, getRainDaily(), wantsColour ? fetchAir(spot) : null]);
+  const [mr, hz, md, rd, aq, lv] = await Promise.allSettled([getMarine(), wantsColour ? fetchHorizon(spot) : null, wantsColour ? fetchModels(spot) : null, getRainDaily(), wantsColour ? fetchAir(spot) : null, wantsColour ? fetchLevelsFor([spot], LEVEL_WHEN).then(r => r[0]) : null]);
   const marine = mr.status === 'fulfilled' ? mr.value : null;
 
   const data = normalize(wx, marine);
@@ -1302,6 +1320,7 @@ async function fetchSpotForecast(spot) {
   data.models = md.status === 'fulfilled' ? md.value : null;    // per-model cloud, for confidence
   data.rainDaily = rd.status === 'fulfilled' ? rd.value : null; // daily rain, 14 days back
   data.air = aq.status === 'fulfilled' ? aq.value : null;       // smoke and haze
+  data.levels = lv.status === 'fulfilled' ? lv.value : null;    // humidity at height
   const entry = { at: Date.now(), data };
   cache.set(key, entry); persist([[key, entry]]);
   return data;
@@ -1353,6 +1372,28 @@ async function fetchAir(spot, range = null) {
   const j = await getJSON(`${AIR}?${qs({ latitude: spot.lat, longitude: spot.lon, ...(range ? { hourly: AIR_PARAMS.hourly, timezone: 'auto', timeformat: 'unixtime', ...range } : AIR_PARAMS) })}`, 10000);
   return airFrom(j);
 }
+
+/* ---------- humidity at height: how deep the moist (cloudy) layer is ---------- */
+const DEEP_LEVELS = [600, 500, 400, 300];
+const LEVEL_HOURLY = DEEP_LEVELS.map(l => `relative_humidity_${l}hPa`).join(',');
+const levelsFrom = j => {
+  const H = j?.hourly;
+  if (!H?.time?.length || !(H.relative_humidity_300hPa || []).some(v => v != null)) return null;
+  const rh = {}; DEEP_LEVELS.forEach(l => { rh[l] = H[`relative_humidity_${l}hPa`] || []; });
+  return { times: H.time, rh };
+};
+// The best-match model may not carry every height; GFS does, everywhere. list: places; when: the time params.
+async function fetchLevelsFor(list, when) {
+  const q = { ...coords(list), hourly: LEVEL_HOURLY, timezone: 'auto', timeformat: 'unixtime', ...when };
+  let res = await getJSON(`${FORECAST}?${qs(q)}`, 12000).then(j => asList(j, list.length).map(levelsFrom))
+    .catch(e => { if (e instanceof SlowError || /connection/i.test(e.message)) throw e; return list.map(() => null); });
+  if (res.some(x => !x)) {
+    const g = await getJSON(`${FORECAST}?${qs({ ...q, models: 'gfs_seamless' })}`, 12000).then(j => asList(j, list.length).map(levelsFrom)).catch(() => list.map(() => null));
+    res = res.map((x, i) => x || g[i]);
+  }
+  return res;
+}
+const LEVEL_WHEN = { forecast_days: 7, past_days: 2 };
 
 /* ---------- the same cloud from several weather models, for confidence ---------- */
 function modelsFrom(j, ms) {
@@ -1441,7 +1482,8 @@ async function fetchForecasts(spots, { force = false, all = spots } = {}) {
     if (!colour.length) return [];
     return many(colour, 50, part => getJSON(`${AIR}?${qs({ ...coords(part), ...AIR_PARAMS })}`, 12000).then(j => asList(j, part.length).map(airFrom)));
   };
-  const [wx, mr, rd, hz, md, aq] = await Promise.allSettled([wxAll(), marineAll(), rainAll(), hzAll(), modelsAll(), airAll()]);
+  const levelsAll = async () => (colour.length ? many(colour, 50, part => fetchLevelsFor(part, LEVEL_WHEN)) : []);
+  const [wx, mr, rd, hz, md, aq, lv] = await Promise.allSettled([wxAll(), marineAll(), rainAll(), hzAll(), modelsAll(), airAll(), levelsAll()]);
   if (wx.status !== 'fulfilled') {
     // The combined request didn't work (for example one place the service won't forecast): fall back to one spot at a time.
     if (wx.reason instanceof SlowError || /connection/i.test(wx.reason?.message || '')) {
@@ -1460,6 +1502,7 @@ async function fetchForecasts(spots, { force = false, all = spots } = {}) {
       data.horizon = wantsColourOf(sp) ? pick(hz, colour, sp) : null;
       data.models = wantsColourOf(sp) ? pick(md, colour, sp) : null;
       data.air = wantsColourOf(sp) ? pick(aq, colour, sp) : null;
+      data.levels = wantsColourOf(sp) ? pick(lv, colour, sp) : null;
       data.rainDaily = isDayHunter(sp) ? pick(rd, dayHunters, sp) : null;
       const entry = { at: now, data };
       cache.set(keyOf(sp), entry); entries.push([keyOf(sp), entry]);
@@ -1724,11 +1767,12 @@ async function fetchPast(spot, t) {
     const j = await getJSON(`${FORECAST}?${qs({ latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime', daily: 'precipitation_sum', start_date: ymd(t - 15 * 86400), end_date: range.end_date })}`);
     return (j.daily?.time || []).map((tt, i) => ({ t: tt, mm: j.daily.precipitation_sum?.[i] ?? 0 }));
   };
-  const [mr, hz, rd, aq] = await Promise.allSettled([getMarine(), wantsColourOf(spot) ? fetchHorizon(spot, { t, range }) : null, getRainDaily(), wantsColourOf(spot) ? fetchAir(spot, range) : null]);
+  const [mr, hz, rd, aq, lv] = await Promise.allSettled([getMarine(), wantsColourOf(spot) ? fetchHorizon(spot, { t, range }) : null, getRainDaily(), wantsColourOf(spot) ? fetchAir(spot, range) : null, wantsColourOf(spot) ? fetchLevelsFor([spot], range).then(r => r[0]) : null]);
   const data = normalize(wx, mr.status === 'fulfilled' ? mr.value : null);
   data.horizon = hz.status === 'fulfilled' ? hz.value : null;
   data.models = null;   // no disagreement to weigh: this is what happened
   data.air = aq.status === 'fulfilled' ? aq.value : null;
+  data.levels = lv.status === 'fulfilled' ? lv.value : null;
   data.rainDaily = rd.status === 'fulfilled' ? rd.value : null;
   return data;
 }

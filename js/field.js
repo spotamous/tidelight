@@ -1,15 +1,15 @@
 // Tidelight: In the field: right now, the field compass, phone heading, sun line-ups with a view, and field mode.
-import { fmtTime, dayKey, fmtDay, esc, getPosition, haversineKm, toast, compass, angleDiff, cap } from './util.js?v=7.3.1';
-import { WEATHER_TEXT, placeName, fetchHourly, searchPlaces, fetchCurrent, fetchRadarFrames } from './api.js?v=7.3.1';
-import { nearestIndex, tideInfo } from './scoring.js?v=7.3.1';
-import { coverUrl } from './photos.js?v=7.3.1';
-import { HUNT_LABEL } from './hunts.js?v=7.3.1';
-import { $, $$, BEHIND_SHEET, closeSheet, eventIndex, forecasts, openSheet, placeTz, S, sessionName, ui } from './core.js?v=7.3.1';
-import { TYPE_NAME, spotTile } from './forecast.js?v=7.3.1';
-import { syncAgo } from './you.js?v=7.3.1';
-import { openExposure } from './tools.js?v=7.3.1';
-import { QUICK, dueToAsk, markAsked, openQuickRate } from './accuracy.js?v=7.3.1';
-import { ratePlan } from './plans.js?v=7.3.1';
+import { fmtTime, dayKey, fmtDay, esc, getPosition, haversineKm, toast, compass, angleDiff, cap } from './util.js?v=7.4';
+import { WEATHER_TEXT, placeName, fetchHourly, searchPlaces, fetchCurrent, fetchRadarFrames } from './api.js?v=7.4';
+import { nearestIndex, tideInfo } from './scoring.js?v=7.4';
+import { coverUrl } from './photos.js?v=7.4';
+import { HUNT_LABEL } from './hunts.js?v=7.4';
+import { $, $$, BEHIND_SHEET, closeSheet, eventIndex, forecasts, openSheet, placeTz, S, sessionName, ui } from './core.js?v=7.4';
+import { TYPE_NAME, spotTile } from './forecast.js?v=7.4';
+import { syncAgo } from './you.js?v=7.4';
+import { openExposure } from './tools.js?v=7.4';
+import { QUICK, dueToAsk, markAsked, openQuickRate } from './accuracy.js?v=7.4';
+import { ratePlan } from './plans.js?v=7.4';
 
 /* ================= right now ================= */
 

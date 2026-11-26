@@ -1,6 +1,6 @@
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
-import { nearestIndex, tideInfo } from './scoring.js?v=7.3.1';
-import { huntsOf, DAY_HUNTS } from './hunts.js?v=7.3.1';
+import { nearestIndex, tideInfo } from './scoring.js?v=7.4';
+import { huntsOf, DAY_HUNTS } from './hunts.js?v=7.4';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
@@ -114,7 +114,7 @@ export async function fetchSpotForecast(spot) {
   };
   // The horizon and model-agreement checks only matter for sunrise and sunset colour.
   const wantsColour = wantsColourOf(spot);
-  const [mr, hz, md, rd, aq] = await Promise.allSettled([getMarine(), wantsColour ? fetchHorizon(spot) : null, wantsColour ? fetchModels(spot) : null, getRainDaily(), wantsColour ? fetchAir(spot) : null]);
+  const [mr, hz, md, rd, aq, lv] = await Promise.allSettled([getMarine(), wantsColour ? fetchHorizon(spot) : null, wantsColour ? fetchModels(spot) : null, getRainDaily(), wantsColour ? fetchAir(spot) : null, wantsColour ? fetchLevelsFor([spot], LEVEL_WHEN).then(r => r[0]) : null]);
   const marine = mr.status === 'fulfilled' ? mr.value : null;
 
   const data = normalize(wx, marine);
@@ -122,6 +122,7 @@ export async function fetchSpotForecast(spot) {
   data.models = md.status === 'fulfilled' ? md.value : null;    // per-model cloud, for confidence
   data.rainDaily = rd.status === 'fulfilled' ? rd.value : null; // daily rain, 14 days back
   data.air = aq.status === 'fulfilled' ? aq.value : null;       // smoke and haze
+  data.levels = lv.status === 'fulfilled' ? lv.value : null;    // humidity at height
   const entry = { at: Date.now(), data };
   cache.set(key, entry); persist([[key, entry]]);
   return data;
@@ -173,6 +174,28 @@ async function fetchAir(spot, range = null) {
   const j = await getJSON(`${AIR}?${qs({ latitude: spot.lat, longitude: spot.lon, ...(range ? { hourly: AIR_PARAMS.hourly, timezone: 'auto', timeformat: 'unixtime', ...range } : AIR_PARAMS) })}`, 10000);
   return airFrom(j);
 }
+
+/* ---------- humidity at height: how deep the moist (cloudy) layer is ---------- */
+const DEEP_LEVELS = [600, 500, 400, 300];
+const LEVEL_HOURLY = DEEP_LEVELS.map(l => `relative_humidity_${l}hPa`).join(',');
+const levelsFrom = j => {
+  const H = j?.hourly;
+  if (!H?.time?.length || !(H.relative_humidity_300hPa || []).some(v => v != null)) return null;
+  const rh = {}; DEEP_LEVELS.forEach(l => { rh[l] = H[`relative_humidity_${l}hPa`] || []; });
+  return { times: H.time, rh };
+};
+// The best-match model may not carry every height; GFS does, everywhere. list: places; when: the time params.
+async function fetchLevelsFor(list, when) {
+  const q = { ...coords(list), hourly: LEVEL_HOURLY, timezone: 'auto', timeformat: 'unixtime', ...when };
+  let res = await getJSON(`${FORECAST}?${qs(q)}`, 12000).then(j => asList(j, list.length).map(levelsFrom))
+    .catch(e => { if (e instanceof SlowError || /connection/i.test(e.message)) throw e; return list.map(() => null); });
+  if (res.some(x => !x)) {
+    const g = await getJSON(`${FORECAST}?${qs({ ...q, models: 'gfs_seamless' })}`, 12000).then(j => asList(j, list.length).map(levelsFrom)).catch(() => list.map(() => null));
+    res = res.map((x, i) => x || g[i]);
+  }
+  return res;
+}
+const LEVEL_WHEN = { forecast_days: 7, past_days: 2 };
 
 /* ---------- the same cloud from several weather models, for confidence ---------- */
 function modelsFrom(j, ms) {
@@ -261,7 +284,8 @@ export async function fetchForecasts(spots, { force = false, all = spots } = {})
     if (!colour.length) return [];
     return many(colour, 50, part => getJSON(`${AIR}?${qs({ ...coords(part), ...AIR_PARAMS })}`, 12000).then(j => asList(j, part.length).map(airFrom)));
   };
-  const [wx, mr, rd, hz, md, aq] = await Promise.allSettled([wxAll(), marineAll(), rainAll(), hzAll(), modelsAll(), airAll()]);
+  const levelsAll = async () => (colour.length ? many(colour, 50, part => fetchLevelsFor(part, LEVEL_WHEN)) : []);
+  const [wx, mr, rd, hz, md, aq, lv] = await Promise.allSettled([wxAll(), marineAll(), rainAll(), hzAll(), modelsAll(), airAll(), levelsAll()]);
   if (wx.status !== 'fulfilled') {
     // The combined request didn't work (for example one place the service won't forecast): fall back to one spot at a time.
     if (wx.reason instanceof SlowError || /connection/i.test(wx.reason?.message || '')) {
@@ -280,6 +304,7 @@ export async function fetchForecasts(spots, { force = false, all = spots } = {})
       data.horizon = wantsColourOf(sp) ? pick(hz, colour, sp) : null;
       data.models = wantsColourOf(sp) ? pick(md, colour, sp) : null;
       data.air = wantsColourOf(sp) ? pick(aq, colour, sp) : null;
+      data.levels = wantsColourOf(sp) ? pick(lv, colour, sp) : null;
       data.rainDaily = isDayHunter(sp) ? pick(rd, dayHunters, sp) : null;
       const entry = { at: now, data };
       cache.set(keyOf(sp), entry); entries.push([keyOf(sp), entry]);
@@ -544,11 +569,12 @@ export async function fetchPast(spot, t) {
     const j = await getJSON(`${FORECAST}?${qs({ latitude: spot.lat, longitude: spot.lon, timezone: 'auto', timeformat: 'unixtime', daily: 'precipitation_sum', start_date: ymd(t - 15 * 86400), end_date: range.end_date })}`);
     return (j.daily?.time || []).map((tt, i) => ({ t: tt, mm: j.daily.precipitation_sum?.[i] ?? 0 }));
   };
-  const [mr, hz, rd, aq] = await Promise.allSettled([getMarine(), wantsColourOf(spot) ? fetchHorizon(spot, { t, range }) : null, getRainDaily(), wantsColourOf(spot) ? fetchAir(spot, range) : null]);
+  const [mr, hz, rd, aq, lv] = await Promise.allSettled([getMarine(), wantsColourOf(spot) ? fetchHorizon(spot, { t, range }) : null, getRainDaily(), wantsColourOf(spot) ? fetchAir(spot, range) : null, wantsColourOf(spot) ? fetchLevelsFor([spot], range).then(r => r[0]) : null]);
   const data = normalize(wx, mr.status === 'fulfilled' ? mr.value : null);
   data.horizon = hz.status === 'fulfilled' ? hz.value : null;
   data.models = null;   // no disagreement to weigh: this is what happened
   data.air = aq.status === 'fulfilled' ? aq.value : null;
+  data.levels = lv.status === 'fulfilled' ? lv.value : null;
   data.rainDaily = rd.status === 'fulfilled' ? rd.value : null;
   return data;
 }
