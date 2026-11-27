@@ -1,24 +1,28 @@
 // Tidelight: First run and testers: What's new, the five-card tour and the welcome.
-import { openAccuracy } from './accuracy.js?v=7.4';
-import { APP_VERSION } from './version.js?v=7.4';
-import { esc, toast, getPosition, uid } from './util.js?v=7.4';
-import { openSkyAR } from './skyar.js?v=7.4';
-import { isConfigured, currentUser, createAccount, signInWithPassword, syncNow, joinCrew } from './sync.js?v=7.4';
-import { HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.4';
-import { searchPlaces, placeName } from './api.js?v=7.4';
-import { update } from './storage.js?v=7.4';
-import { $, $$, S, closeSheet, forecasts, openSheet, ui } from './core.js?v=7.4';
-import { render, setTab } from './app.js?v=7.4';
-import { openAligner, openTideWindows } from './planners.js?v=7.4';
-import { G, avatar, bandFill, bandInk, bandSky, day3am, demoSkyDay, lightBand, toneDot } from './forecast.js?v=7.4';
-import { PIN_ICON } from './here.js?v=7.4';
-import { loadCrew } from './crews.js?v=7.4';
+import { openAccuracy } from './accuracy.js?v=7.4.1';
+import { APP_VERSION } from './version.js?v=7.4.1';
+import { esc, toast, getPosition, uid } from './util.js?v=7.4.1';
+import { openSkyAR } from './skyar.js?v=7.4.1';
+import { isConfigured, currentUser, createAccount, signInWithPassword, syncNow, joinCrew } from './sync.js?v=7.4.1';
+import { HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.4.1';
+import { searchPlaces, placeName } from './api.js?v=7.4.1';
+import { update } from './storage.js?v=7.4.1';
+import { $, $$, S, closeSheet, forecasts, openSheet, ui } from './core.js?v=7.4.1';
+import { render, setTab } from './app.js?v=7.4.1';
+import { openAligner, openTideWindows } from './planners.js?v=7.4.1';
+import { G, avatar, bandFill, bandInk, bandSky, day3am, demoSkyDay, lightBand, toneDot } from './forecast.js?v=7.4.1';
+import { PIN_ICON } from './here.js?v=7.4.1';
+import { loadCrew } from './crews.js?v=7.4.1';
 
 /* ================= first-run welcome ================= */
 /* ================= what's new ================= */
 // For testers: what changed in each update. Opens once after an update, and any time from You.
 export const SEEN_VERSION = 'tidelight:seenVersion';
 export const WHATS_NEW = [
+  { v: '7.4.1', date: '27 Nov', title: 'Sunrise or sunset at a glance', items: [
+    'New: All, Sunrise and Sunset buttons above the week. Pick Sunset to see each day\'s best sunset score, or Sunrise for the mornings.',
+    'On All, each day\'s score now has a small mark showing whether it\'s a sunrise, sunset or night session.',
+  ] },
   { v: '7.4', date: '26 Nov', title: 'Tuned on real skies', items: [
     'The sky data collected in 7.3.1 has been checked against testers\' rated sunsets, and two of the signals earned a place in the score.',
     'New: cloud depth. When the air is moist from about 4 to 9 km up, the cloud is a thick layer the light struggles through, even when the high-cloud number looks good. Both stormy duds that had this were caught.',

@@ -1,17 +1,17 @@
 // Tidelight: The Forecast tab: the session card, score gauge and What if?, the light band, week strip, little pictures (horizon scenes, spot tiles, avatars) and gestures.
-import { dayKey, esc, fmtTime, toast, fmtWeekday, fmtDayDate, cap } from './util.js?v=7.4';
-import { nearestIndex, horizonBlock, spotFloor, baseScore, tideInfo } from './scoring.js?v=7.4';
-import { HUNT_LABEL, HUNT_VERB, huntsOf, forestAt, waterfallAt, stormAt, setKp } from './hunts.js?v=7.4';
-import { update } from './storage.js?v=7.4';
-import { unshareFromCrew, syncNow } from './sync.js?v=7.4';
-import { coverUrl } from './photos.js?v=7.4';
-import { fetchForecasts, fetchKp } from './api.js?v=7.4';
-import { $, $$, S, allEvents, bgRefresh, ensureForecasts, eventIndex, forecasts, forecastsLanded, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.4';
-import { render } from './app.js?v=7.4';
-import { openSpotForm } from './spots.js?v=7.4';
-import { untilText } from './field.js?v=7.4';
-import { crewGoing, goingText, loadCrew } from './crews.js?v=7.4';
-import { PIN_ICON, openHere } from './here.js?v=7.4';
+import { dayKey, esc, fmtTime, toast, fmtWeekday, fmtDayDate, cap } from './util.js?v=7.4.1';
+import { nearestIndex, horizonBlock, spotFloor, baseScore, tideInfo } from './scoring.js?v=7.4.1';
+import { HUNT_LABEL, HUNT_VERB, huntsOf, forestAt, waterfallAt, stormAt, setKp } from './hunts.js?v=7.4.1';
+import { update } from './storage.js?v=7.4.1';
+import { unshareFromCrew, syncNow } from './sync.js?v=7.4.1';
+import { coverUrl } from './photos.js?v=7.4.1';
+import { fetchForecasts, fetchKp } from './api.js?v=7.4.1';
+import { $, $$, S, allEvents, bgRefresh, ensureForecasts, eventIndex, forecasts, forecastsLanded, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.4.1';
+import { render } from './app.js?v=7.4.1';
+import { openSpotForm } from './spots.js?v=7.4.1';
+import { untilText } from './field.js?v=7.4.1';
+import { crewGoing, goingText, loadCrew } from './crews.js?v=7.4.1';
+import { PIN_ICON, openHere } from './here.js?v=7.4.1';
 
 /* ================= forecast ================= */
 
@@ -498,9 +498,20 @@ export function skyGlyph(e) {
   if (kind === 'part') return G(`<g transform="translate(-2.4 -2.4) scale(.8)">${sun}</g><path d="${G_CLOUD_SM}"/>`);
   return G(night ? `${G_MOON}<path d="M18.5 4.5v2M17.5 5.5h2"/>` : sun);
 }
-export function weekStrip(evs, offset) {
+// A tiny mark for the session type, so each day's score says what it's for.
+const TYPE_MARK = {
+  sunrise: '<path d="M3 18h18M7.5 18a4.5 4.5 0 0 1 9 0"/><path d="M12 11V4.5M9 7.5l3-3 3 3"/>',
+  sunset: '<path d="M3 18h18M7.5 18a4.5 4.5 0 0 1 9 0"/><path d="M12 4.5V11M9 8l3 3 3-3"/>',
+  night: G_MOON,
+  day: G_SUN,
+};
+const typeMark = type => `<svg class="wk-t" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TYPE_MARK[type] || ''}</svg>`;
+const WEEK_TYPES = [['all', 'All'], ['sunrise', 'Sunrise'], ['sunset', 'Sunset']];
+export function weekStrip(allEvs, offset) {
   const now = Date.now() / 1000;
   const cells = [];
+  const only = ui.weekType !== 'all' ? ui.weekType : null;
+  const evs = only ? allEvs.filter(e => e.type === only) : allEvs;
   for (let i = 0; i < 7; i++) {
     const t = now + i * 86400;
     const best = evs.filter(e => e.dayIdx === i).sort((a, b) => b.score - a.score)[0];
@@ -512,11 +523,12 @@ export function weekStrip(evs, offset) {
         aria-label="${esc(full)}${S().plans.some(p => evs.some(e => e.dayIdx === i && e.key === p.key)) ? ', you have a plan' : ''}${best ? `: best is ${best.score}, ${TYPE_NAME[best.type].toLowerCase()} at ${esc(best.spot.name)}, ${skyNow(best).word.toLowerCase()}` : ': no sessions'}">
       ${i === ui.homeDay ? '<span class="wk-hl" aria-hidden="true"></span>' : ''}<span class="wk-l">${label}<small class="num">${esc(date)}</small></span>
       <span class="wk-sky ${best ? `${skyClass(best)} ${scoreTone(best.score)}` : 'none'}" ${best ? `style="background:${skyOf(best)}"` : ''} aria-hidden="true">${best ? skyGlyph(best) : ''}</span>
-      <span class="wk-s num ${best && best.score >= 75 ? 'go' : ''}" aria-hidden="true">${best ? `${toneDot(best.score)}${best.score}` : '–'}</span>${S().plans.some(p => evs.some(e => e.dayIdx === i && e.key === p.key)) ? '<span class="wk-plan" aria-hidden="true"></span>' : ''}
+      <span class="wk-s num ${best && best.score >= 75 ? 'go' : ''}" aria-hidden="true">${best ? `${only ? toneDot(best.score) : typeMark(best.type)}${best.score}` : '–'}</span>${S().plans.some(p => evs.some(e => e.dayIdx === i && e.key === p.key)) ? '<span class="wk-plan" aria-hidden="true"></span>' : ''}
     </button>`);
   }
-  return `<nav class="week" aria-label="Choose a day">${cells.join('')}</nav>
-    <p class="wk-key" aria-hidden="true"><span>The sky at each day's best session</span>
+  const seg = `<div class="wk-filter" role="group" aria-label="Show in the week">${WEEK_TYPES.map(([k, l]) => `<button class="${ui.weekType === k ? 'on' : ''}" data-weektype="${k}" aria-pressed="${ui.weekType === k}">${k === 'all' ? '' : typeMark(k)}${l}</button>`).join('')}</div>`;
+  return `${seg}<nav class="week" aria-label="Choose a day">${cells.join('')}</nav>
+    <p class="wk-key" aria-hidden="true"><span>The sky at each day's best ${only || 'session'}${only ? '' : ` (${typeMark('sunrise')}sunrise, ${typeMark('sunset')}sunset)`}</span>
       <span class="wk-key-i">${G('<path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0"/><path d="M12 9.5V8M7.6 11.6l-1.1-1.1M16.4 11.6l1.1-1.1"/>')}Clear</span><span class="wk-key-i">${G('<path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0"/><path d="M4 7.5h7.5M14 5.5h6M9 11h9"/>')}High cloud</span><span class="wk-key-i">${G(`<path d="${G_CLOUD}"/>`)}Overcast</span><span class="wk-key-i">${G(`<path d="${G_CLOUD}" transform="translate(0 -3)"/><path d="M9 18.5l-1 2.5M12.5 18.5l-1 2.5M16 18.5l-1 2.5"/>`)}Rain</span><span class="wk-key-i">${G('<path d="M4 8.5h16M6 12.5h12M4 16.5h16"/>')}Fog</span></p>`;
 }
 // When to set the alarm: the leave time, less the time you need to get ready.
@@ -954,8 +966,17 @@ export async function renderForecast(v) {
     if (d < 0 || d > 6 || d === ui.homeDay) return;
     const dir = d > ui.homeDay ? 'right' : 'left';
     ui.homeDay = d; ui.homeSel = null;
+    if (ui.weekType !== 'all') ui.homeSel = evs.filter(e => e.dayIdx === d && e.type === ui.weekType).sort((a, b) => b.score - a.score)[0]?.key || null;
     transitionHome(v, dir);
   };
+  $$('[data-weektype]', v).forEach(b => b.onclick = () => {
+    if (ui.weekType === b.dataset.weektype) return;
+    ui.weekType = b.dataset.weektype;
+    try { localStorage.setItem('tidelight:weekType', ui.weekType); } catch {}
+    if (ui.weekType !== 'all') ui.homeSel = evs.filter(e => e.dayIdx === ui.homeDay && e.type === ui.weekType).sort((a, b) => b.score - a.score)[0]?.key || ui.homeSel;
+    ui.homeAnimate = false;
+    renderForecast(v);
+  });
   $$('[data-day]', v).forEach(b => b.onclick = () => pickDay(Number(b.dataset.day)));
   const step = d => {
     const i = order.findIndex(e => e.key === ui.homeSel) + d;

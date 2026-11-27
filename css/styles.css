@@ -1270,6 +1270,14 @@ p { text-wrap: pretty; }
 .wk-s { font: 400 var(--t-lg)/1 var(--serif); color: var(--text); }
 .wk-s.go { color: var(--caramel); }
 .wk-d:not(.on) .wk-s:not(.go) { color: var(--muted); }
+.wk-s { display: inline-flex; align-items: center; gap: 3px; }
+.wk-t { flex: none; opacity: .75; }
+.wk-key .wk-t { vertical-align: -2px; margin-right: 2px; }
+/* All / Sunrise / Sunset above the week */
+.wk-filter { display: inline-flex; gap: 2px; padding: 3px; margin: 0 0 10px; border-radius: 999px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.wk-filter button { display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: var(--muted); font: 600 var(--t-xs)/1 var(--sans); cursor: pointer; transition: background-color .2s var(--ease-out), color .2s var(--ease-out); }
+.wk-filter button.on { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+.wk-filter .wk-t { opacity: .9; }
 
 /* Starlight on dark skies (night sessions, pre-dawn) */
 .sky-night { position: relative; }

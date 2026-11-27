@@ -1,17 +1,17 @@
 // Tidelight: The Tools tab: scouting, the light dial, tide slider, exposure tools, lightning timer and coach.
-import { HUNT_ORDER, HUNT_LABEL, coreAltAz } from './hunts.js?v=7.4';
-import { compass, getPosition, toast, uid, esc, fmtTime, cap, fmtDayDate } from './util.js?v=7.4';
-import { placeName } from './api.js?v=7.4';
-import { addPhotoFile } from './photos.js?v=7.4';
-import { update } from './storage.js?v=7.4';
-import { openSkyAR } from './skyar.js?v=7.4';
-import { $, $$, S, allEvents, closeSheet, ensureForecasts, eventIndex, forecasts, openSheet, ui } from './core.js?v=7.4';
-import { alignmentText, openCompass, phoneHeading } from './field.js?v=7.4';
-import { render } from './app.js?v=7.4';
-import { openSpotDetail } from './spots.js?v=7.4';
-import { BAND, day3am, lightBand, phaseAt, phaseColor } from './forecast.js?v=7.4';
-import { openHere } from './here.js?v=7.4';
-import { openAligner, openTideWindows } from './planners.js?v=7.4';
+import { HUNT_ORDER, HUNT_LABEL, coreAltAz } from './hunts.js?v=7.4.1';
+import { compass, getPosition, toast, uid, esc, fmtTime, cap, fmtDayDate } from './util.js?v=7.4.1';
+import { placeName } from './api.js?v=7.4.1';
+import { addPhotoFile } from './photos.js?v=7.4.1';
+import { update } from './storage.js?v=7.4.1';
+import { openSkyAR } from './skyar.js?v=7.4.1';
+import { $, $$, S, allEvents, closeSheet, ensureForecasts, eventIndex, forecasts, openSheet, ui } from './core.js?v=7.4.1';
+import { alignmentText, openCompass, phoneHeading } from './field.js?v=7.4.1';
+import { render } from './app.js?v=7.4.1';
+import { openSpotDetail } from './spots.js?v=7.4.1';
+import { BAND, day3am, lightBand, phaseAt, phaseColor } from './forecast.js?v=7.4.1';
+import { openHere } from './here.js?v=7.4.1';
+import { openAligner, openTideWindows } from './planners.js?v=7.4.1';
 
 /* ================= scout a spot ================= */
 export function openScout() {

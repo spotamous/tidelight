@@ -1,12 +1,12 @@
 // Tidelight: Shared by every screen: screen state (ui), forecasts, the rule-based briefing, shared fragments and the sheet.
-import { getState } from './storage.js?v=7.4';
-import { clearCache, savedForecast, FORECAST_TTL, fetchKp, fetchForecasts } from './api.js?v=7.4';
-import { huntsOf, setKp, HUNT_VERB, HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.4';
-import { evaluateSpot, hikeMinutes, hikeIsEstimate } from './scoring.js?v=7.4';
-import { fmtDay, fmtTime, compass, esc, cap, haversineKm, tzOffset, deviceOffset } from './util.js?v=7.4';
-import { huntPhrase, savedAgo, toneDot } from './forecast.js?v=7.4';
-import { fieldState } from './field.js?v=7.4';
-import { render } from './app.js?v=7.4';
+import { getState } from './storage.js?v=7.4.1';
+import { clearCache, savedForecast, FORECAST_TTL, fetchKp, fetchForecasts } from './api.js?v=7.4.1';
+import { huntsOf, setKp, HUNT_VERB, HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.4.1';
+import { evaluateSpot, hikeMinutes, hikeIsEstimate } from './scoring.js?v=7.4.1';
+import { fmtDay, fmtTime, compass, esc, cap, haversineKm, tzOffset, deviceOffset } from './util.js?v=7.4.1';
+import { huntPhrase, savedAgo, toneDot } from './forecast.js?v=7.4.1';
+import { fieldState } from './field.js?v=7.4.1';
+import { render } from './app.js?v=7.4.1';
 
 export function $(sel, el = document) { return el.querySelector(sel); }
 export function $$(sel, el = document) { return [...el.querySelectorAll(sel)]; }
@@ -18,6 +18,7 @@ export const ui = {
   found: null,           // last place picked from search: { name, lat, lon, marker }
   onSheetClose: null,
   homeDay: null,
+  weekType: (() => { try { const v = localStorage.getItem('tidelight:weekType'); return ['sunrise', 'sunset'].includes(v) ? v : 'all'; } catch { return 'all'; } })(),   // the week strip: all sessions, or only sunrises / sunsets
   homeAnimate: true,
   tabChanged: true,
   homeSel: null,

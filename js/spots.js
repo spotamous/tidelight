@@ -1,17 +1,17 @@
 // Tidelight: The Spots tab: your spot library, the map, search and the spot form.
-import { fmtWeekday, fmtDayDate, esc, cap, toast, uid, dayKey } from './util.js?v=7.4';
-import { coverUrl, deletePhotos, photoUrl, addPhotoFile } from './photos.js?v=7.4';
-import { huntsOf, HUNT_LABEL, HUNT_ORDER } from './hunts.js?v=7.4';
-import { searchPlaces, fetchSpotForecast } from './api.js?v=7.4';
-import { DIFFICULTIES, evaluateSpot, spotFloor } from './scoring.js?v=7.4';
-import { readExif } from './ai.js?v=7.4';
-import { update } from './storage.js?v=7.4';
-import { SESSION_TYPES, SUN_ICON, TYPE_NAME, band, huntPhrase, nextDays, sessionWhen, skeleton, spotTile } from './forecast.js?v=7.4';
-import { $, $$, S, closeSheet, ensureForecasts, forecasts, hikeSummary, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.4';
-import { openScout } from './tools.js?v=7.4';
-import { render } from './app.js?v=7.4';
-import { alignmentText, openNow } from './field.js?v=7.4';
-import { openTideWindows, seasonView, wireSeason } from './planners.js?v=7.4';
+import { fmtWeekday, fmtDayDate, esc, cap, toast, uid, dayKey } from './util.js?v=7.4.1';
+import { coverUrl, deletePhotos, photoUrl, addPhotoFile } from './photos.js?v=7.4.1';
+import { huntsOf, HUNT_LABEL, HUNT_ORDER } from './hunts.js?v=7.4.1';
+import { searchPlaces, fetchSpotForecast } from './api.js?v=7.4.1';
+import { DIFFICULTIES, evaluateSpot, spotFloor } from './scoring.js?v=7.4.1';
+import { readExif } from './ai.js?v=7.4.1';
+import { update } from './storage.js?v=7.4.1';
+import { SESSION_TYPES, SUN_ICON, TYPE_NAME, band, huntPhrase, nextDays, sessionWhen, skeleton, spotTile } from './forecast.js?v=7.4.1';
+import { $, $$, S, closeSheet, ensureForecasts, forecasts, hikeSummary, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.4.1';
+import { openScout } from './tools.js?v=7.4.1';
+import { render } from './app.js?v=7.4.1';
+import { alignmentText, openNow } from './field.js?v=7.4.1';
+import { openTideWindows, seasonView, wireSeason } from './planners.js?v=7.4.1';
 
 /* ================= spots ================= */
 
