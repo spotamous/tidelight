@@ -1,8 +1,8 @@
 // Tidelight: big seas (7.5). Rare, powerful swells at coastal spots, measured against the spot's own
 // wave history, so "a top-6 swell" means one of the six biggest in a typical year *here*.
 // Shared with the alerts function (bundled by tools/build-alerts.mjs), so keep it free of the DOM.
-import { fetchSeasForecast, fetchSeasHistory } from './api.js?v=7.5.1';
-import { fmtTime, fmtDay } from './util.js?v=7.5.1';
+import { fetchSeasForecast, fetchSeasHistory } from './api.js?v=7.5.2';
+import { fmtTime, fmtDay } from './util.js?v=7.5.2';
 
 export const SEAS_TOPS = [3, 6, 12];
 export const SEAS_DEFAULT_TOP = 6;

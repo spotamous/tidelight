@@ -1,24 +1,29 @@
 // Tidelight: First run and testers: What's new, the five-card tour and the welcome.
-import { openAccuracy } from './accuracy.js?v=7.5.1';
-import { APP_VERSION } from './version.js?v=7.5.1';
-import { esc, toast, getPosition, uid } from './util.js?v=7.5.1';
-import { openSkyAR } from './skyar.js?v=7.5.1';
-import { isConfigured, currentUser, createAccount, signInWithPassword, syncNow, joinCrew } from './sync.js?v=7.5.1';
-import { HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.5.1';
-import { searchPlaces, placeName } from './api.js?v=7.5.1';
-import { update } from './storage.js?v=7.5.1';
-import { $, $$, S, closeSheet, forecasts, openSheet, ui } from './core.js?v=7.5.1';
-import { render, setTab } from './app.js?v=7.5.1';
-import { openAligner, openTideWindows } from './planners.js?v=7.5.1';
-import { G, avatar, bandFill, bandInk, bandSky, day3am, demoSkyDay, lightBand, toneDot } from './forecast.js?v=7.5.1';
-import { PIN_ICON } from './here.js?v=7.5.1';
-import { loadCrew } from './crews.js?v=7.5.1';
+import { openAccuracy } from './accuracy.js?v=7.5.2';
+import { APP_VERSION } from './version.js?v=7.5.2';
+import { esc, toast, getPosition, uid } from './util.js?v=7.5.2';
+import { openSkyAR } from './skyar.js?v=7.5.2';
+import { isConfigured, currentUser, createAccount, signInWithPassword, syncNow, joinCrew } from './sync.js?v=7.5.2';
+import { HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.5.2';
+import { searchPlaces, placeName } from './api.js?v=7.5.2';
+import { update } from './storage.js?v=7.5.2';
+import { $, $$, S, closeSheet, forecasts, openSheet, ui } from './core.js?v=7.5.2';
+import { render, setTab } from './app.js?v=7.5.2';
+import { openAligner, openTideWindows } from './planners.js?v=7.5.2';
+import { G, avatar, bandFill, bandInk, bandSky, day3am, demoSkyDay, lightBand, toneDot } from './forecast.js?v=7.5.2';
+import { PIN_ICON } from './here.js?v=7.5.2';
+import { loadCrew } from './crews.js?v=7.5.2';
 
 /* ================= first-run welcome ================= */
 /* ================= what's new ================= */
 // For testers: what changed in each update. Opens once after an update, and any time from You.
 export const SEEN_VERSION = 'tidelight:seenVersion';
 export const WHATS_NEW = [
+  { v: '7.5.2', date: '28 Nov', title: 'A calmer look, and a new icon', items: [
+    'A new app icon: a caramel half sun on a blue-hour horizon, its light breaking up on the water. If you\'ve added Tidelight to your home screen, the new icon may only show after you remove it and add it again.',
+    'The app\'s own buttons and labels are quieter now, so the light and your photos stay the brightest things on screen: sentence-case labels, no glow under buttons, and the band\'s markers no longer pulse.',
+    'Liquid Glass stays where it helps (the header, tab bar and sheets). Buttons and chips are plain surfaces with a fine outline, in both dark and Daylight.',
+  ] },
   { v: '7.5.1', date: '28 Nov', title: 'A tidy-up', items: [
     'A session\'s briefing now leads with the plan. The tools sit below it in two short rows: On location, and Share.',
     'Sunsets that score well now say "Worth the drive". "Worth the alarm" stays for sunrises.',

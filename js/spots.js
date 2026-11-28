@@ -1,19 +1,19 @@
 // Tidelight: The Spots tab: your spot library, the map, search and the spot form.
-import { fmtWeekday, fmtDayDate, esc, cap, toast, uid, dayKey } from './util.js?v=7.5.1';
-import { coverUrl, deletePhotos, photoUrl, addPhotoFile } from './photos.js?v=7.5.1';
-import { huntsOf, HUNT_LABEL, HUNT_ORDER, huntWord } from './hunts.js?v=7.5.1';
-import { searchPlaces, fetchSpotForecast } from './api.js?v=7.5.1';
-import { DIFFICULTIES, evaluateSpot, spotFloor } from './scoring.js?v=7.5.1';
-import { readExif } from './ai.js?v=7.5.1';
-import { update } from './storage.js?v=7.5.1';
-import { SESSION_TYPES, SUN_ICON, TYPE_NAME, band, huntPhrase, nextDays, sessionWhen, skeleton, spotTile } from './forecast.js?v=7.5.1';
-import { $, $$, S, closeSheet, ensureForecasts, forecasts, hikeSummary, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.5.1';
-import { openScout } from './tools.js?v=7.5.1';
-import { render } from './app.js?v=7.5.1';
-import { alignmentText, openNow } from './field.js?v=7.5.1';
-import { openTideWindows, seasonView, wireSeason } from './planners.js?v=7.5.1';
-import { compass16, SEAS_TOPS, SEAS_DEFAULT_TOP } from './seas.js?v=7.5.1';
-import { afterSpotSave, seasSpotSection, wireSeasSpot } from './seasui.js?v=7.5.1';
+import { fmtWeekday, fmtDayDate, esc, cap, toast, uid, dayKey } from './util.js?v=7.5.2';
+import { coverUrl, deletePhotos, photoUrl, addPhotoFile } from './photos.js?v=7.5.2';
+import { huntsOf, HUNT_LABEL, HUNT_ORDER, huntWord } from './hunts.js?v=7.5.2';
+import { searchPlaces, fetchSpotForecast } from './api.js?v=7.5.2';
+import { DIFFICULTIES, evaluateSpot, spotFloor } from './scoring.js?v=7.5.2';
+import { readExif } from './ai.js?v=7.5.2';
+import { update } from './storage.js?v=7.5.2';
+import { SESSION_TYPES, SUN_ICON, TYPE_NAME, band, huntPhrase, nextDays, sessionWhen, skeleton, spotTile } from './forecast.js?v=7.5.2';
+import { $, $$, S, closeSheet, ensureForecasts, forecasts, hikeSummary, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.5.2';
+import { openScout } from './tools.js?v=7.5.2';
+import { render } from './app.js?v=7.5.2';
+import { alignmentText, openNow } from './field.js?v=7.5.2';
+import { openTideWindows, seasonView, wireSeason } from './planners.js?v=7.5.2';
+import { compass16, SEAS_TOPS, SEAS_DEFAULT_TOP } from './seas.js?v=7.5.2';
+import { afterSpotSave, seasSpotSection, wireSeasSpot } from './seasui.js?v=7.5.2';
 const COMPASS_POINTS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'].map((n, i) => [`${n} (${i * 22.5}°)`, i * 22.5]);
 
 /* ================= spots ================= */

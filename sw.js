@@ -3,7 +3,7 @@
 // - Forecast, tide and aurora data: network first, falling back to the last saved copy.
 // - Map tiles you've viewed are kept for offline use; live radar is never cached.
 // Bump VERSION with each release (matches APP_VERSION in js/version.js).
-const VERSION = '7.5.1';
+const VERSION = '7.5.2';
 const SHELL = `tidelight-shell-${VERSION}`;
 const DATA = 'tidelight-data';
 const TILES = 'tidelight-tiles';
@@ -14,7 +14,7 @@ const MAX_TILES = 600;
 const CODE = ['app', 'core', 'forecast', 'event', 'crews', 'plans', 'spots', 'field', 'here', 'planners', 'tools', 'you', 'welcome',
   'records', 'accuracy', 'report', 'version', 'skyar', 'seas', 'seasui', 'api', 'scoring', 'hunts', 'storage', 'sync', 'photos', 'gear', 'ai', 'util', 'config'];
 const STYLES = ['styles', 'glass', 'daylight', 'festive'];
-const SHELL_FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon.svg', './icons/icon-180.png', './icons/icon-192.png',
+const SHELL_FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon.svg?v=2', './icons/icon-180.png?v=2', './icons/icon-192.png?v=2',
   ...CODE.map(f => `./js/${f}.js?v=${VERSION}`), ...STYLES.map(f => `./css/${f}.css?v=${VERSION}`)];
 const DATA_HOSTS = ['open-meteo.com', 'services.swpc.noaa.gov', 'api.rainviewer.com'];
 const LIB_HOSTS = ['cdnjs.cloudflare.com', 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com', 'tysonwaldron.com'];
@@ -94,8 +94,8 @@ self.addEventListener('push', event => {
   event.waitUntil(self.registration.showNotification(d.title || 'Tidelight', {
     body: d.body || '',
     tag: d.tag || undefined,
-    icon: './icons/icon-192.png',
-    badge: './icons/icon-192.png',
+    icon: './icons/icon-192.png?v=2',
+    badge: './icons/icon-192.png?v=2',
     data: { url: d.url || './' },
   }));
 });

@@ -1,17 +1,17 @@
 // Tidelight: The Plans tab: upcoming, crew and history views, gear lists, alarms and rating a shoot.
-import { update } from './storage.js?v=7.5.1';
-import { uid, downloadFile, esc, fmtDay, fmtTime, fmtWeekday, cap, toast } from './util.js?v=7.5.1';
-import { gearFor } from './gear.js?v=7.5.1';
-import { currentUser, unshareFromCrew } from './sync.js?v=7.5.1';
-import { RATING_TAGS, ratingScore, featureVector, labelFor } from './scoring.js?v=7.5.1';
-import { fetchHistorical } from './api.js?v=7.5.1';
-import { crewPanel, crewState, loadCrew, openShareSheet, sessionKeyOf, wireCrewPanel } from './crews.js?v=7.5.1';
-import { $, $$, S, allEvents, briefing, chips, closeSheet, ensureForecasts, eventIndex, openSheet, sessionName, ui } from './core.js?v=7.5.1';
-import { TYPE_NAME, whyLine } from './forecast.js?v=7.5.1';
-import { untilText } from './field.js?v=7.5.1';
-import { render, setTab } from './app.js?v=7.5.1';
-import { snap } from './records.js?v=7.5.1';
-import { accuracySummary, openQuickRate, openRecord, verdictMark, wireAccuracySummary } from './accuracy.js?v=7.5.1';
+import { update } from './storage.js?v=7.5.2';
+import { uid, downloadFile, esc, fmtDay, fmtTime, fmtWeekday, cap, toast } from './util.js?v=7.5.2';
+import { gearFor } from './gear.js?v=7.5.2';
+import { currentUser, unshareFromCrew } from './sync.js?v=7.5.2';
+import { RATING_TAGS, ratingScore, featureVector, labelFor } from './scoring.js?v=7.5.2';
+import { fetchHistorical } from './api.js?v=7.5.2';
+import { crewPanel, crewState, loadCrew, openShareSheet, sessionKeyOf, wireCrewPanel } from './crews.js?v=7.5.2';
+import { $, $$, S, allEvents, briefing, chips, closeSheet, ensureForecasts, eventIndex, openSheet, sessionName, ui } from './core.js?v=7.5.2';
+import { TYPE_NAME, whyLine } from './forecast.js?v=7.5.2';
+import { untilText } from './field.js?v=7.5.2';
+import { render, setTab } from './app.js?v=7.5.2';
+import { snap } from './records.js?v=7.5.2';
+import { accuracySummary, openQuickRate, openRecord, verdictMark, wireAccuracySummary } from './accuracy.js?v=7.5.2';
 
 /* ================= plans ================= */
 
