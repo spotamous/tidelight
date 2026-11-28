@@ -87,7 +87,7 @@ export function hourlyRows(fc, count) {
       <span class="hr-wind num"><svg viewBox="0 0 24 24" width="13" height="13" style="transform:rotate(${(h.dir ?? 0) + 180}deg)" aria-hidden="true"><path d="M12 3l5 9h-3.5v9h-3v-9H7z" fill="currentColor"/></svg>${Math.round(h.wind ?? 0)}${h.gust ? `<small>–${Math.round(h.gust)}</small>` : ''}</span>
       <span class="hr-cloud num">${h.cloud != null ? Math.round(h.cloud) + '%' : ''}</span>
     </div>`);
-    fc.suns.filter(s => s.t >= h.t && s.t < next).forEach(s => rows.push(`<div class="hr-sun"><span class="num">${fmtTime(s.t, o)}</span><span>${s.kind}</span></div>`));
+    fc.suns.filter(s => s.t >= h.t && s.t < next).forEach(s => rows.push(`<div class="hr-sun"><span class="num">${fmtTime(s.t, o)}</span><span>${s.kind.charAt(0).toUpperCase() + s.kind.slice(1)}</span></div>`));
   });
   return `<div class="hr-head"><span>Time</span><span></span><span>Temp</span><span>Rain</span><span>Wind km/h</span><span>Cloud</span></div>${rows.join('')}`;
 }

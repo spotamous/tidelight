@@ -481,7 +481,7 @@ export async function shareCardBlob(e) {
   // Verdict and spot name shrink to fit beside the score.
   const room = W - 144 - scoreW - 36;
   const fit = (t, size, style) => { let px = size; g.font = `${style} ${px}px ${SERIF}`; while (g.measureText(t).width > room && px > 34) { px -= 2; g.font = `${style} ${px}px ${SERIF}`; } return `${style} ${px}px ${SERIF}`; };
-  text(`${huntPhrase(e)}.`, 72, P + 24, fit(`${huntPhrase(e)}.`, 76, 'italic 400'), '#F4EFE7');
+  text(huntPhrase(e), 72, P + 24, fit(huntPhrase(e), 76, 'italic 400'), '#F4EFE7');
   text(e.spot.name, 72, P + 112, fit(e.spot.name, 64, '400'), '#F4EFE7');
   // facts
   const facts = [['Be there', fmtTime(e.t - ((e.type === 'sunrise' ? 30 : 15) * 60), o)], [cap(TYPE_NAME[e.type]), fmtTime(e.t, o)]];
