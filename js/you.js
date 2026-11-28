@@ -1,20 +1,20 @@
 // Tidelight: The You tab: light profile, account, alerts, settings, kit, data and feedback.
-import { syncStatus, syncNow, signOut, sendPasswordReset, createAccount, signInWithPassword, savePushSubscription, removePushSubscription, sendTestAlert, currentUser, sendFeedback, myFeedback } from './sync.js?v=7.4.2';
-import { pageAccuracy } from './accuracy.js?v=7.4.2';
-import { accuracyReport } from './records.js?v=7.4.2';
-import { esc, fmtDate, uid, toast, fmtDay, getPosition, cap, downloadFile } from './util.js?v=7.4.2';
-import { MIN_KEEPERS, spotFloor, personalModelSummary, featureVector, similarity, tuningReport, colourRatings, ratingScore } from './scoring.js?v=7.4.2';
-import { hasAI, readExif, resizeImage, aiAnalyzeReference, aiResultToFeatures, testKey } from './ai.js?v=7.4.2';
-import { APP_VERSION } from './version.js?v=7.4.2';
-import { update, exportData, importData, resetAll } from './storage.js?v=7.4.2';
-import { fetchHistorical } from './api.js?v=7.4.2';
-import { VAPID_PUBLIC_KEY } from './config.js?v=7.4.2';
-import { exportPhotos, importPhotos, clearPhotos } from './photos.js?v=7.4.2';
-import { $, $$, S, allEvents, ensureForecasts, eventRow, forecasts, ui } from './core.js?v=7.4.2';
-import { THEMES, applyMotion, applyTheme, next3Days } from './forecast.js?v=7.4.2';
-import { hasNews, openTour, openWelcome, openWhatsNew } from './welcome.js?v=7.4.2';
-import { openSpotDetail } from './spots.js?v=7.4.2';
-import { render, setTab } from './app.js?v=7.4.2';
+import { syncStatus, syncNow, signOut, sendPasswordReset, createAccount, signInWithPassword, savePushSubscription, removePushSubscription, sendTestAlert, currentUser, sendFeedback, myFeedback } from './sync.js?v=7.5';
+import { pageAccuracy } from './accuracy.js?v=7.5';
+import { accuracyReport } from './records.js?v=7.5';
+import { esc, fmtDate, uid, toast, fmtDay, getPosition, cap, downloadFile } from './util.js?v=7.5';
+import { MIN_KEEPERS, spotFloor, personalModelSummary, featureVector, similarity, tuningReport, colourRatings, ratingScore } from './scoring.js?v=7.5';
+import { hasAI, readExif, resizeImage, aiAnalyzeReference, aiResultToFeatures, testKey } from './ai.js?v=7.5';
+import { APP_VERSION } from './version.js?v=7.5';
+import { update, exportData, importData, resetAll } from './storage.js?v=7.5';
+import { fetchHistorical } from './api.js?v=7.5';
+import { VAPID_PUBLIC_KEY } from './config.js?v=7.5';
+import { exportPhotos, importPhotos, clearPhotos } from './photos.js?v=7.5';
+import { $, $$, S, allEvents, ensureForecasts, eventRow, forecasts, ui } from './core.js?v=7.5';
+import { THEMES, applyMotion, applyTheme, next3Days } from './forecast.js?v=7.5';
+import { hasNews, openTour, openWelcome, openWhatsNew } from './welcome.js?v=7.5';
+import { openSpotDetail } from './spots.js?v=7.5';
+import { render, setTab } from './app.js?v=7.5';
 
 /* ================= coach ================= */
 
@@ -348,6 +348,11 @@ export async function renderAlerts() {
       <label class="check"><input type="checkbox" name="crew" ${a.crew !== false ? 'checked' : ''}> Tell me when someone in my crew plans a shoot</label>
       <label class="check"><input type="checkbox" name="calledOff" ${a.calledOff ? 'checked' : ''}> Tell me if a session I was alerted about falls through</label>
       <label class="check"><input type="checkbox" name="rate" ${a.rate !== false ? 'checked' : ''}> After a planned shoot, ask how the light was, once it's finished (one tap to answer; comes through quiet hours, never after 11pm)</label>
+      <fieldset class="seas-prefs"><legend>Big seas (coastal spots with Big seas on)</legend>
+        <label class="check"><input type="checkbox" name="seas" ${a.seas !== false ? 'checked' : ''}> Tell me when one of a spot's biggest swells of the year is on its way (up to 5 days ahead)</label>
+        <label class="check"><input type="checkbox" name="seasEve" ${a.seasEve !== false ? 'checked' : ''}> Update me the evening before, with the latest timing</label>
+        <label class="check"><input type="checkbox" name="seasFade" ${a.seasFade !== false ? 'checked' : ''}> Tell me if a big swell I was alerted about fades</label>
+      </fieldset>
       <label class="check"><input type="checkbox" name="digest" ${a.digest ? 'checked' : ''}> Weekly digest of the best 3 sessions, every
         <select name="digestDay" aria-label="Digest day">${DAYS.map((d, i) => opt(i, a.digestDay, d)).join('')}</select>
         at <select name="digestHour" aria-label="Digest time">${[7, 8, 12, 17, 18, 19, 20].map(h => opt(h, a.digestHour, hourLabel(h))).join('')}</select></label>
@@ -405,6 +410,7 @@ export async function renderAlerts() {
       s.settings.alerts = {
         go: !!f.get('go'), threshold: parseInt(f.get('threshold'), 10),
         calledOff: !!f.get('calledOff'), confident: !!f.get('confident'), crew: !!f.get('crew'), rate: !!f.get('rate'),
+        seas: !!f.get('seas'), seasEve: !!f.get('seasEve'), seasFade: !!f.get('seasFade'),
         digest: !!f.get('digest'), digestDay: parseInt(f.get('digestDay'), 10), digestHour: parseInt(f.get('digestHour'), 10),
         quietStart: qs < 0 ? 0 : qs, quietEnd: qs < 0 ? 0 : qe,
       };

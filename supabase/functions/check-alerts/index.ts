@@ -1226,7 +1226,7 @@ async function getJSON(url, ms = 15000) {
 
 const qs = o => new URLSearchParams(o).toString();
 
-function clearCache() { cache.clear(); }
+function clearCache() { cache.clear(); seasCache?.clear(); }
 
 const BASE = 'cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,precipitation_probability,precipitation,visibility,wind_speed_10m,temperature_2m';
 const FOG_STORM = 'relative_humidity_2m,dew_point_2m,cape,lifted_index,convective_inhibition,wind_gusts_10m,weather_code';
@@ -1719,6 +1719,39 @@ async function placeName(lat, lon) {
 // The forecast service also answers for past dates (about three months back) with its best record of
 // what happened. Same variables and the same normalised shape as a live forecast, so the app's own
 // scoring can be run on it: "what Tidelight would have said with the real weather".
+/* ---------- big seas (7.5): wave power at a coastal spot ---------- */
+// Hourly waves for the next 8 days (and yesterday), with the sea level for the tides. Kept an hour.
+const seasCache = new Map();
+function clearSeasCache() { seasCache.clear(); }
+async function fetchSeasForecast(spot) {
+  const key = `${spot.lat.toFixed(3)},${spot.lon.toFixed(3)}`, hit = seasCache.get(key);
+  if (hit && Date.now() - hit.at < 3600e3) return hit.data;
+  const j = await getJSON(`${MARINE}?${qs({ latitude: spot.lat, longitude: spot.lon, hourly: 'wave_height,wave_period,wave_direction,sea_level_height_msl', timezone: 'auto', timeformat: 'unixtime', forecast_days: 8, past_days: 1 })}`, 12000);
+  const H = j?.hourly;
+  if (!H?.time?.length || !(H.wave_height || []).some(v => v != null)) throw new Error('No wave forecast at this point: try moving the pin slightly offshore.');
+  const data = { offset: j.utc_offset_seconds || 0, times: H.time, h: H.wave_height, T: H.wave_period, dir: H.wave_direction, sea: H.sea_level_height_msl || [] };
+  seasCache.set(key, { at: Date.now(), data });
+  return data;
+}
+// The spot's wave history, hour by hour, for the last few years: what counts as rare *here*.
+// The archived best-match forecast first (the same models as the forecast); the ERA5 ocean reanalysis
+// if that comes back thin.
+async function fetchSeasHistory(spot, years = 3) {
+  const ymd = d => d.toISOString().slice(0, 10);
+  const end = new Date(Date.now() - 7 * 86400e3), start = new Date(end.getTime() - years * 365.25 * 86400e3);
+  const q = { latitude: spot.lat, longitude: spot.lon, hourly: 'wave_height,wave_period,wave_direction', timezone: 'auto', timeformat: 'unixtime', start_date: ymd(start), end_date: ymd(end) };
+  const read = j => {
+    const H = j?.hourly;
+    if (!H?.time?.length) return null;
+    const n = H.wave_height.filter(v => v != null).length;
+    return n > H.time.length * 0.6 ? { times: H.time, h: H.wave_height, T: H.wave_period, dir: H.wave_direction, offset: j.utc_offset_seconds || 0 } : null;
+  };
+  let out = await getJSON(`${MARINE}?${qs(q)}`, 30000).then(read).catch(e => { if (/connection/i.test(e.message)) throw e; return null; });
+  if (!out) out = await getJSON(`${MARINE}?${qs({ ...q, models: 'era5_ocean' })}`, 30000).then(read).catch(() => null);
+  if (!out) throw new Error("Couldn't read this spot's wave records. Try moving the pin slightly offshore, or try again later.");
+  return out;
+}
+
 const PAST_LIMIT_DAYS = 90;
 // Extra sky signals around a past shoot (7.3.1), so the colour score can be tested against them:
 // humidity through the column (thin cirrus vs a deep deck), pressure trend (clean air behind a front),
@@ -1777,7 +1810,223 @@ async function fetchPast(spot, t) {
   return data;
 }
 
-return { clearCache, restoreForecasts, savedForecast, FORECAST_TTL, fetchSpotForecast, fetchForecasts, fetchHistorical, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, coastalCheck, placeName, PAST_LIMIT_DAYS, fetchSignals, fetchPast };
+return { clearCache, restoreForecasts, savedForecast, FORECAST_TTL, fetchSpotForecast, fetchForecasts, fetchHistorical, fetchKp, fetchCurrent, fetchRadarFrames, WEATHER_TEXT, searchPlaces, fetchHourly, coastalCheck, placeName, clearSeasCache, fetchSeasForecast, fetchSeasHistory, PAST_LIMIT_DAYS, fetchSignals, fetchPast };
+})();
+
+/* ===== js/seas.js ===== */
+const M_seas = (() => {
+// Tidelight: big seas (7.5). Rare, powerful swells at coastal spots, measured against the spot's own
+// wave history, so "a top-6 swell" means one of the six biggest in a typical year *here*.
+// Shared with the alerts function (bundled by tools/build-alerts.mjs), so keep it free of the DOM.
+const { fetchSeasForecast, fetchSeasHistory } = M_api;
+const { fmtTime, fmtDay } = M_util;
+const SEAS_TOPS = [3, 6, 12];
+const SEAS_DEFAULT_TOP = 6;
+const rad = d => (d * Math.PI) / 180;
+const r1 = v => Math.round(v * 10) / 10;
+const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+const compass16 = deg => (deg == null || isNaN(deg) ? '' : COMPASS[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16]);
+const COMPASS_NAME = { N: 'north', NNE: 'north-north-east', NE: 'north-east', ENE: 'east-north-east', E: 'east', ESE: 'east-south-east', SE: 'south-east', SSE: 'south-south-east', S: 'south', SSW: 'south-south-west', SW: 'south-west', WSW: 'west-south-west', W: 'west', WNW: 'west-north-west', NW: 'north-west', NNW: 'north-north-west' };
+
+// Wave power along the coast, kW per metre: about 0.49 × height² × period. Height counts most, but a
+// long-period swell carries far more energy than a short, choppy sea of the same height.
+const powerOf = (h, T) => (h == null || T == null ? null : 0.49 * h * h * T);
+// How square-on the waves hit a coast that faces `facing` (the bearing it looks out to sea; wave
+// directions are where they come from). Straight in counts in full; side-on still counts a little.
+function aimOf(dir, facing) {
+  if (dir == null || facing == null || facing === '') return 1;
+  const d = Math.abs(((dir - facing + 540) % 360) - 180);
+  return Math.max(0.15, Math.cos(rad(Math.min(d, 90))));
+}
+function circMean(degs) {
+  let x = 0, y = 0;
+  degs.filter(d => d != null).forEach(d => { x += Math.cos(rad(d)); y += Math.sin(rad(d)); });
+  return x === 0 && y === 0 ? null : ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+// Each day's biggest hour.
+function dailyPeaks(H, facing) {
+  const byDay = new Map();
+  H.times.forEach((t, i) => {
+    const p = powerOf(H.h[i], H.T[i]);
+    if (p == null) return;
+    const pe = p * aimOf(H.dir[i], facing);
+    const k = Math.floor((t + (H.offset || 0)) / 86400);
+    const cur = byDay.get(k);
+    if (!cur || pe > cur.p) byDay.set(k, { t, p: pe, raw: p, h: H.h[i], T: H.T[i], dir: H.dir[i] });
+  });
+  return [...byDay.values()];
+}
+// Separate storms: biggest day first, and nothing within 3 days of one already counted.
+function stormsOf(days) {
+  const out = [];
+  for (const d of [...days].sort((a, b) => b.p - a.p)) if (!out.some(o => Math.abs(o.t - d.t) < 3 * 86400)) out.push(d);
+  return out;
+}
+
+// From the wave history: the coast's facing (yours, or where its biggest swells come from), and the
+// ladder of its biggest storms, enough for the top 12 a year.
+function climateFrom(H, { facing = null, top = SEAS_DEFAULT_TOP } = {}) {
+  const rawDays = dailyPeaks(H, null);
+  if (rawDays.length < 300) throw new Error('Not enough wave records here to judge what\'s rare.');
+  const years = rawDays.length / 365.25;
+  const biggest = stormsOf(rawDays).slice(0, Math.max(8, Math.round(6 * years)));
+  const autoFacing = circMean(biggest.map(d => d.dir));
+  const face = facing === '' || facing == null ? autoFacing : Number(facing);
+  const storms = stormsOf(dailyPeaks(H, face)).slice(0, Math.round(12 * years) + 1);
+  return {
+    v: 1, at: Math.round(Date.now() / 1000), years: r1(years), facing: Math.round(face), autoFacing: Math.round(autoFacing), auto: facing === '' || facing == null, top,
+    storms: storms.map(d => ({ t: d.t, h: r1(d.h), T: Math.round(d.T), dir: Math.round(d.dir), p: Math.round(d.p) })),
+  };
+}
+// The power a swell needs to be in the spot's top N a year.
+function thresholdOf(clim, top = clim?.top ?? SEAS_DEFAULT_TOP) {
+  if (!clim?.storms?.length) return null;
+  const k = Math.max(1, Math.round(top * clim.years));
+  return clim.storms[Math.min(k, clim.storms.length) - 1].p;
+}
+// "#2": where a swell of power p would sit in a typical year at this spot.
+function rankOf(clim, p) {
+  const bigger = clim.storms.filter(s => s.p > p).length;
+  return { bigger, perYear: Math.floor(bigger / clim.years) + 1 };
+}
+function rankText(clim, p) {
+  const r = rankOf(clim, p);
+  const yrs = Math.round(clim.years);
+  return r.bigger === 0 ? `Bigger than any swell here in ${yrs} years` : `About #${r.perYear} of a typical year (${r.bigger} bigger in ${yrs} years)`;
+}
+const seasOn = spot => !!(spot?.coastal && spot.seas?.on);
+const seasReady = spot => seasOn(spot) && !!spot.seas.clim?.storms?.length;
+
+const ymdOf = (t, off) => new Date((t + off) * 1000).toISOString().slice(0, 10);
+// Light for shooting: civil dawn to civil dusk, on the spot's local day (SunCalc wants local noon).
+const noonOf = (t, off) => Math.floor((t + off) / 86400) * 86400 - off + 12 * 3600;
+function sunDay(spot, t, off) {
+  const S = window.SunCalc;
+  if (!S) return null;
+  const tm = S.getTimes(new Date(noonOf(t, off) * 1000), spot.lat, spot.lon);
+  const dawn = tm.dawn?.getTime() / 1000, dusk = tm.dusk?.getTime() / 1000;
+  return isNaN(dawn) || isNaN(dusk) ? null : { dawn, dusk };
+}
+function lightAt(spot, t, off) {
+  const d = sunDay(spot, t, off);
+  return !d || (t >= d.dawn && t <= d.dusk);
+}
+// The first light after a dark peak: the same morning if it's before dawn, else the next.
+function firstLightAfter(spot, t, off) {
+  const d = sunDay(spot, t, off);
+  if (!d) return null;
+  return t < d.dawn ? d.dawn : sunDay(spot, t + 86400, off)?.dawn ?? null;
+}
+// Local high tides (peaks of the sea level) between a and b.
+function highTides(fc, a, b) {
+  const out = [];
+  for (let i = 1; i < fc.times.length - 1; i++) {
+    const s0 = fc.sea[i - 1], s1 = fc.sea[i], s2 = fc.sea[i + 1];
+    if (s0 == null || s1 == null || s2 == null) continue;
+    if (s1 >= s0 && s1 > s2 && fc.times[i] >= a && fc.times[i] <= b) {
+      // refine between the hours with a parabola through the three points
+      const den = s0 - 2 * s1 + s2, f = den ? 0.5 * (s0 - s2) / den : 0;
+      out.push(Math.round(fc.times[i] + f * 3600));
+    }
+  }
+  return out;
+}
+
+// The outlook for one spot: every hour's power, each day's peak, and the days that make the cut.
+// hours: optional main-forecast hours (for wind). Returns { thr, days: [...], events: [...] }.
+function seasOutlook(spot, fc, { now = Date.now() / 1000, hours = null } = {}) {
+  const clim = spot.seas?.clim;
+  const thr = thresholdOf(clim, spot.seas?.top ?? SEAS_DEFAULT_TOP);
+  if (!thr) return null;
+  const facing = clim.facing;
+  const off = fc.offset || 0;
+  const hrs = fc.times.map((t, i) => {
+    const raw = powerOf(fc.h[i], fc.T[i]);
+    return { t, h: fc.h[i], T: fc.T[i], dir: fc.dir[i], p: raw == null ? null : raw * aimOf(fc.dir[i], facing) };
+  }).filter(x => x.p != null);
+  const byDay = new Map();
+  for (const x of hrs) {
+    if (x.t < now - 6 * 3600) continue;
+    const k = ymdOf(x.t, off);
+    const d = byDay.get(k) || { ymd: k, peak: null, hours: [] };
+    d.hours.push(x);
+    if (!d.peak || x.p > d.peak.p) d.peak = x;
+    byDay.set(k, d);
+  }
+  const days = [...byDay.values()].map(d => ({ ymd: d.ymd, t: d.peak.t, p: Math.round(d.peak.p), ratio: d.peak.p / thr, h: d.peak.h, T: d.peak.T, dir: d.peak.dir }));
+  const events = [];
+  for (const d of byDay.values()) {
+    const pk = d.peak;
+    if (pk.p < thr || pk.t < now - 3 * 3600) continue;
+    // The best hour you can shoot: the peak if it's light, else the biggest light hour within 14 hours of it.
+    const lit = hrs.filter(x => Math.abs(x.t - pk.t) <= 14 * 3600 && x.t > now && lightAt(spot, x.t, off));
+    const best = lightAt(spot, pk.t, off) ? pk : lit.sort((a, b) => b.p - a.p)[0] || null;
+    const night = !lightAt(spot, pk.t, off);
+    const fl = night ? firstLightAfter(spot, pk.t, off) : null;
+    const atFirst = fl && fl <= hrs[hrs.length - 1].t ? hrs.reduce((m, x) => (Math.abs(x.t - fl) < Math.abs((m?.t ?? Infinity) - fl) ? x : m), null) : null;
+    // The big hours: everything above the line, for "peak 2–5pm".
+    const big = d.hours.filter(x => x.p >= thr * 0.92).map(x => x.t);
+    const tide = best ? highTides(fc, best.t - 4 * 3600, best.t + 4 * 3600).sort((a, b) => Math.abs(a - best.t) - Math.abs(b - best.t))[0] ?? null : null;
+    const wh = hours && best ? hours.reduce((m, x) => (Math.abs(x.t - best.t) < Math.abs((m?.t ?? Infinity) - best.t) ? x : m), null) : null;
+    events.push({
+      key: `${spot.id}:${d.ymd}`, spot, ymd: d.ymd, offset: off,
+      t: pk.t, p: Math.round(pk.p), ratio: pk.p / thr, h: pk.h, T: pk.T, dir: pk.dir,
+      from: Math.min(...big), to: Math.max(...big),
+      night, best: best ? { t: best.t, p: Math.round(best.p), share: best.p / pk.p, above: best.p >= thr, h: best.h, T: best.T } : null,
+      firstLight: atFirst ? { t: fl, p: Math.round(atFirst.p), share: atFirst.p / pk.p, above: atFirst.p >= thr, h: atFirst.h } : null,
+      tide, wind: wh?.wind ?? null, rank: rankOf(clim, pk.p), rankText: rankText(clim, pk.p),
+    });
+  }
+  events.sort((a, b) => a.t - b.t);
+  return { thr: Math.round(thr), days, events, clim, offset: off };
+}
+
+// Plain words for an event, used on the card and in the alerts.
+function seasWhen(e) {
+  const o = e.offset;
+  const span = e.to - e.from >= 2 * 3600 ? `${fmtTime(e.from, o)}–${fmtTime(e.to, o)}` : fmtTime(e.t, o);
+  return `${fmtDay(e.t, o)}, peak ${span}`;
+}
+function seasSwell(e) {
+  return `${(+e.h).toFixed(1)} m at ${Math.round(e.T)} s from the ${compass16(e.dir)}`;
+}
+function seasLightLine(e) {
+  if (!e.night) return '';
+  const o = e.offset;
+  if (e.firstLight) {
+    const fl = e.firstLight;
+    return fl.above
+      ? `Peaks in the dark around ${fmtTime(e.t, o)}. At first light (${fmtTime(fl.t, o)}) it's still ${Math.round(fl.share * 100)}% of the peak: still a big-seas morning.`
+      : `Peaks in the dark around ${fmtTime(e.t, o)}. By first light (${fmtTime(fl.t, o)}) it's eased to ${Math.round(fl.share * 100)}% of the peak: still big, but past its best.`;
+  }
+  if (e.best) return `Peaks after dark around ${fmtTime(e.t, o)}. The best light hour is ${fmtTime(e.best.t, o)}, at ${Math.round(e.best.share * 100)}% of the peak.`;
+  return `Peaks in the dark around ${fmtTime(e.t, o)}.`;
+}
+function seasNotes(e) {
+  const o = e.offset, out = [];
+  out.push({ k: 'good', t: e.ratio >= 1.3 ? 'Well above this spot\'s top swells: a standout' : 'A swell that makes this spot\'s top few of the year' });
+  if (e.T >= 14) out.push({ k: 'good', t: `Long-period swell (${Math.round(e.T)} s): more power behind every wave` });
+  if (e.tide && e.best && Math.abs(e.tide - e.best.t) <= 2 * 3600) out.push({ k: 'good', t: 'High tide lands in the big hours: more water against the cliffs' });
+  if (e.wind != null && e.wind >= 35) out.push({ k: 'neutral', t: `Strong wind (${Math.round(e.wind)} km/h): big spray, so shield the lens` });
+  return out;
+}
+
+// Everything the forecast page and alerts need for the spots with big seas on.
+async function seasForSpots(spots, opts = {}) {
+  const out = [];
+  for (const sp of spots.filter(seasReady)) {
+    try { out.push({ spot: sp, ...seasOutlook(sp, await fetchSeasForecast(sp), { ...opts, hours: opts.hoursFor?.(sp) || null }) }); }
+    catch (err) { out.push({ spot: sp, error: err?.message || 'No wave forecast' }); }
+  }
+  return out;
+}
+// Read the history and work out what's rare at this spot. facing: '' for automatic.
+async function buildClimate(spot) {
+  const H = await fetchSeasHistory(spot);
+  return climateFrom(H, { facing: spot.seas?.facing ?? '', top: spot.seas?.top ?? SEAS_DEFAULT_TOP });
+}
+
+return { SEAS_TOPS, SEAS_DEFAULT_TOP, compass16, COMPASS_NAME, powerOf, aimOf, climateFrom, thresholdOf, rankOf, rankText, seasOn, seasReady, seasOutlook, seasWhen, seasSwell, seasLightLine, seasNotes, seasForSpots, buildClimate };
 })();
 
 /* ===== Tidelight hourly alerts (Supabase Edge Function) =====
@@ -1790,8 +2039,9 @@ const { evaluateSpot } = M_scoring;
 const { setKp, HUNT_LABEL, HUNT_VERB } = M_hunts;
 const { fetchSpotForecast, fetchKp, clearCache } = M_api;
 const { fmtTime, fmtDay, tzOffset } = M_util;
+const { seasForSpots, seasReady, seasSwell, seasWhen, seasLightLine } = M_seas;
 
-const DEFAULT_ALERTS = { go: true, threshold: 80, confident: true, calledOff: true, crew: true, rate: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 };
+const DEFAULT_ALERTS = { go: true, threshold: 80, confident: true, calledOff: true, crew: true, rate: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6, seas: true, seasEve: true, seasFade: true };
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
@@ -1855,14 +2105,17 @@ async function checkUser(admin, uid) {
   if (!d || !d.spots?.length) return { sent: 0 };
   const prefs = { ...DEFAULT_ALERTS, ...(d.settings?.alerts || {}) };
   const settings = { driveSpeedKmh: 60, arriveBeforeMin: 30, ...(d.settings || {}) };
-  if (!prefs.go && !prefs.calledOff && !prefs.digest && !prefs.rate) return { sent: 0 };
+  const wantsSeas = (prefs.seas || prefs.seasEve || prefs.seasFade) && d.spots.some(seasReady);
+  if (!prefs.go && !prefs.calledOff && !prefs.digest && !prefs.rate && !wantsSeas) return { sent: 0 };
 
   if (d.spots.some(s => (s.hunts || []).includes('aurora'))) { try { setKp(await fetchKp()); } catch { setKp([]); } }
   const events = [];
+  const dataOf = {};
   let offset = null;
   for (const spot of d.spots) {
     try {
       const data = await fetchSpotForecast(spot);
+      dataOf[spot.id] = data;
       if (offset == null) offset = data.offset;
       events.push(...evaluateSpot(spot, data, d.keepers || [], settings));
     } catch (e) { console.error('forecast failed', spot.name, e?.message); }
@@ -1924,7 +2177,7 @@ async function checkUser(admin, uid) {
   if (prefs.rate) {
     const startOfDay = (t, off) => Math.floor((t + off) / 86400) * 86400 - off;
     const morningAfter = p => startOfDay(p.t - 12 * 3600, p.offset ?? offset) + 86400 + 7 * 3600;
-    const lightDone = p => p.type === 'sunset' ? p.t + 45 * 60 : p.type === 'sunrise' ? p.t + 3600 : p.type === 'day' ? p.t + 2 * 3600 : morningAfter(p);
+    const lightDone = p => p.type === 'sunset' ? p.t + 45 * 60 : p.type === 'sunrise' ? p.t + 3600 : p.type === 'day' || p.type === 'seas' ? p.t + 2 * 3600 : morningAfter(p);
     const daytime = !quiet && hour >= 7 && hour <= 20;
     const fresh = [], again = [];
     for (const p of d.plans || []) {
@@ -1938,7 +2191,7 @@ async function checkUser(admin, uid) {
         again.push(p);
       }
     }
-    const word = p => (p.type === 'sunrise' ? 'sunrise' : p.type === 'sunset' ? 'sunset' : p.type === 'night' ? 'night shoot' : 'shoot');
+    const word = p => (p.type === 'sunrise' ? 'sunrise' : p.type === 'sunset' ? 'sunset' : p.type === 'night' ? 'night shoot' : p.type === 'seas' ? 'big-seas shoot' : 'shoot');
     const all = [...fresh, ...again].sort((a, b) => b.t - a.t);
     if (all.length) {
       const p = all[0];
@@ -1950,6 +2203,54 @@ async function checkUser(admin, uid) {
           : { title: `How was the light at ${p.spotName}?`, body: `${p.type === 'sunrise' || p.type === 'day' ? "Yesterday's" : "Last night's"} ${word(p)}${p.score != null ? ` scored ${p.score}` : ''}. One tap to rate it.`, tag: `rate-${p.id}`, url: `./#rate-${p.id}` });
       fresh.forEach(x => toLog.push({ kind: 'rate', key: x.id, score: x.score ?? null }));
       again.forEach(x => toLog.push({ kind: 'rate', key: `${x.id}|am`, score: x.score ?? null }));
+    }
+  }
+
+  // Big seas: one of a coastal spot's biggest swells of the year. First word up to 5 days ahead, an update
+  // the evening before, and word if it fades. A swell whose peak shifts a day stays the same swell.
+  if (wantsSeas && !quiet) {
+    let list = [];
+    try { list = await seasForSpots(d.spots, { now, hoursFor: sp => dataOf[sp.id]?.hours || null }); } catch (e) { console.error('seas failed', e?.message); }
+    const ymdDays = (a, b) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000);
+    const logged = kind => (log || []).filter(l => l.kind === kind);
+    const sameSwell = (key, ev) => { const [sid, ymd] = key.split(':'); return sid === ev.spot.id && Math.abs(ymdDays(ymd, ev.ymd)) <= 1; };
+    const dayLocal = (t, off) => new Date((t + off) * 1000).toISOString().slice(0, 10);
+    for (const x of list) {
+      if (x.error) continue;
+      for (const e of x.events) {
+        const first = logged('seas').find(l => sameSwell(l.key, e));
+        const name = e.spot.name, day = fmtDay(e.t, e.offset);
+        const light = e.night ? ` ${seasLightLine(e)}` : '';
+        if (!first) {
+          if (!prefs.seas || e.t > now + 5 * 86400 || e.t < now + 2 * 3600) continue;
+          toSend.push({ title: `Big seas ${day} at ${name}`, body: `${seasSwell(e)}: ${e.rankText.charAt(0).toLowerCase()}${e.rankText.slice(1)}. ${e.night ? '' : `Peak ${seasWhen(e).split(', peak ')[1]}.`}${e.tide && e.best && Math.abs(e.tide - e.best.t) <= 3 * 3600 ? ` High tide ${fmtTime(e.tide, e.offset)}.` : ''}${light}`.replace(/\s+/g, ' ').trim(), tag: `seas-${e.key}`, url: './#seas' });
+          toLog.push({ kind: 'seas', key: e.key, score: Math.round(e.ratio * 100) });
+          continue;
+        }
+        // The evening before (5pm on), once.
+        const eveDay = dayLocal(e.t - 86400, e.offset), today = dayLocal(now, e.offset);
+        if (prefs.seasEve && today === eveDay && hour >= 17 && !done.has(`seas-eve|${first.key}`) && !done.has(`seas-off|${first.key}`)) {
+          const leave = e.best ? (() => { const sp = e.spot; const drive = Number(sp.driveMin) || null; return drive ? ` Leave by ${fmtTime(e.best.t - (drive + Number(settings.arriveBeforeMin ?? 30)) * 60, e.offset)}.` : ''; })() : '';
+          toSend.push({ title: `Still on for tomorrow: big seas at ${name}`, body: `Now ${seasSwell(e)}, peak ${seasWhen(e).split(', peak ')[1]}.${light}${leave}`.replace(/\s+/g, ' ').trim(), tag: `seas-${first.key}`, url: './#seas' });
+          toLog.push({ kind: 'seas-eve', key: first.key, score: Math.round(e.ratio * 100) });
+        }
+      }
+    }
+    // Faded: alerted, still ahead, and now well under the line (or gone from the outlook).
+    if (prefs.seasFade) {
+      for (const l of logged('seas')) {
+        if (done.has(`seas-off|${l.key}`)) continue;
+        const [sid, ymd] = l.key.split(':');
+        const x = list.find(y => y.spot.id === sid);
+        if (!x || x.error) continue;
+        const ahead = Date.parse(ymd) / 1000 + 86400 > now;
+        if (!ahead) continue;
+        const still = x.events.some(e => sameSwell(l.key, e));
+        const near = (x.days || []).filter(dd => Math.abs(ymdDays(dd.ymd, ymd)) <= 1).sort((a, b) => b.ratio - a.ratio)[0];
+        if (still || !near || near.ratio >= 0.85) continue;
+        toSend.push({ title: `Big seas ${fmtDay(near.t, x.offset)}: downgraded`, body: `${x.spot.name}: the swell now tops out at ${(+near.h).toFixed(1)} m (${Math.round(near.ratio * 100)}% of a top-${x.spot.seas.top ?? 6} swell). No need to go for the big seas.`, tag: `seas-${l.key}`, url: './#seas' });
+        toLog.push({ kind: 'seas-off', key: l.key, score: Math.round(near.ratio * 100) });
+      }
     }
   }
 

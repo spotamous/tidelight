@@ -1,17 +1,20 @@
 // Tidelight: The Spots tab: your spot library, the map, search and the spot form.
-import { fmtWeekday, fmtDayDate, esc, cap, toast, uid, dayKey } from './util.js?v=7.4.2';
-import { coverUrl, deletePhotos, photoUrl, addPhotoFile } from './photos.js?v=7.4.2';
-import { huntsOf, HUNT_LABEL, HUNT_ORDER } from './hunts.js?v=7.4.2';
-import { searchPlaces, fetchSpotForecast } from './api.js?v=7.4.2';
-import { DIFFICULTIES, evaluateSpot, spotFloor } from './scoring.js?v=7.4.2';
-import { readExif } from './ai.js?v=7.4.2';
-import { update } from './storage.js?v=7.4.2';
-import { SESSION_TYPES, SUN_ICON, TYPE_NAME, band, huntPhrase, nextDays, sessionWhen, skeleton, spotTile } from './forecast.js?v=7.4.2';
-import { $, $$, S, closeSheet, ensureForecasts, forecasts, hikeSummary, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.4.2';
-import { openScout } from './tools.js?v=7.4.2';
-import { render } from './app.js?v=7.4.2';
-import { alignmentText, openNow } from './field.js?v=7.4.2';
-import { openTideWindows, seasonView, wireSeason } from './planners.js?v=7.4.2';
+import { fmtWeekday, fmtDayDate, esc, cap, toast, uid, dayKey } from './util.js?v=7.5';
+import { coverUrl, deletePhotos, photoUrl, addPhotoFile } from './photos.js?v=7.5';
+import { huntsOf, HUNT_LABEL, HUNT_ORDER } from './hunts.js?v=7.5';
+import { searchPlaces, fetchSpotForecast } from './api.js?v=7.5';
+import { DIFFICULTIES, evaluateSpot, spotFloor } from './scoring.js?v=7.5';
+import { readExif } from './ai.js?v=7.5';
+import { update } from './storage.js?v=7.5';
+import { SESSION_TYPES, SUN_ICON, TYPE_NAME, band, huntPhrase, nextDays, sessionWhen, skeleton, spotTile } from './forecast.js?v=7.5';
+import { $, $$, S, closeSheet, ensureForecasts, forecasts, hikeSummary, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.5';
+import { openScout } from './tools.js?v=7.5';
+import { render } from './app.js?v=7.5';
+import { alignmentText, openNow } from './field.js?v=7.5';
+import { openTideWindows, seasonView, wireSeason } from './planners.js?v=7.5';
+import { compass16, SEAS_TOPS, SEAS_DEFAULT_TOP } from './seas.js?v=7.5';
+import { afterSpotSave, seasSpotSection, wireSeasSpot } from './seasui.js?v=7.5';
+const COMPASS_POINTS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'].map((n, i) => [`${n} (${i * 22.5}°)`, i * 22.5]);
 
 /* ================= spots ================= */
 
@@ -222,6 +225,19 @@ export function openSpotForm(prefill = {}, existing = null) {
           ${['any', 'low', 'mid', 'high'].map(t => `<option value="${t}" ${s.tide === t ? 'selected' : ''}>${cap(t)}</option>`).join('')}
         </select></label>
         <label class="check"><input type="checkbox" name="tideAccess" ${s.tideAccess ? 'checked' : ''}> Access depends on the tide (rock shelf, cave, sandbar)</label>
+        <div class="seas-form">
+          <label class="check"><input type="checkbox" name="seas_on" ${s.seas?.on ? 'checked' : ''}> Big seas: alert me before this spot's biggest swells of the year</label>
+          <div class="two" id="seasWrap">
+            <label>Coast faces<select name="seas_facing">
+              <option value="" ${s.seas?.facing == null || s.seas?.facing === '' ? 'selected' : ''}>Work it out${s.seas?.clim?.auto ? ` (${compass16(s.seas.clim.facing)})` : ''}</option>
+              ${COMPASS_POINTS.map(([n, d]) => `<option value="${d}" ${s.seas?.facing !== '' && s.seas?.facing != null && Number(s.seas.facing) === d ? 'selected' : ''}>${n}</option>`).join('')}
+            </select></label>
+            <label>How rare<select name="seas_top">
+              ${SEAS_TOPS.map(n => `<option value="${n}" ${(s.seas?.top ?? SEAS_DEFAULT_TOP) === n ? 'selected' : ''}>Top ${n} a year</option>`).join('')}
+            </select></label>
+          </div>
+          <span class="hint" id="seasHint">"Work it out" uses where this spot's biggest swells come from. Reading its wave records takes a few seconds after you save.</span>
+        </div>
         <div class="two" id="accessWrap">
           <label>Open below (% of tide range)<span class="hint">0 is low tide, 100 is high</span><input name="accessPct" inputmode="numeric" value="${s.accessPct ?? 40}"></label>
           <label>Safety buffer (min)<span class="hint">Be back this long before it closes</span><input name="accessBuffer" inputmode="numeric" value="${s.accessBuffer ?? 30}"></label>
@@ -254,6 +270,9 @@ export function openSpotForm(prefill = {}, existing = null) {
   const syncOptional = () => {
     $('#fogModeWrap').hidden = !sf.querySelector('[name=hunt_fog]').checked;
     $('#accessWrap').hidden = !sf.querySelector('[name=tideAccess]').checked;
+    const seasOk = sf.querySelector('[name=coastal]').checked;
+    sf.querySelector('.seas-form').hidden = !seasOk;
+    $('#seasWrap').hidden = $('#seasHint').hidden = !(seasOk && sf.querySelector('[name=seas_on]').checked);
   };
   sf.addEventListener('change', syncOptional);
   syncOptional();
@@ -331,16 +350,19 @@ export function openSpotForm(prefill = {}, existing = null) {
       accessPct: Math.min(100, Math.max(0, parseFloat(f.get('accessPct')) || 40)),
       accessBuffer: Math.max(0, parseInt(f.get('accessBuffer'), 10) || 0),
       photos,
+      seas: { ...(existing?.seas || {}), on: !!f.get('coastal') && !!f.get('seas_on'), facing: f.get('seas_facing') === '' || f.get('seas_facing') == null ? '' : Number(f.get('seas_facing')), top: SEAS_TOPS.includes(Number(f.get('seas_top'))) ? Number(f.get('seas_top')) : SEAS_DEFAULT_TOP },
     };
     saved = true;
     deletePhotos(original.filter(id => !photos.includes(id)).concat([...added].filter(id => !photos.includes(id))));
+    const id = existing?.id || uid();
     update(st => {
       if (existing) Object.assign(st.spots.find(x => x.id === existing.id), data);
-      else st.spots.push({ id: uid(), ...data });
+      else st.spots.push({ id, ...data });
     });
     if (existing) delete forecasts[existing.id];
     closeSheet();
     toast(existing ? 'Spot saved' : 'Spot added');
+    afterSpotSave(id);
     render();
   };
   if (existing) {
@@ -416,6 +438,7 @@ export async function openSpotDetail(id) {
       ${alignmentText(s) ? `<p class="align-line">${esc(alignmentText(s))}</p>` : ''}
       ${s.notes ? `<p class="bf-brief">${esc(s.notes)}</p>` : ''}` : ''}
     ${seasonView(s)}
+    ${seasSpotSection(s)}
     <p class="small muted">${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}${s.coastal && !data.hasMarine ? '. No tide or wave data at this exact point; try moving the pin slightly offshore.' : ''}</p>
     <div class="bf-quiet">
       <button class="link-btn" id="spotHourly">Hourly forecast</button>
@@ -430,6 +453,7 @@ export async function openSpotDetail(id) {
   $('#spotHourly').onclick = () => openNow({ kind: 'spot', id: s.id, lat: s.lat, lon: s.lon, name: s.name });
   if ($('#spotTide')) $('#spotTide').onclick = () => openTideWindows(s.id);
   wireSeason(s);
+  wireSeasSpot(s, () => openSpotDetail(s.id));
   $$('[data-show]').forEach(b => b.onclick = () => {
     $('#spotBanner').src = photoUrl(b.dataset.show);
     $$('[data-show]').forEach(x => x.classList.toggle('on', x === b));

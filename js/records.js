@@ -1,10 +1,10 @@
 // Tidelight: shoot records. For every planned shoot: what was forecast when you planned it, the last
 // forecast before it, what the weather actually did, and how Tidelight's call compared with your rating.
 // This is what lets the score be checked (and improved) against real shoots rather than guesswork.
-import { update } from './storage.js?v=7.4.2';
-import { fetchPast, fetchSignals, PAST_LIMIT_DAYS } from './api.js?v=7.4.2';
-import { evaluateSpot, ratingScore, labelFor, horizonBlock, aodAt } from './scoring.js?v=7.4.2';
-import { S, allEvents, freshHooks } from './core.js?v=7.4.2';
+import { update } from './storage.js?v=7.5';
+import { fetchPast, fetchSignals, PAST_LIMIT_DAYS } from './api.js?v=7.5';
+import { evaluateSpot, ratingScore, labelFor, horizonBlock, aodAt } from './scoring.js?v=7.5';
+import { S, allEvents, freshHooks } from './core.js?v=7.5';
 
 /* ---------- the calls ---------- */
 // The same cut-offs as everywhere else: Go 75+, Maybe 50 to 74, Skip under 50; and for your rating,
@@ -66,7 +66,7 @@ freshHooks().push(noteLatest);
 // Fetched a few hours after, and once more a day later when the weather records have settled.
 const HOUR = 3600;
 function needsActual(p, now) {
-  if (p.rating === 'skipped' || !p.t || p.t > now - 4 * HOUR || p.t < now - PAST_LIMIT_DAYS * 86400) return false;
+  if (p.rating === 'skipped' || p.type === 'seas' || !p.t || p.t > now - 4 * HOUR || p.t < now - PAST_LIMIT_DAYS * 86400) return false;
   const a = p.actual;
   if (!a) return true;
   if (a.error) return now - a.at > 12 * HOUR;
@@ -219,8 +219,9 @@ export function accuracyReport(plans = S().plans) {
   const realRight = withActual.filter(r => callOf(r.p.actual.score) === r.v.you).length;
   return { n: rows.length, right, rows, why, kinds, actualN: withActual.length, realRight };
 }
-export const KIND_LABEL = { sunsetColour: 'Sunset colour', sunriseColour: 'Sunrise colour', fog: 'Fog', astro: 'Milky Way', storm: 'Storms', aurora: 'Aurora', day: 'Daytime', other: 'Other' };
+export const KIND_LABEL = { seas: 'Big seas', sunsetColour: 'Sunset colour', sunriseColour: 'Sunrise colour', fog: 'Fog', astro: 'Milky Way', storm: 'Storms', aurora: 'Aurora', day: 'Daytime', other: 'Other' };
 function kindOf(p) {
+  if (p.type === 'seas') return 'seas';
   if (p.hunt === 'fog') return 'fog';
   if (p.hunt === 'astro' || p.type === 'night') return 'astro';
   if (p.hunt === 'storm' || p.hunt === 'lightning') return 'storm';

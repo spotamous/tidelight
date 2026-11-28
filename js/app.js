@@ -1,22 +1,22 @@
 // Tidelight: The entry point: the tab router and start-up. Everything else lives in the modules it imports.
-import { startErrorReports, flushErrors, report } from './report.js?v=7.4.2';
-import { fillActuals, fillSignals } from './records.js?v=7.4.2';
-import { maybePromptRating, openQuickRate } from './accuracy.js?v=7.4.2';
-import { esc, toast, fmtTime, uid } from './util.js?v=7.4.2';
-import { setNewPassword, onPasswordRecovery, initSync, currentUser, onSyncStatus } from './sync.js?v=7.4.2';
-import { update } from './storage.js?v=7.4.2';
-import { loadAllPhotos } from './photos.js?v=7.4.2';
-import { restoreForecasts } from './api.js?v=7.4.2';
-import { $, $$, S, closeSheet, eventIndex, forecasts, openSheet, refreshInBackground, ui } from './core.js?v=7.4.2';
-import { TYPE_NAME, applyMotion, applyTheme, commitPanel, homeTimer, motionOK, openLab, renderForecast, undoPlan } from './forecast.js?v=7.4.2';
-import { addPlan, downloadIcs, openGear, plansTimer, renderPlans } from './plans.js?v=7.4.2';
-import { openSpotForm, renderSpots } from './spots.js?v=7.4.2';
-import { openLightDial, openLightningTimer, renderTools } from './tools.js?v=7.4.2';
-import { applyTextSize, renderAccount, renderAlerts, renderYou } from './you.js?v=7.4.2';
-import { afterPlanned, crewState, loadCrew, openSharedSpot } from './crews.js?v=7.4.2';
-import { closeField, openCompass, openField, openNow } from './field.js?v=7.4.2';
-import { openEvent } from './event.js?v=7.4.2';
-import { closeWelcome, hasNews, maybeWelcome, openWhatsNew, welcome } from './welcome.js?v=7.4.2';
+import { startErrorReports, flushErrors, report } from './report.js?v=7.5';
+import { fillActuals, fillSignals } from './records.js?v=7.5';
+import { maybePromptRating, openQuickRate } from './accuracy.js?v=7.5';
+import { esc, toast, fmtTime, uid } from './util.js?v=7.5';
+import { setNewPassword, onPasswordRecovery, initSync, currentUser, onSyncStatus } from './sync.js?v=7.5';
+import { update } from './storage.js?v=7.5';
+import { loadAllPhotos } from './photos.js?v=7.5';
+import { restoreForecasts } from './api.js?v=7.5';
+import { $, $$, S, closeSheet, eventIndex, forecasts, openSheet, refreshInBackground, ui } from './core.js?v=7.5';
+import { TYPE_NAME, applyMotion, applyTheme, commitPanel, homeTimer, motionOK, openLab, renderForecast, undoPlan } from './forecast.js?v=7.5';
+import { addPlan, downloadIcs, openGear, plansTimer, renderPlans } from './plans.js?v=7.5';
+import { openSpotForm, renderSpots } from './spots.js?v=7.5';
+import { openLightDial, openLightningTimer, renderTools } from './tools.js?v=7.5';
+import { applyTextSize, renderAccount, renderAlerts, renderYou } from './you.js?v=7.5';
+import { afterPlanned, crewState, loadCrew, openSharedSpot } from './crews.js?v=7.5';
+import { closeField, openCompass, openField, openNow } from './field.js?v=7.5';
+import { openEvent } from './event.js?v=7.5';
+import { closeWelcome, hasNews, maybeWelcome, openWhatsNew, welcome } from './welcome.js?v=7.5';
 
 /* ================= router ================= */
 
@@ -162,6 +162,15 @@ export async function openLink(hash) {
     if (S().plans.some(p => p.id === rate[1])) openQuickRate(rate[1]);
     return;
   }
+  // from a big-seas alert: the Big seas view
+  if (hash === '#seas') {
+    history.replaceState(null, '', location.pathname + location.search);
+    closeWelcome(false);
+    ui.weekType = 'seas';
+    try { localStorage.setItem('tidelight:weekType', 'seas'); } catch {}
+    setTab('forecast');
+    return;
+  }
   const m = /^#crew(?:-([0-9a-f-]{8,}))?$/i.exec(hash || '');
   if (!m) return;
   history.replaceState(null, '', location.pathname + location.search);
@@ -201,7 +210,7 @@ Promise.allSettled([loadAllPhotos(), restoreForecasts()]).finally(() => {
   // After an update, show testers what's new, once. Otherwise, the morning after a shoot, ask how it was.
   const opening = location.hash;
   if (!$('#welcome') && hasNews()) setTimeout(() => { if (!$('#welcome') && $('#sheet').classList.contains('hidden') && !document.querySelector('.skyar')) openWhatsNew(); }, 1400);
-  else if (/^#rate-/.test(opening)) openLink(opening);
+  else if (/^#rate-/.test(opening) || opening === '#seas') openLink(opening);
   else setTimeout(() => maybePromptRating(), 1400);
   // Coming back to the app after a shoot (say, in the car after sunset): ask then, while it's fresh.
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(() => maybePromptRating(), 800); });

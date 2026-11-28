@@ -2201,3 +2201,59 @@ html[data-tabdir="back"] #view.view-in { animation-name: view-in-l; }
 .field.nightvision .qr-btn, .field.nightvision .qr-btn.best { background: transparent !important; border-color: #5A1A15 !important; color: #E0453A !important; box-shadow: none; }
 .field.nightvision .qr-btn .qr-ic, .field.nightvision .qr-btn .qr-s, .field.nightvision .qr-more, .field.nightvision .qr-more .link-btn { color: #B8362D !important; }
 .band-tz { margin: 6px 2px 0; }
+
+/* ---------- Big seas (7.5) ---------- */
+.seas-banner { display: flex; align-items: center; gap: 12px; width: 100%; margin: 4px 0 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 18px; background: linear-gradient(180deg, rgba(157,173,177,.14), rgba(157,173,177,.04)); color: var(--text); text-align: left; font: inherit; cursor: pointer; min-height: 56px; }
+.seas-banner .sb-icon { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: var(--caramel); color: var(--caramel-ink); }
+.seas-banner .sb-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.seas-banner b { font-weight: 700; }
+.seas-banner small { color: var(--muted); font-size: var(--t-xs, 13px); line-height: 1.35; }
+.seas-banner .sb-go { color: var(--muted); font-size: 22px; }
+.seas-view { display: flex; flex-direction: column; gap: 22px; }
+.seas-spot { display: flex; flex-direction: column; gap: 12px; }
+.seas-spot .ss-head { display: flex; flex-direction: column; gap: 2px; }
+.seas-spot .ss-name { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 30px; line-height: 1.05; }
+.seas-spot .ss-none { margin: 0; color: var(--muted); }
+.seas-chart { margin: 0; }
+.seas-chart .sc-plot { position: relative; }
+.seas-chart svg { display: block; width: 100%; height: 110px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.seas-chart .sc-fill { fill: rgba(157,173,177,.18); }
+.seas-chart .sc-line { fill: none; stroke: var(--slate); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.seas-chart .sc-thr { stroke: var(--caramel); stroke-width: 1.5; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.seas-chart .sc-dot { fill: var(--caramel); }
+.seas-chart .sc-thr-label { position: absolute; right: 10px; transform: translateY(calc(-100% - 3px)); padding: 0 4px; border-radius: 4px; background: var(--surface); line-height: 1.3; font-size: 11px; font-weight: 600; color: var(--caramel); }
+.seas-chart .sc-days { display: flex; justify-content: space-around; margin-top: 6px; font-size: 11px; color: var(--muted); }
+.seas-chart .sc-days .on { color: var(--text); font-weight: 700; }
+.seas-card { display: flex; flex-direction: column; gap: 14px; padding: 20px 18px 18px; border: 1px solid var(--line); border-radius: 22px; background: linear-gradient(180deg, #24343A 0%, var(--surface) 62%); }
+.seas-card .sc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.seas-card .sc-eyebrow { margin: 0; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--slate); font-weight: 700; }
+.seas-card .sc-title { margin: 6px 0 0; font-family: var(--serif); font-weight: 400; font-size: 38px; line-height: 1.02; }
+.seas-card .sc-rank { text-align: right; }
+.seas-card .sc-rank b { display: block; font-family: var(--serif); font-weight: 400; font-size: 46px; line-height: 1; color: var(--caramel); }
+.seas-card .sc-rank small { font-size: 11px; color: var(--muted); }
+.seas-card .sc-where { margin: 0; font-weight: 600; }
+.seas-card .sc-night { margin: 0; padding: 10px 12px; border-radius: 12px; background: rgba(15,17,17,.5); font-size: 14px; line-height: 1.45; }
+.seas-card .sc-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.seas-card .sc-stats div { padding: 10px; border-radius: 12px; background: rgba(15,17,17,.55); }
+.seas-card .sc-stats dt { font-size: 11px; color: var(--muted); }
+.seas-card .sc-stats dd { margin: 3px 0 0; font-size: 17px; font-weight: 700; }
+.seas-card .sc-stats dd.sub { margin-top: 1px; font-size: 12px; font-weight: 500; color: var(--slate); }
+.seas-card .sc-notes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.4; }
+.seas-card .sc-notes li { position: relative; padding-left: 18px; }
+.seas-card .sc-notes li::before { content: ''; position: absolute; left: 0; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.seas-card .sc-notes li.good::before { background: var(--ok); }
+.seas-card .sc-notes li.bad::before { background: var(--danger); }
+.seas-card .sc-actions { display: flex; gap: 10px; }
+.seas-card .sc-actions .btn { flex: 1; }
+.seas-safety { padding: 14px 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--muted); font-size: 13px; line-height: 1.5; }
+.seas-safety b { color: var(--text); }
+.seas-history { margin: 6px 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.seas-history li { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 11px 14px; border-top: 1px solid var(--line); font-size: 14px; }
+.seas-history li:first-child { border-top: 0; }
+.seas-history .sh-date { font-weight: 600; }
+.seas-history .sh-swell { color: var(--slate); font-size: 13px; }
+.seas-history .sh-rank { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); }
+.seas-more summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--caramel); font-weight: 600; }
+.seas-form { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; }
+.seas-prefs { border: 0; padding: 0; margin: 4px 0; display: flex; flex-direction: column; gap: 8px; }
+.seas-prefs legend { font-weight: 700; margin-bottom: 4px; }

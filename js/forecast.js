@@ -1,17 +1,18 @@
 // Tidelight: The Forecast tab: the session card, score gauge and What if?, the light band, week strip, little pictures (horizon scenes, spot tiles, avatars) and gestures.
-import { dayKey, esc, fmtTime, toast, fmtWeekday, fmtDayDate, cap } from './util.js?v=7.4.2';
-import { nearestIndex, horizonBlock, spotFloor, baseScore, tideInfo } from './scoring.js?v=7.4.2';
-import { HUNT_LABEL, HUNT_VERB, huntsOf, forestAt, waterfallAt, stormAt, setKp } from './hunts.js?v=7.4.2';
-import { update } from './storage.js?v=7.4.2';
-import { unshareFromCrew, syncNow } from './sync.js?v=7.4.2';
-import { coverUrl } from './photos.js?v=7.4.2';
-import { fetchForecasts, fetchKp } from './api.js?v=7.4.2';
-import { $, $$, S, allEvents, bgRefresh, ensureForecasts, eventIndex, forecasts, forecastsLanded, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.4.2';
-import { render } from './app.js?v=7.4.2';
-import { openSpotForm } from './spots.js?v=7.4.2';
-import { untilText } from './field.js?v=7.4.2';
-import { crewGoing, goingText, loadCrew } from './crews.js?v=7.4.2';
-import { PIN_ICON, openHere } from './here.js?v=7.4.2';
+import { dayKey, esc, fmtTime, toast, fmtWeekday, fmtDayDate, cap } from './util.js?v=7.5';
+import { nearestIndex, horizonBlock, spotFloor, baseScore, tideInfo } from './scoring.js?v=7.5';
+import { HUNT_LABEL, HUNT_VERB, huntsOf, forestAt, waterfallAt, stormAt, setKp } from './hunts.js?v=7.5';
+import { update } from './storage.js?v=7.5';
+import { unshareFromCrew, syncNow } from './sync.js?v=7.5';
+import { coverUrl } from './photos.js?v=7.5';
+import { fetchForecasts, fetchKp } from './api.js?v=7.5';
+import { $, $$, S, allEvents, bgRefresh, ensureForecasts, eventIndex, forecasts, forecastsLanded, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.5';
+import { render } from './app.js?v=7.5';
+import { openSpotForm, openSpotDetail } from './spots.js?v=7.5';
+import { anySeas, ensureSeas, seasBanner, seasView, wireSeasView } from './seasui.js?v=7.5';
+import { untilText } from './field.js?v=7.5';
+import { crewGoing, goingText, loadCrew } from './crews.js?v=7.5';
+import { PIN_ICON, openHere } from './here.js?v=7.5';
 
 /* ================= forecast ================= */
 
@@ -61,7 +62,7 @@ export function forecastAlerts(st, failed) {
     ${!st.settings.home ? `<div class="alert info">Set your home under You, in Home and travel, to get leave times that include the drive.</div>` : ''}`;
 }
 export const SESSION_TYPES = ['sunrise', 'day', 'sunset', 'night'];
-export const TYPE_NAME = { sunrise: 'Sunrise', day: 'Daytime', sunset: 'Sunset', night: 'Night' };
+export const TYPE_NAME = { sunrise: 'Sunrise', day: 'Daytime', sunset: 'Sunset', night: 'Night', seas: 'Big seas' };
 // One line on why: the strongest point in its favour, or the main thing against it.
 export function whyLine(e) {
   const fs = e.hunts?.[e.topHunt]?.factors || e.factors || [];
@@ -506,7 +507,12 @@ const TYPE_MARK = {
   day: G_SUN,
 };
 const typeMark = type => `<svg class="wk-t" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TYPE_MARK[type] || ''}</svg>`;
-const WEEK_TYPES = [['all', 'All'], ['sunrise', 'Sunrise'], ['sunset', 'Sunset']];
+const WAVE_MARK = '<svg class="wk-t" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 15c2 0 2-1.5 4-1.5S8 15 10 15s2-1.5 4-1.5 2 1.5 4 1.5 2-1.5 4-1.5"/><path d="M3 11c1.5-4 5-6.5 9-6.5 2.5 0 4 1.5 4 3.5S14.5 10.5 13 10.5c-1.2 0-2-.8-2-1.8"/></svg>';
+// All / Sunrise / Sunset above the week, plus Big seas when a coastal spot has it on.
+export function weekFilter() {
+  const types = [['all', 'All'], ['sunrise', 'Sunrise'], ['sunset', 'Sunset'], ...(anySeas() ? [['seas', 'Big seas']] : [])];
+  return `<div class="wk-filter" role="group" aria-label="Show in the week">${types.map(([k, l]) => `<button class="${ui.weekType === k ? 'on' : ''}" data-weektype="${k}" aria-pressed="${ui.weekType === k}">${k === 'all' ? '' : k === 'seas' ? WAVE_MARK : typeMark(k)}${l}</button>`).join('')}</div>`;
+}
 export function weekStrip(allEvs, offset) {
   const now = Date.now() / 1000;
   const cells = [];
@@ -526,7 +532,7 @@ export function weekStrip(allEvs, offset) {
       <span class="wk-s num ${best && best.score >= 75 ? 'go' : ''}" aria-hidden="true">${best ? `${only ? toneDot(best.score) : typeMark(best.type)}${best.score}` : '–'}</span>${S().plans.some(p => evs.some(e => e.dayIdx === i && e.key === p.key)) ? '<span class="wk-plan" aria-hidden="true"></span>' : ''}
     </button>`);
   }
-  const seg = `<div class="wk-filter" role="group" aria-label="Show in the week">${WEEK_TYPES.map(([k, l]) => `<button class="${ui.weekType === k ? 'on' : ''}" data-weektype="${k}" aria-pressed="${ui.weekType === k}">${k === 'all' ? '' : typeMark(k)}${l}</button>`).join('')}</div>`;
+  const seg = weekFilter();
   return `${seg}<nav class="week" aria-label="Choose a day">${cells.join('')}</nav>
     <p class="wk-key" aria-hidden="true"><span>${only ? `Showing ${only}s only. ` : ''}The sky at each day's best ${only || 'session'}${only ? '' : ` (${typeMark('sunrise')}sunrise, ${typeMark('sunset')}sunset)`}</span>
       <span class="wk-key-i">${G('<path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0"/><path d="M12 9.5V8M7.6 11.6l-1.1-1.1M16.4 11.6l1.1-1.1"/>')}Clear</span><span class="wk-key-i">${G('<path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0"/><path d="M4 7.5h7.5M14 5.5h6M9 11h9"/>')}High cloud</span><span class="wk-key-i">${G(`<path d="${G_CLOUD}"/>`)}Overcast</span><span class="wk-key-i">${G(`<path d="${G_CLOUD}" transform="translate(0 -3)"/><path d="M9 18.5l-1 2.5M12.5 18.5l-1 2.5M16 18.5l-1 2.5"/>`)}Rain</span><span class="wk-key-i">${G('<path d="M4 8.5h16M6 12.5h12M4 16.5h16"/>')}Fog</span></p>`;
@@ -853,6 +859,9 @@ export async function renderForecast(v) {
   const slowNote = setTimeout(() => { const el = $('.sk-status'); if (el) el.textContent = 'Taking longer than usual. The weather service is slow to answer; saved forecasts are used where it doesn\'t.'; }, 6000);
   const failed = await ensureForecasts().finally(() => clearTimeout(slowNote));
   if (ui.tab !== 'forecast') return;
+  try { await ensureSeas(); } catch { /* big seas are extra: never block the forecast */ }
+  if (ui.tab !== 'forecast') return;
+  if (ui.weekType === 'seas' && !anySeas()) ui.weekType = 'all';
   const evs = nextDays(7);
   indexEvents(evs);
   const offset = evs[0]?.offset ?? -new Date().getTimezoneOffset() * 60;
@@ -908,9 +917,25 @@ export async function renderForecast(v) {
   const order = [...dayEvs].sort((a, b) => b.score - a.score || a.t - b.t);   // slide order: best first
   const nextWithLight = [1, 2, 3, 4, 5, 6].map(d => ui.homeDay + d).find(d => d <= 6 && evs.some(e => e.dayIdx === d && shown(e)));
 
+  const wireFilter = () => $$('[data-weektype]', v).forEach(b => b.onclick = () => {
+    if (ui.weekType === b.dataset.weektype) return;
+    ui.weekType = b.dataset.weektype;
+    try { localStorage.setItem('tidelight:weekType', ui.weekType); } catch {}
+    if (ui.weekType !== 'all' && ui.weekType !== 'seas') ui.homeSel = evs.filter(e => e.dayIdx === ui.homeDay && e.type === ui.weekType).sort((a, b) => b.score - a.score)[0]?.key || ui.homeSel;
+    ui.homeAnimate = false;
+    renderForecast(v).then(() => { if (ui.weekType === 'seas') window.scrollTo({ top: 0, behavior: motionOK() ? 'smooth' : 'auto' }); });
+  });
+  if (ui.weekType === 'seas') {
+    v.innerHTML = `${forecastAlerts(st, failed)}${weekFilter()}${seasView()}`;
+    wireFilter();
+    wireSeasView(v, { onSpot: id => openSpotDetail(id), rerender: () => renderForecast(v) });
+    return;
+  }
+
   v.innerHTML = `
     ${forecastAlerts(st, failed)}
     ${weekStrip(evs, viewOff)}
+    ${seasBanner()}
     <div class="home-grid ${ui.homeAnimate ? 'enter' : ''}">
     <header class="day-head-v2">
       <h1 class="day-title">${esc(dayName)}<span>${esc(ui.homeDay > 1 ? dateLine : `${weekday} ${dateLine}`)}</span></h1>
@@ -971,14 +996,7 @@ export async function renderForecast(v) {
     if (ui.weekType !== 'all') ui.homeSel = evs.filter(e => e.dayIdx === d && e.type === ui.weekType).sort((a, b) => b.score - a.score)[0]?.key || null;
     transitionHome(v, dir);
   };
-  $$('[data-weektype]', v).forEach(b => b.onclick = () => {
-    if (ui.weekType === b.dataset.weektype) return;
-    ui.weekType = b.dataset.weektype;
-    try { localStorage.setItem('tidelight:weekType', ui.weekType); } catch {}
-    if (ui.weekType !== 'all') ui.homeSel = evs.filter(e => e.dayIdx === ui.homeDay && e.type === ui.weekType).sort((a, b) => b.score - a.score)[0]?.key || ui.homeSel;
-    ui.homeAnimate = false;
-    renderForecast(v);
-  });
+  wireFilter();
   $$('[data-day]', v).forEach(b => b.onclick = () => pickDay(Number(b.dataset.day)));
   const step = d => {
     const i = order.findIndex(e => e.key === ui.homeSel) + d;

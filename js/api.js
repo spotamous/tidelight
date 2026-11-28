@@ -1,6 +1,6 @@
 // Free, keyless data from Open-Meteo (https://open-meteo.com). Personal / non-commercial use.
-import { nearestIndex, tideInfo } from './scoring.js?v=7.4.2';
-import { huntsOf, DAY_HUNTS } from './hunts.js?v=7.4.2';
+import { nearestIndex, tideInfo } from './scoring.js?v=7.5';
+import { huntsOf, DAY_HUNTS } from './hunts.js?v=7.5';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
@@ -28,7 +28,7 @@ async function getJSON(url, ms = 15000) {
 
 const qs = o => new URLSearchParams(o).toString();
 
-export function clearCache() { cache.clear(); }
+export function clearCache() { cache.clear(); seasCache?.clear(); }
 
 const BASE = 'cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,precipitation_probability,precipitation,visibility,wind_speed_10m,temperature_2m';
 const FOG_STORM = 'relative_humidity_2m,dew_point_2m,cape,lifted_index,convective_inhibition,wind_gusts_10m,weather_code';
@@ -521,6 +521,39 @@ export async function placeName(lat, lon) {
 // The forecast service also answers for past dates (about three months back) with its best record of
 // what happened. Same variables and the same normalised shape as a live forecast, so the app's own
 // scoring can be run on it: "what Tidelight would have said with the real weather".
+/* ---------- big seas (7.5): wave power at a coastal spot ---------- */
+// Hourly waves for the next 8 days (and yesterday), with the sea level for the tides. Kept an hour.
+const seasCache = new Map();
+export function clearSeasCache() { seasCache.clear(); }
+export async function fetchSeasForecast(spot) {
+  const key = `${spot.lat.toFixed(3)},${spot.lon.toFixed(3)}`, hit = seasCache.get(key);
+  if (hit && Date.now() - hit.at < 3600e3) return hit.data;
+  const j = await getJSON(`${MARINE}?${qs({ latitude: spot.lat, longitude: spot.lon, hourly: 'wave_height,wave_period,wave_direction,sea_level_height_msl', timezone: 'auto', timeformat: 'unixtime', forecast_days: 8, past_days: 1 })}`, 12000);
+  const H = j?.hourly;
+  if (!H?.time?.length || !(H.wave_height || []).some(v => v != null)) throw new Error('No wave forecast at this point: try moving the pin slightly offshore.');
+  const data = { offset: j.utc_offset_seconds || 0, times: H.time, h: H.wave_height, T: H.wave_period, dir: H.wave_direction, sea: H.sea_level_height_msl || [] };
+  seasCache.set(key, { at: Date.now(), data });
+  return data;
+}
+// The spot's wave history, hour by hour, for the last few years: what counts as rare *here*.
+// The archived best-match forecast first (the same models as the forecast); the ERA5 ocean reanalysis
+// if that comes back thin.
+export async function fetchSeasHistory(spot, years = 3) {
+  const ymd = d => d.toISOString().slice(0, 10);
+  const end = new Date(Date.now() - 7 * 86400e3), start = new Date(end.getTime() - years * 365.25 * 86400e3);
+  const q = { latitude: spot.lat, longitude: spot.lon, hourly: 'wave_height,wave_period,wave_direction', timezone: 'auto', timeformat: 'unixtime', start_date: ymd(start), end_date: ymd(end) };
+  const read = j => {
+    const H = j?.hourly;
+    if (!H?.time?.length) return null;
+    const n = H.wave_height.filter(v => v != null).length;
+    return n > H.time.length * 0.6 ? { times: H.time, h: H.wave_height, T: H.wave_period, dir: H.wave_direction, offset: j.utc_offset_seconds || 0 } : null;
+  };
+  let out = await getJSON(`${MARINE}?${qs(q)}`, 30000).then(read).catch(e => { if (/connection/i.test(e.message)) throw e; return null; });
+  if (!out) out = await getJSON(`${MARINE}?${qs({ ...q, models: 'era5_ocean' })}`, 30000).then(read).catch(() => null);
+  if (!out) throw new Error("Couldn't read this spot's wave records. Try moving the pin slightly offshore, or try again later.");
+  return out;
+}
+
 export const PAST_LIMIT_DAYS = 90;
 // Extra sky signals around a past shoot (7.3.1), so the colour score can be tested against them:
 // humidity through the column (thin cirrus vs a deep deck), pressure trend (clean air behind a front),

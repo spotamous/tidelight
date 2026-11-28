@@ -1,24 +1,31 @@
 // Tidelight: First run and testers: What's new, the five-card tour and the welcome.
-import { openAccuracy } from './accuracy.js?v=7.4.2';
-import { APP_VERSION } from './version.js?v=7.4.2';
-import { esc, toast, getPosition, uid } from './util.js?v=7.4.2';
-import { openSkyAR } from './skyar.js?v=7.4.2';
-import { isConfigured, currentUser, createAccount, signInWithPassword, syncNow, joinCrew } from './sync.js?v=7.4.2';
-import { HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.4.2';
-import { searchPlaces, placeName } from './api.js?v=7.4.2';
-import { update } from './storage.js?v=7.4.2';
-import { $, $$, S, closeSheet, forecasts, openSheet, ui } from './core.js?v=7.4.2';
-import { render, setTab } from './app.js?v=7.4.2';
-import { openAligner, openTideWindows } from './planners.js?v=7.4.2';
-import { G, avatar, bandFill, bandInk, bandSky, day3am, demoSkyDay, lightBand, toneDot } from './forecast.js?v=7.4.2';
-import { PIN_ICON } from './here.js?v=7.4.2';
-import { loadCrew } from './crews.js?v=7.4.2';
+import { openAccuracy } from './accuracy.js?v=7.5';
+import { APP_VERSION } from './version.js?v=7.5';
+import { esc, toast, getPosition, uid } from './util.js?v=7.5';
+import { openSkyAR } from './skyar.js?v=7.5';
+import { isConfigured, currentUser, createAccount, signInWithPassword, syncNow, joinCrew } from './sync.js?v=7.5';
+import { HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.5';
+import { searchPlaces, placeName } from './api.js?v=7.5';
+import { update } from './storage.js?v=7.5';
+import { $, $$, S, closeSheet, forecasts, openSheet, ui } from './core.js?v=7.5';
+import { render, setTab } from './app.js?v=7.5';
+import { openAligner, openTideWindows } from './planners.js?v=7.5';
+import { G, avatar, bandFill, bandInk, bandSky, day3am, demoSkyDay, lightBand, toneDot } from './forecast.js?v=7.5';
+import { PIN_ICON } from './here.js?v=7.5';
+import { loadCrew } from './crews.js?v=7.5';
 
 /* ================= first-run welcome ================= */
 /* ================= what's new ================= */
 // For testers: what changed in each update. Opens once after an update, and any time from You.
 export const SEEN_VERSION = 'tidelight:seenVersion';
 export const WHATS_NEW = [
+  { v: '7.5', date: '28 Nov', title: 'Big seas', items: [
+    'New for coastal spots: Big seas. Turn it on under Edit spot → Coast and tide, and Tidelight reads a few years of that spot\'s wave records to learn what a truly big swell looks like there.',
+    'You\'ll get an alert up to 5 days before one of its top 6 swells of the year (or top 3, or 12), an update the evening before with the latest timing, and word if it fades.',
+    'It\'s measured as wave power: height and the time between waves together, aimed at the way your coast faces. A swell that peaks in the dark says so, and how much is left at first light.',
+    'Pick Big seas above the week to see the swell building, day by day, against the spot\'s top-6 line. Each spot also lists the past swells that would have alerted you, so you can check them against your own photos.',
+    'Big seas are dangerous: stay well back from cliff edges and rock platforms, and check the Bureau of Meteorology\'s warnings before you go.',
+  ] },
   { v: '7.4.2', date: '27 Nov', title: 'Only sunrises, or only sunsets', items: [
     'Sunrise and Sunset above the week now filter the whole day too: the light band, the main card and the list below show only that kind of session. All brings everything back.',
   ] },

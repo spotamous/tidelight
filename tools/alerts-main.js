@@ -8,8 +8,9 @@ const { evaluateSpot } = M_scoring;
 const { setKp, HUNT_LABEL, HUNT_VERB } = M_hunts;
 const { fetchSpotForecast, fetchKp, clearCache } = M_api;
 const { fmtTime, fmtDay, tzOffset } = M_util;
+const { seasForSpots, seasReady, seasSwell, seasWhen, seasLightLine } = M_seas;
 
-const DEFAULT_ALERTS = { go: true, threshold: 80, confident: true, calledOff: true, crew: true, rate: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6 };
+const DEFAULT_ALERTS = { go: true, threshold: 80, confident: true, calledOff: true, crew: true, rate: true, digest: true, digestDay: 4, digestHour: 19, quietStart: 21, quietEnd: 6, seas: true, seasEve: true, seasFade: true };
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
@@ -73,14 +74,17 @@ async function checkUser(admin, uid) {
   if (!d || !d.spots?.length) return { sent: 0 };
   const prefs = { ...DEFAULT_ALERTS, ...(d.settings?.alerts || {}) };
   const settings = { driveSpeedKmh: 60, arriveBeforeMin: 30, ...(d.settings || {}) };
-  if (!prefs.go && !prefs.calledOff && !prefs.digest && !prefs.rate) return { sent: 0 };
+  const wantsSeas = (prefs.seas || prefs.seasEve || prefs.seasFade) && d.spots.some(seasReady);
+  if (!prefs.go && !prefs.calledOff && !prefs.digest && !prefs.rate && !wantsSeas) return { sent: 0 };
 
   if (d.spots.some(s => (s.hunts || []).includes('aurora'))) { try { setKp(await fetchKp()); } catch { setKp([]); } }
   const events = [];
+  const dataOf = {};
   let offset = null;
   for (const spot of d.spots) {
     try {
       const data = await fetchSpotForecast(spot);
+      dataOf[spot.id] = data;
       if (offset == null) offset = data.offset;
       events.push(...evaluateSpot(spot, data, d.keepers || [], settings));
     } catch (e) { console.error('forecast failed', spot.name, e?.message); }
@@ -142,7 +146,7 @@ async function checkUser(admin, uid) {
   if (prefs.rate) {
     const startOfDay = (t, off) => Math.floor((t + off) / 86400) * 86400 - off;
     const morningAfter = p => startOfDay(p.t - 12 * 3600, p.offset ?? offset) + 86400 + 7 * 3600;
-    const lightDone = p => p.type === 'sunset' ? p.t + 45 * 60 : p.type === 'sunrise' ? p.t + 3600 : p.type === 'day' ? p.t + 2 * 3600 : morningAfter(p);
+    const lightDone = p => p.type === 'sunset' ? p.t + 45 * 60 : p.type === 'sunrise' ? p.t + 3600 : p.type === 'day' || p.type === 'seas' ? p.t + 2 * 3600 : morningAfter(p);
     const daytime = !quiet && hour >= 7 && hour <= 20;
     const fresh = [], again = [];
     for (const p of d.plans || []) {
@@ -156,7 +160,7 @@ async function checkUser(admin, uid) {
         again.push(p);
       }
     }
-    const word = p => (p.type === 'sunrise' ? 'sunrise' : p.type === 'sunset' ? 'sunset' : p.type === 'night' ? 'night shoot' : 'shoot');
+    const word = p => (p.type === 'sunrise' ? 'sunrise' : p.type === 'sunset' ? 'sunset' : p.type === 'night' ? 'night shoot' : p.type === 'seas' ? 'big-seas shoot' : 'shoot');
     const all = [...fresh, ...again].sort((a, b) => b.t - a.t);
     if (all.length) {
       const p = all[0];
@@ -168,6 +172,54 @@ async function checkUser(admin, uid) {
           : { title: `How was the light at ${p.spotName}?`, body: `${p.type === 'sunrise' || p.type === 'day' ? "Yesterday's" : "Last night's"} ${word(p)}${p.score != null ? ` scored ${p.score}` : ''}. One tap to rate it.`, tag: `rate-${p.id}`, url: `./#rate-${p.id}` });
       fresh.forEach(x => toLog.push({ kind: 'rate', key: x.id, score: x.score ?? null }));
       again.forEach(x => toLog.push({ kind: 'rate', key: `${x.id}|am`, score: x.score ?? null }));
+    }
+  }
+
+  // Big seas: one of a coastal spot's biggest swells of the year. First word up to 5 days ahead, an update
+  // the evening before, and word if it fades. A swell whose peak shifts a day stays the same swell.
+  if (wantsSeas && !quiet) {
+    let list = [];
+    try { list = await seasForSpots(d.spots, { now, hoursFor: sp => dataOf[sp.id]?.hours || null }); } catch (e) { console.error('seas failed', e?.message); }
+    const ymdDays = (a, b) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000);
+    const logged = kind => (log || []).filter(l => l.kind === kind);
+    const sameSwell = (key, ev) => { const [sid, ymd] = key.split(':'); return sid === ev.spot.id && Math.abs(ymdDays(ymd, ev.ymd)) <= 1; };
+    const dayLocal = (t, off) => new Date((t + off) * 1000).toISOString().slice(0, 10);
+    for (const x of list) {
+      if (x.error) continue;
+      for (const e of x.events) {
+        const first = logged('seas').find(l => sameSwell(l.key, e));
+        const name = e.spot.name, day = fmtDay(e.t, e.offset);
+        const light = e.night ? ` ${seasLightLine(e)}` : '';
+        if (!first) {
+          if (!prefs.seas || e.t > now + 5 * 86400 || e.t < now + 2 * 3600) continue;
+          toSend.push({ title: `Big seas ${day} at ${name}`, body: `${seasSwell(e)}: ${e.rankText.charAt(0).toLowerCase()}${e.rankText.slice(1)}. ${e.night ? '' : `Peak ${seasWhen(e).split(', peak ')[1]}.`}${e.tide && e.best && Math.abs(e.tide - e.best.t) <= 3 * 3600 ? ` High tide ${fmtTime(e.tide, e.offset)}.` : ''}${light}`.replace(/\s+/g, ' ').trim(), tag: `seas-${e.key}`, url: './#seas' });
+          toLog.push({ kind: 'seas', key: e.key, score: Math.round(e.ratio * 100) });
+          continue;
+        }
+        // The evening before (5pm on), once.
+        const eveDay = dayLocal(e.t - 86400, e.offset), today = dayLocal(now, e.offset);
+        if (prefs.seasEve && today === eveDay && hour >= 17 && !done.has(`seas-eve|${first.key}`) && !done.has(`seas-off|${first.key}`)) {
+          const leave = e.best ? (() => { const sp = e.spot; const drive = Number(sp.driveMin) || null; return drive ? ` Leave by ${fmtTime(e.best.t - (drive + Number(settings.arriveBeforeMin ?? 30)) * 60, e.offset)}.` : ''; })() : '';
+          toSend.push({ title: `Still on for tomorrow: big seas at ${name}`, body: `Now ${seasSwell(e)}, peak ${seasWhen(e).split(', peak ')[1]}.${light}${leave}`.replace(/\s+/g, ' ').trim(), tag: `seas-${first.key}`, url: './#seas' });
+          toLog.push({ kind: 'seas-eve', key: first.key, score: Math.round(e.ratio * 100) });
+        }
+      }
+    }
+    // Faded: alerted, still ahead, and now well under the line (or gone from the outlook).
+    if (prefs.seasFade) {
+      for (const l of logged('seas')) {
+        if (done.has(`seas-off|${l.key}`)) continue;
+        const [sid, ymd] = l.key.split(':');
+        const x = list.find(y => y.spot.id === sid);
+        if (!x || x.error) continue;
+        const ahead = Date.parse(ymd) / 1000 + 86400 > now;
+        if (!ahead) continue;
+        const still = x.events.some(e => sameSwell(l.key, e));
+        const near = (x.days || []).filter(dd => Math.abs(ymdDays(dd.ymd, ymd)) <= 1).sort((a, b) => b.ratio - a.ratio)[0];
+        if (still || !near || near.ratio >= 0.85) continue;
+        toSend.push({ title: `Big seas ${fmtDay(near.t, x.offset)}: downgraded`, body: `${x.spot.name}: the swell now tops out at ${(+near.h).toFixed(1)} m (${Math.round(near.ratio * 100)}% of a top-${x.spot.seas.top ?? 6} swell). No need to go for the big seas.`, tag: `seas-${l.key}`, url: './#seas' });
+        toLog.push({ kind: 'seas-off', key: l.key, score: Math.round(near.ratio * 100) });
+      }
     }
   }
 
