@@ -1,15 +1,15 @@
 // Tidelight: In the field: right now, the field compass, phone heading, sun line-ups with a view, and field mode.
-import { fmtTime, dayKey, fmtDay, esc, getPosition, haversineKm, toast, compass, angleDiff, cap } from './util.js?v=7.5';
-import { WEATHER_TEXT, placeName, fetchHourly, searchPlaces, fetchCurrent, fetchRadarFrames } from './api.js?v=7.5';
-import { nearestIndex, tideInfo } from './scoring.js?v=7.5';
-import { coverUrl } from './photos.js?v=7.5';
-import { HUNT_LABEL } from './hunts.js?v=7.5';
-import { $, $$, BEHIND_SHEET, closeSheet, eventIndex, forecasts, openSheet, placeTz, S, sessionName, ui } from './core.js?v=7.5';
-import { TYPE_NAME, spotTile } from './forecast.js?v=7.5';
-import { syncAgo } from './you.js?v=7.5';
-import { openExposure } from './tools.js?v=7.5';
-import { QUICK, dueToAsk, markAsked, openQuickRate } from './accuracy.js?v=7.5';
-import { ratePlan } from './plans.js?v=7.5';
+import { fmtTime, dayKey, fmtDay, esc, getPosition, haversineKm, toast, compass, angleDiff, cap } from './util.js?v=7.5.1';
+import { WEATHER_TEXT, placeName, fetchHourly, searchPlaces, fetchCurrent, fetchRadarFrames } from './api.js?v=7.5.1';
+import { nearestIndex, tideInfo } from './scoring.js?v=7.5.1';
+import { coverUrl } from './photos.js?v=7.5.1';
+import { HUNT_LABEL, huntWord } from './hunts.js?v=7.5.1';
+import { $, $$, BEHIND_SHEET, closeSheet, eventIndex, forecasts, openSheet, placeTz, S, sessionName, ui } from './core.js?v=7.5.1';
+import { TYPE_NAME, spotTile } from './forecast.js?v=7.5.1';
+import { syncAgo } from './you.js?v=7.5.1';
+import { openExposure } from './tools.js?v=7.5.1';
+import { QUICK, dueToAsk, markAsked, openQuickRate } from './accuracy.js?v=7.5.1';
+import { ratePlan } from './plans.js?v=7.5.1';
 
 /* ================= right now ================= */
 
@@ -467,7 +467,7 @@ export function fieldMoments(e) {
   } else if (e.type === 'day') {
     const H = e.hunts?.[e.topHunt];
     if (H?.from && H.from < e.t) add(H.from, 'Good light from');
-    add(e.t, `Best for ${HUNT_LABEL[e.topHunt].toLowerCase()}`, 'key');
+    add(e.t, `Best for ${huntWord(e.topHunt)}`, 'key');
     if (H?.to && H.to > e.t) add(H.to, 'Good light until');
   } else if (e.timeline) {
     e.timeline.forEach(x => add(x.t, x.label, x.cls || ''));
@@ -566,7 +566,7 @@ export async function openField(key) {
   el.setAttribute('aria-label', `Field mode for ${e.spot.name}`);
   el.innerHTML = `
     <div class="fm-top">
-      <div><p class="fm-spot">${esc(e.spot.name)}</p><p class="fm-sub">${esc(cap(sessionName(e)))}, score ${e.score}${e.topHunt !== 'colour' ? ` for ${HUNT_LABEL[e.topHunt].toLowerCase()}` : ''}</p>
+      <div><p class="fm-spot">${esc(e.spot.name)}</p><p class="fm-sub">${esc(cap(sessionName(e)))}, score ${e.score}${e.topHunt !== 'colour' ? ` for ${huntWord(e.topHunt)}` : ''}</p>
         ${(() => { const p = S().plans.find(x => x.key === e.key); if (!p || p.score == null) return ''; const d = e.score - p.score; return `<p class="fm-still ${d <= -10 ? 'down' : ''}">${Math.abs(d) < 5 ? 'Still on: the forecast has held since you planned it.' : d > 0 ? `Better than planned: up ${d} to ${e.score}.` : `Down ${-d} since you planned it, to ${e.score}.${e.score < 50 ? ' Check the radar before you commit.' : ''}`}</p>`; })()}</div>
       <button class="icon-btn" id="fmClose" aria-label="Close field mode"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>

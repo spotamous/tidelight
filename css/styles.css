@@ -1750,8 +1750,13 @@ html[data-motion="reduced"] .sk::after { animation: none; }
 .wk-sky svg { color: #FBF7F0; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .55)); opacity: .92; }
 .wk-sky.sky-day svg { opacity: .85; }
 .week { margin-bottom: 6px; }
-.wk-key { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin: 0 0 18px; font: 500 var(--t-xs)/1.4 var(--sans); color: var(--muted); }
-.wk-key > span:first-child { flex: 1 0 100%; }
+.wk-key { margin: -2px 0 14px; font: 500 var(--t-xs)/1.4 var(--sans); color: var(--muted); }
+.wk-key summary { display: inline-flex; align-items: center; min-height: 32px; cursor: pointer; list-style: none; }
+.wk-key summary::-webkit-details-marker { display: none; }
+.wk-key summary::after { content: '›'; margin-left: 6px; transition: transform .2s; }
+.wk-key[open] summary::after { transform: rotate(90deg); }
+.wk-key > p { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin: 2px 0 0; }
+.wk-key > p > span:first-child { flex: 1 0 100%; }
 .wk-key-i { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
 .wk-key-i svg { width: 14px; height: 14px; color: var(--text); opacity: .8; }
 
@@ -2257,3 +2262,8 @@ html[data-tabdir="back"] #view.view-in { animation-name: view-in-l; }
 .seas-form { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; }
 .seas-prefs { border: 0; padding: 0; margin: 4px 0; display: flex; flex-direction: column; gap: 8px; }
 .seas-prefs legend { font-weight: 700; margin-bottom: 4px; }
+
+/* 7.5.1: the briefing's tools, grouped and below the plan */
+.bf-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 0; }
+.bf-tools + .bf-tools { margin-top: 14px; }
+.bf-tools-l { flex: 0 0 100%; margin-bottom: -2px; font: 600 var(--t-xs) var(--sans); letter-spacing: .04em; color: var(--muted); }

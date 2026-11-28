@@ -1,8 +1,8 @@
 // Tidelight: big seas (7.5). Rare, powerful swells at coastal spots, measured against the spot's own
 // wave history, so "a top-6 swell" means one of the six biggest in a typical year *here*.
 // Shared with the alerts function (bundled by tools/build-alerts.mjs), so keep it free of the DOM.
-import { fetchSeasForecast, fetchSeasHistory } from './api.js?v=7.5';
-import { fmtTime, fmtDay } from './util.js?v=7.5';
+import { fetchSeasForecast, fetchSeasHistory } from './api.js?v=7.5.1';
+import { fmtTime, fmtDay } from './util.js?v=7.5.1';
 
 export const SEAS_TOPS = [3, 6, 12];
 export const SEAS_DEFAULT_TOP = 6;
@@ -188,10 +188,10 @@ export function seasLightLine(e) {
 }
 export function seasNotes(e) {
   const o = e.offset, out = [];
-  out.push({ k: 'good', t: e.ratio >= 1.3 ? 'Well above this spot\'s top swells: a standout' : 'A swell that makes this spot\'s top few of the year' });
-  if (e.T >= 14) out.push({ k: 'good', t: `Long-period swell (${Math.round(e.T)} s): more power behind every wave` });
-  if (e.tide && e.best && Math.abs(e.tide - e.best.t) <= 2 * 3600) out.push({ k: 'good', t: 'High tide lands in the big hours: more water against the cliffs' });
-  if (e.wind != null && e.wind >= 35) out.push({ k: 'neutral', t: `Strong wind (${Math.round(e.wind)} km/h): big spray, so shield the lens` });
+  out.push({ k: 'good', t: e.ratio >= 1.3 ? 'Well above this spot\'s top swells, a standout' : 'A swell that makes this spot\'s top few of the year' });
+  if (e.T >= 14) out.push({ k: 'good', t: `Long-period swell (${Math.round(e.T)} s), with more power behind every wave` });
+  if (e.tide && e.best && Math.abs(e.tide - e.best.t) <= 2 * 3600) out.push({ k: 'good', t: 'High tide lands in the big hours, putting more water against the cliffs' });
+  if (e.wind != null && e.wind >= 35) out.push({ k: 'neutral', t: `Strong wind (${Math.round(e.wind)} km/h) means big spray, so shield the lens` });
   return out;
 }
 

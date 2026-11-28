@@ -1,10 +1,10 @@
 // Tidelight: big seas on screen (7.5): the Big seas view on the Forecast page, the banner that points to
 // it, the spot's history check, and planning a big-seas shoot. The maths is in seas.js.
-import { esc, fmtTime, fmtDay, toast, uid } from './util.js?v=7.5';
-import { update } from './storage.js?v=7.5';
-import { driveMinutes, hikeMinutes } from './scoring.js?v=7.5';
-import { S, forecasts } from './core.js?v=7.5';
-import { seasForSpots, seasOn, seasReady, seasWhen, seasSwell, seasLightLine, seasNotes, compass16, COMPASS_NAME, thresholdOf, buildClimate, SEAS_DEFAULT_TOP } from './seas.js?v=7.5';
+import { esc, fmtTime, fmtDay, toast, uid } from './util.js?v=7.5.1';
+import { update } from './storage.js?v=7.5.1';
+import { driveMinutes, hikeMinutes } from './scoring.js?v=7.5.1';
+import { S, forecasts } from './core.js?v=7.5.1';
+import { seasForSpots, seasOn, seasReady, seasWhen, seasSwell, seasLightLine, seasNotes, compass16, COMPASS_NAME, thresholdOf, buildClimate, SEAS_DEFAULT_TOP } from './seas.js?v=7.5.1';
 
 const WAVE_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 16c2 0 2-1.5 4-1.5S8 16 10 16s2-1.5 4-1.5 2 1.5 4 1.5 2-1.5 4-1.5"/><path d="M3 12c1.5-4 5-7 9-7 2.5 0 4 1.5 4 3.5S14.5 11 13 11c-1.2 0-2-.8-2-1.8"/><path d="M2 20c2 0 2-1.5 4-1.5S8 20 10 20s2-1.5 4-1.5 2 1.5 4 1.5 2-1.5 4-1.5"/></svg>';
 export const anySeas = () => S().spots.some(seasReady);

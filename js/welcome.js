@@ -1,24 +1,32 @@
 // Tidelight: First run and testers: What's new, the five-card tour and the welcome.
-import { openAccuracy } from './accuracy.js?v=7.5';
-import { APP_VERSION } from './version.js?v=7.5';
-import { esc, toast, getPosition, uid } from './util.js?v=7.5';
-import { openSkyAR } from './skyar.js?v=7.5';
-import { isConfigured, currentUser, createAccount, signInWithPassword, syncNow, joinCrew } from './sync.js?v=7.5';
-import { HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.5';
-import { searchPlaces, placeName } from './api.js?v=7.5';
-import { update } from './storage.js?v=7.5';
-import { $, $$, S, closeSheet, forecasts, openSheet, ui } from './core.js?v=7.5';
-import { render, setTab } from './app.js?v=7.5';
-import { openAligner, openTideWindows } from './planners.js?v=7.5';
-import { G, avatar, bandFill, bandInk, bandSky, day3am, demoSkyDay, lightBand, toneDot } from './forecast.js?v=7.5';
-import { PIN_ICON } from './here.js?v=7.5';
-import { loadCrew } from './crews.js?v=7.5';
+import { openAccuracy } from './accuracy.js?v=7.5.1';
+import { APP_VERSION } from './version.js?v=7.5.1';
+import { esc, toast, getPosition, uid } from './util.js?v=7.5.1';
+import { openSkyAR } from './skyar.js?v=7.5.1';
+import { isConfigured, currentUser, createAccount, signInWithPassword, syncNow, joinCrew } from './sync.js?v=7.5.1';
+import { HUNT_ORDER, HUNT_LABEL } from './hunts.js?v=7.5.1';
+import { searchPlaces, placeName } from './api.js?v=7.5.1';
+import { update } from './storage.js?v=7.5.1';
+import { $, $$, S, closeSheet, forecasts, openSheet, ui } from './core.js?v=7.5.1';
+import { render, setTab } from './app.js?v=7.5.1';
+import { openAligner, openTideWindows } from './planners.js?v=7.5.1';
+import { G, avatar, bandFill, bandInk, bandSky, day3am, demoSkyDay, lightBand, toneDot } from './forecast.js?v=7.5.1';
+import { PIN_ICON } from './here.js?v=7.5.1';
+import { loadCrew } from './crews.js?v=7.5.1';
 
 /* ================= first-run welcome ================= */
 /* ================= what's new ================= */
 // For testers: what changed in each update. Opens once after an update, and any time from You.
 export const SEEN_VERSION = 'tidelight:seenVersion';
 export const WHATS_NEW = [
+  { v: '7.5.1', date: '28 Nov', title: 'A tidy-up', items: [
+    'A session\'s briefing now leads with the plan. The tools sit below it in two short rows: On location, and Share.',
+    'Sunsets that score well now say "Worth the drive". "Worth the alarm" stays for sunrises.',
+    'The key under the week folds away. Tap Key when you need it.',
+    'How accurate is Tidelight? now shows the new colour score (from 7.3) on its own, with the older shoots beside it.',
+    '"What if?" is now "Try other weather". Plus smaller fixes: "Updated just now", weekday names instead of "Tmrw", and Milky Way with capitals.',
+    'The reasons behind each score read as plain sentences now, with fewer colons and semicolons.',
+  ] },
   { v: '7.5', date: '28 Nov', title: 'Big seas', items: [
     'New for coastal spots: Big seas. Turn it on under Edit spot → Coast and tide, and Tidelight reads a few years of that spot\'s wave records to learn what a truly big swell looks like there.',
     'You\'ll get an alert up to 5 days before one of its top 6 swells of the year (or top 3, or 12), an update the evening before with the latest timing, and word if it fades.',

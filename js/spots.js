@@ -1,19 +1,19 @@
 // Tidelight: The Spots tab: your spot library, the map, search and the spot form.
-import { fmtWeekday, fmtDayDate, esc, cap, toast, uid, dayKey } from './util.js?v=7.5';
-import { coverUrl, deletePhotos, photoUrl, addPhotoFile } from './photos.js?v=7.5';
-import { huntsOf, HUNT_LABEL, HUNT_ORDER } from './hunts.js?v=7.5';
-import { searchPlaces, fetchSpotForecast } from './api.js?v=7.5';
-import { DIFFICULTIES, evaluateSpot, spotFloor } from './scoring.js?v=7.5';
-import { readExif } from './ai.js?v=7.5';
-import { update } from './storage.js?v=7.5';
-import { SESSION_TYPES, SUN_ICON, TYPE_NAME, band, huntPhrase, nextDays, sessionWhen, skeleton, spotTile } from './forecast.js?v=7.5';
-import { $, $$, S, closeSheet, ensureForecasts, forecasts, hikeSummary, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.5';
-import { openScout } from './tools.js?v=7.5';
-import { render } from './app.js?v=7.5';
-import { alignmentText, openNow } from './field.js?v=7.5';
-import { openTideWindows, seasonView, wireSeason } from './planners.js?v=7.5';
-import { compass16, SEAS_TOPS, SEAS_DEFAULT_TOP } from './seas.js?v=7.5';
-import { afterSpotSave, seasSpotSection, wireSeasSpot } from './seasui.js?v=7.5';
+import { fmtWeekday, fmtDayDate, esc, cap, toast, uid, dayKey } from './util.js?v=7.5.1';
+import { coverUrl, deletePhotos, photoUrl, addPhotoFile } from './photos.js?v=7.5.1';
+import { huntsOf, HUNT_LABEL, HUNT_ORDER, huntWord } from './hunts.js?v=7.5.1';
+import { searchPlaces, fetchSpotForecast } from './api.js?v=7.5.1';
+import { DIFFICULTIES, evaluateSpot, spotFloor } from './scoring.js?v=7.5.1';
+import { readExif } from './ai.js?v=7.5.1';
+import { update } from './storage.js?v=7.5.1';
+import { SESSION_TYPES, SUN_ICON, TYPE_NAME, band, huntPhrase, nextDays, sessionWhen, skeleton, spotTile } from './forecast.js?v=7.5.1';
+import { $, $$, S, closeSheet, ensureForecasts, forecasts, hikeSummary, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.5.1';
+import { openScout } from './tools.js?v=7.5.1';
+import { render } from './app.js?v=7.5.1';
+import { alignmentText, openNow } from './field.js?v=7.5.1';
+import { openTideWindows, seasonView, wireSeason } from './planners.js?v=7.5.1';
+import { compass16, SEAS_TOPS, SEAS_DEFAULT_TOP } from './seas.js?v=7.5.1';
+import { afterSpotSave, seasSpotSection, wireSeasSpot } from './seasui.js?v=7.5.1';
 const COMPASS_POINTS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'].map((n, i) => [`${n} (${i * 22.5}°)`, i * 22.5]);
 
 /* ================= spots ================= */
@@ -27,7 +27,7 @@ export function spotGrid(evs, st, offset) {
   const spots = [...st.spots].sort((a, b) => weekBest(b) - weekBest(a));
   const days = [0, 1, 2, 3, 4, 5, 6].map(i => {
     const t = now + i * 86400;
-    return { i, label: i === 0 ? 'Today' : i === 1 ? 'Tmrw' : fmtWeekday(t, offset).slice(0, 3), date: fmtDayDate(t, offset).split(' ')[1] || '' };
+    return { i, label: i === 0 ? 'Today' : fmtWeekday(t, offset).slice(0, 3), date: fmtDayDate(t, offset).split(' ')[1] || '' };
   });
   return `<div class="sg-wrap"><table class="sg">
     <caption class="sr-only">Best session score for each spot over the next 7 days</caption>
@@ -47,7 +47,7 @@ export function spotRow(sp) {
   const hk = hikeSummary(sp);
   return `<button class="lib-row" data-spot="${sp.id}">
     ${coverUrl(sp) ? `<img class="lib-img" src="${coverUrl(sp)}" alt="">` : spotTile(sp)}
-    <span class="lib-text"><span class="lib-name">${esc(sp.name)}</span><span class="lib-sub">${esc([huntsOf(sp).map(k => HUNT_LABEL[k]).filter(Boolean).join(', '), sp.coastal ? 'coastal' : '', hk.replace('Hike: ', 'hike ')].filter(Boolean).join(' · '))}</span></span>
+    <span class="lib-text"><span class="lib-name">${esc(sp.name)}</span><span class="lib-sub">${esc([huntsOf(sp).map((k, i) => (i ? huntWord(k) : HUNT_LABEL[k])).filter(Boolean).join(', '), sp.coastal ? 'Coastal' : '', hk ? hk.replace(/^Hike: ([\d.]+ km)(, )?/, (m, km, c) => `${km} hike${c || ''}`).replace(/^Hike: /, 'Hike ') : ''].filter(Boolean).join(' · '))}</span></span>
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
   </button>`;
 }

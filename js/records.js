@@ -1,10 +1,10 @@
 // Tidelight: shoot records. For every planned shoot: what was forecast when you planned it, the last
 // forecast before it, what the weather actually did, and how Tidelight's call compared with your rating.
 // This is what lets the score be checked (and improved) against real shoots rather than guesswork.
-import { update } from './storage.js?v=7.5';
-import { fetchPast, fetchSignals, PAST_LIMIT_DAYS } from './api.js?v=7.5';
-import { evaluateSpot, ratingScore, labelFor, horizonBlock, aodAt } from './scoring.js?v=7.5';
-import { S, allEvents, freshHooks } from './core.js?v=7.5';
+import { update } from './storage.js?v=7.5.1';
+import { fetchPast, fetchSignals, PAST_LIMIT_DAYS } from './api.js?v=7.5.1';
+import { evaluateSpot, ratingScore, labelFor, horizonBlock, aodAt } from './scoring.js?v=7.5.1';
+import { S, allEvents, freshHooks } from './core.js?v=7.5.1';
 
 /* ---------- the calls ---------- */
 // The same cut-offs as everywhere else: Go 75+, Maybe 50 to 74, Skip under 50; and for your rating,
@@ -218,6 +218,18 @@ export function accuracyReport(plans = S().plans) {
   const withActual = rows.filter(r => r.p.actual && !r.p.actual.error);
   const realRight = withActual.filter(r => callOf(r.p.actual.score) === r.v.you).length;
   return { n: rows.length, right, rows, why, kinds, actualN: withActual.length, realRight };
+}
+// The colour score was rebuilt in 7.3 (live 26 Nov 2026, evening). Shoots before it were scored the old way,
+// so the accuracy numbers show the new score on its own, with the old ones beside it.
+export const NEW_SCORE_T = 1795687200;
+export function accuracySplit(plans = S().plans) {
+  return { now: accuracyReport(plans.filter(p => p.t >= NEW_SCORE_T)), before: accuracyReport(plans.filter(p => p.t < NEW_SCORE_T)) };
+}
+export function accuracyLine() {
+  const { now, before } = accuracySplit();
+  if (!now.n && before.n < 3) return 'Rate a few shoots to see.';
+  const nowTxt = now.n ? `Right ${now.right} in ${now.n} since the new score` : 'The new score (7.3) has no rated shoots yet';
+  return before.n ? `${nowTxt}. Before it, ${before.right} in ${before.n}.` : `${nowTxt}.`;
 }
 export const KIND_LABEL = { seas: 'Big seas', sunsetColour: 'Sunset colour', sunriseColour: 'Sunrise colour', fog: 'Fog', astro: 'Milky Way', storm: 'Storms', aurora: 'Aurora', day: 'Daytime', other: 'Other' };
 function kindOf(p) {

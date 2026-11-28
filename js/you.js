@@ -1,20 +1,20 @@
 // Tidelight: The You tab: light profile, account, alerts, settings, kit, data and feedback.
-import { syncStatus, syncNow, signOut, sendPasswordReset, createAccount, signInWithPassword, savePushSubscription, removePushSubscription, sendTestAlert, currentUser, sendFeedback, myFeedback } from './sync.js?v=7.5';
-import { pageAccuracy } from './accuracy.js?v=7.5';
-import { accuracyReport } from './records.js?v=7.5';
-import { esc, fmtDate, uid, toast, fmtDay, getPosition, cap, downloadFile } from './util.js?v=7.5';
-import { MIN_KEEPERS, spotFloor, personalModelSummary, featureVector, similarity, tuningReport, colourRatings, ratingScore } from './scoring.js?v=7.5';
-import { hasAI, readExif, resizeImage, aiAnalyzeReference, aiResultToFeatures, testKey } from './ai.js?v=7.5';
-import { APP_VERSION } from './version.js?v=7.5';
-import { update, exportData, importData, resetAll } from './storage.js?v=7.5';
-import { fetchHistorical } from './api.js?v=7.5';
-import { VAPID_PUBLIC_KEY } from './config.js?v=7.5';
-import { exportPhotos, importPhotos, clearPhotos } from './photos.js?v=7.5';
-import { $, $$, S, allEvents, ensureForecasts, eventRow, forecasts, ui } from './core.js?v=7.5';
-import { THEMES, applyMotion, applyTheme, next3Days } from './forecast.js?v=7.5';
-import { hasNews, openTour, openWelcome, openWhatsNew } from './welcome.js?v=7.5';
-import { openSpotDetail } from './spots.js?v=7.5';
-import { render, setTab } from './app.js?v=7.5';
+import { syncStatus, syncNow, signOut, sendPasswordReset, createAccount, signInWithPassword, savePushSubscription, removePushSubscription, sendTestAlert, currentUser, sendFeedback, myFeedback } from './sync.js?v=7.5.1';
+import { pageAccuracy } from './accuracy.js?v=7.5.1';
+import { accuracyReport, accuracyLine } from './records.js?v=7.5.1';
+import { esc, fmtDate, uid, toast, fmtDay, getPosition, cap, downloadFile } from './util.js?v=7.5.1';
+import { MIN_KEEPERS, spotFloor, personalModelSummary, featureVector, similarity, tuningReport, colourRatings, ratingScore } from './scoring.js?v=7.5.1';
+import { hasAI, readExif, resizeImage, aiAnalyzeReference, aiResultToFeatures, testKey } from './ai.js?v=7.5.1';
+import { APP_VERSION } from './version.js?v=7.5.1';
+import { update, exportData, importData, resetAll } from './storage.js?v=7.5.1';
+import { fetchHistorical } from './api.js?v=7.5.1';
+import { VAPID_PUBLIC_KEY } from './config.js?v=7.5.1';
+import { exportPhotos, importPhotos, clearPhotos } from './photos.js?v=7.5.1';
+import { $, $$, S, allEvents, ensureForecasts, eventRow, forecasts, ui } from './core.js?v=7.5.1';
+import { THEMES, applyMotion, applyTheme, next3Days } from './forecast.js?v=7.5.1';
+import { hasNews, openTour, openWelcome, openWhatsNew } from './welcome.js?v=7.5.1';
+import { openSpotDetail } from './spots.js?v=7.5.1';
+import { render, setTab } from './app.js?v=7.5.1';
 
 /* ================= coach ================= */
 
@@ -50,7 +50,7 @@ export function renderYou(v, logLines = []) {
     <div class="you-list">
       ${row('profile', 'Light profile and keepers', good >= MIN_KEEPERS ? `${good} keepers. Your personal score is on.` : `${good} keeper${good === 1 ? '' : 's'}. Add ${MIN_KEEPERS - good} more to switch on your personal score.`)}
       ${row('tuning', 'Score tuning', s.tuning === false ? 'Off. Scores use the standard rules.' : (() => { const n = st.spots.filter(sp => spotFloor(sp, st.keepers, s).floor > 0.35).length; return n ? `Learning from your ratings. ${n} spot${n === 1 ? '' : 's'} adjusted.` : 'Learning from your ratings.'; })())}
-      ${row('accuracy', 'How accurate is Tidelight?', (() => { const r = accuracyReport(); return r.n >= 3 ? `Right ${r.right} times in ${r.n} rated shoots.` : 'Rate a few shoots to see.'; })())}
+      ${row('accuracy', 'How accurate is Tidelight?', accuracyLine())}
       ${row('recreate', 'Recreate a shot', 'Find upcoming sessions that match a photo.')}
     </div>
 

@@ -1,12 +1,14 @@
 // Extra things to hunt for at a spot, beyond sunrise/sunset colour.
 // Each scorer returns { score 0–100, factors: [{k: good|bad|neutral, t}], ...extras } or null when not applicable.
-import { clamp, compass, fmtTime, angleDiff } from './util.js?v=7.5';
+import { clamp, compass, fmtTime, angleDiff } from './util.js?v=7.5.1';
 
 export const HUNT_ORDER = ['colour', 'fog', 'storm', 'lightning', 'rainbow', 'forest', 'waterfall', 'aurora', 'astro'];
 export const NIGHT_HUNTS = ['aurora', 'astro'];     // scored as their own "Night" session
 export const DAY_HUNTS = ['forest', 'waterfall'];   // scored as their own "Daytime" session
 export const HUNT_LABEL = { colour: 'Colour', fog: 'Fog', storm: 'Storm', lightning: 'Lightning', rainbow: 'Rainbow', forest: 'Forest', waterfall: 'Waterfall', aurora: 'Aurora', astro: 'Milky Way' };
 export const HUNT_VERB = { colour: 'colour', fog: 'fog', storm: 'storms', lightning: 'lightning', rainbow: 'a rainbow', forest: 'rainforest light', waterfall: 'waterfall flow', aurora: 'aurora', astro: 'the Milky Way' };
+// The hunt in a sentence: lower case, except names (Milky Way).
+export const huntWord = k => (k === 'astro' ? 'Milky Way' : (HUNT_LABEL[k] || '').toLowerCase());
 export const huntsOf = spot => (spot.hunts && spot.hunts.length ? spot.hunts : ['colour']);
 
 const THUNDER = c => c === 95 || c === 96 || c === 99;
@@ -97,7 +99,7 @@ function stormFactors(h) {
   if (h.cape != null) {
     if (h.cape >= 1000) f.push({ k: 'good', t: `Very unstable air (storm energy ${Math.round(h.cape)} J/kg)` });
     else if (h.cape >= 300) f.push({ k: 'neutral', t: `Some storm energy (${Math.round(h.cape)} J/kg)` });
-    else f.push({ k: 'bad', t: 'Stable air: little fuel for storms' });
+    else f.push({ k: 'bad', t: 'Stable air, so little fuel for storms' });
   }
   if (THUNDER(h.code)) f.push({ k: 'good', t: 'Thunderstorms in the forecast' });
   else if (SHOWERY(h.code)) f.push({ k: 'neutral', t: 'Showers forecast, storms possible' });
@@ -351,8 +353,8 @@ export function waterfallAt(data, i) {
 }
 
 function lightFactor(tc) {
-  return tc >= 85 ? { k: 'good', t: `Overcast (${Math.round(tc)}% cloud): soft, even light with no harsh highlights` }
-    : tc >= 60 ? { k: 'neutral', t: `Mostly cloudy (${Math.round(tc)}%): softish light, some bright patches` }
+  return tc >= 85 ? { k: 'good', t: `Overcast (${Math.round(tc)}% cloud) gives soft, even light with no harsh highlights` }
+    : tc >= 60 ? { k: 'neutral', t: `Mostly cloudy (${Math.round(tc)}%), so softish light with some bright patches` }
     : { k: 'bad', t: `Only ${Math.round(tc)}% cloud: harsh, dappled light under the canopy` };
 }
 
@@ -379,19 +381,19 @@ export function computeDayHunts({ spot, data, i0, i1 }) {
     if (kind === 'forest') {
       f.push(best.wet >= 0.7 ? { k: 'good', t: `Wet forest: ${best.r24.toFixed(1)} mm of rain in the 24 hours before` }
         : best.wet >= 0.3 ? { k: 'neutral', t: `Damp: ${(best.r24 + best.r48).toFixed(1)} mm of rain over the past 2 days` }
-        : { k: 'bad', t: 'Dry: little or no rain in the past 2 days, so the greens won\'t glow' });
-      if ((best.wind ?? 0) >= 20) f.push({ k: 'bad', t: `Breezy (${Math.round(best.wind)} km/h): leaves will blur on long exposures` });
-      else f.push({ k: 'good', t: 'Light wind: leaves stay still for long exposures' });
-      if (best.mist) f.push({ k: 'good', t: 'Mist or very humid air: extra atmosphere between the trees' });
+        : { k: 'bad', t: 'Little or no rain in the past 2 days, so the greens won\'t glow' });
+      if ((best.wind ?? 0) >= 20) f.push({ k: 'bad', t: `Breezy (${Math.round(best.wind)} km/h), so leaves will blur on long exposures` });
+      else f.push({ k: 'good', t: 'Light wind keeps the leaves still for long exposures' });
+      if (best.mist) f.push({ k: 'good', t: 'Mist or very humid air adds atmosphere between the trees' });
     } else {
       const week = best.r7 != null ? `, ${best.r7.toFixed(0)} mm over the week` : '';
       f.push(best.flow >= 0.6 ? { k: 'good', t: `Good flow: ${best.r72.toFixed(0)} mm of rain in the past 3 days${week}` }
         : best.flow >= 0.25 ? { k: 'neutral', t: `Modest flow: ${best.r72.toFixed(0)} mm in the past 3 days${week}` }
         : { k: 'bad', t: `Low flow likely: only ${best.r72.toFixed(1)} mm in the past 3 days${week}` });
-      if (best.flood) f.unshift({ k: 'bad', t: 'Very heavy recent rain: likely flooding, brown water and dangerous access. Check track closures.' });
+      if (best.flood) f.unshift({ k: 'bad', t: 'Very heavy recent rain means likely flooding, brown water and dangerous access. Check track closures.' });
     }
-    if (best.now.heavy) f.push({ k: 'bad', t: 'Heavy rain at the time: hard on gear and visibility' });
-    else if (best.now.light) f.push({ k: 'neutral', t: 'Light rain at the time: bring a rain cover, keep the lens dry' });
+    if (best.now.heavy) f.push({ k: 'bad', t: 'Heavy rain at the time, hard on gear and visibility' });
+    else if (best.now.light) f.push({ k: 'neutral', t: 'Light rain at the time. Bring a rain cover and keep the lens dry' });
     const softV = pct((best.tc - 40) / 50);
     const parts = kind === 'forest' ? [
       { label: 'Soft light', value: softV, note: `${Math.round(best.tc)}% cloud` },

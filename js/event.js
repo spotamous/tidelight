@@ -1,19 +1,19 @@
 // Tidelight: A session's briefing: the full detail sheet for one sunrise, sunset or night.
-import { cap, esc, fmtTime, toast } from './util.js?v=7.5';
-import { gearFor } from './gear.js?v=7.5';
-import { coverUrl } from './photos.js?v=7.5';
-import { HUNT_LABEL } from './hunts.js?v=7.5';
-import { currentUser } from './sync.js?v=7.5';
-import { MIN_KEEPERS, personalModelSummary } from './scoring.js?v=7.5';
-import { openSkyAR } from './skyar.js?v=7.5';
-import { hasAI, aiBriefing, briefingContext } from './ai.js?v=7.5';
-import { $, briefing, closeSheet, eventIndex, huntList, openSheet, placeTz, S, sessionName } from './core.js?v=7.5';
-import { avatarStack, cloudChips, commitPanel, horizonScene, huntPhrase, labModel, partBar, phaseColor, runCounts, sessionWhen, skyClass, skyOf, toneDot, toneOf, whySentence } from './forecast.js?v=7.5';
-import { crewGoing, crewState, goingText, openShareSheet } from './crews.js?v=7.5';
-import { tideChart, wireTide } from './tools.js?v=7.5';
-import { drawHere, saveHere } from './here.js?v=7.5';
-import { openShareCard } from './planners.js?v=7.5';
-import { addPlan } from './plans.js?v=7.5';
+import { cap, esc, fmtTime, toast } from './util.js?v=7.5.1';
+import { gearFor } from './gear.js?v=7.5.1';
+import { coverUrl } from './photos.js?v=7.5.1';
+import { HUNT_LABEL } from './hunts.js?v=7.5.1';
+import { currentUser } from './sync.js?v=7.5.1';
+import { MIN_KEEPERS, personalModelSummary } from './scoring.js?v=7.5.1';
+import { openSkyAR } from './skyar.js?v=7.5.1';
+import { hasAI, aiBriefing, briefingContext } from './ai.js?v=7.5.1';
+import { $, briefing, closeSheet, eventIndex, huntList, openSheet, placeTz, S, sessionName } from './core.js?v=7.5.1';
+import { avatarStack, cloudChips, commitPanel, horizonScene, huntPhrase, labModel, partBar, phaseColor, runCounts, sessionWhen, skyClass, skyOf, toneDot, toneOf, whySentence } from './forecast.js?v=7.5.1';
+import { crewGoing, crewState, goingText, openShareSheet } from './crews.js?v=7.5.1';
+import { tideChart, wireTide } from './tools.js?v=7.5.1';
+import { drawHere, saveHere } from './here.js?v=7.5.1';
+import { openShareCard } from './planners.js?v=7.5.1';
+import { addPlan } from './plans.js?v=7.5.1';
 
 /* ================= event detail ================= */
 
@@ -74,14 +74,6 @@ export function openEvent(key) {
     ${e.topHunt === 'colour' && e.confidence ? `<p class="bf-note conf-${e.confidence.level}">${{ high: 'The weather models agree.', medium: 'The weather models roughly agree.', low: 'The weather models disagree, so treat this as a maybe.' }[e.confidence.level]}</p>` : ''}
     ${e.access && !e.access.inside ? `<p class="bf-note conf-low">${e.access.none ? 'The tide stays above your access level around this session.' : `Tide access runs ${fmtTime(e.access.start, o)} to ${fmtTime(e.access.backBy, o)}, which doesn't cover this session.`}</p>` : ''}
     ${going.length ? `<p class="bf-note crew">${avatarStack(going, 22)}${esc(goingText(going))}.</p>` : ''}
-    <div class="bf-tools" role="group" aria-label="Tools for this session">
-      <button class="tool-chip" data-compass="${esc(e.key)}">Compass</button>
-      <button class="tool-chip" data-dial="${esc(e.key)}">Light dial</button>
-      ${labModel(e) ? `<button class="tool-chip" data-lab="${esc(e.key)}">What if?</button>` : ''}
-      <button class="tool-chip" id="skyBtn">Sky view</button>
-      <button class="tool-chip" id="cardBtn">Share card</button>
-      ${currentUser() && crewState.crews.length && !e.spot.here ? '<button class="tool-chip" id="shareBtn">Share with crew</button>' : ''}
-    </div>
     ${e.spot.here ? `<p class="bf-note">${e.spot.hereMode === 'place' ? 'Not a saved spot. Leave times are from home.' : 'Right here, not a saved spot. Times assume you\'re already here.'}</p>` : ''}
 
     <h3 class="sec">The plan</h3>
@@ -90,6 +82,19 @@ export function openEvent(key) {
     </ol>
 
     ${tideChart(e)}
+
+    <div class="bf-tools" role="group" aria-label="On location">
+      <span class="bf-tools-l">On location</span>
+      <button class="tool-chip" data-compass="${esc(e.key)}">Compass</button>
+      <button class="tool-chip" id="skyBtn">Sky view</button>
+      <button class="tool-chip" data-dial="${esc(e.key)}">Light dial</button>
+      ${labModel(e) ? `<button class="tool-chip" data-lab="${esc(e.key)}">Try other weather</button>` : ''}
+    </div>
+    <div class="bf-tools" role="group" aria-label="Share">
+      <span class="bf-tools-l">Share</span>
+      <button class="tool-chip" id="cardBtn">Share card</button>
+      ${currentUser() && crewState.crews.length && !e.spot.here ? '<button class="tool-chip" id="shareBtn">With your crew</button>' : ''}
+    </div>
 
     <h3 class="sec">Briefing</h3>
     <p class="bf-brief" id="briefText">${esc(briefing(e))}</p>

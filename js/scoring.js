@@ -1,5 +1,5 @@
-import { clamp, haversineKm, angleDiff, compass } from './util.js?v=7.5';
-import { computeHunts, computeNightHunts, computeDayHunts, huntsOf, NIGHT_HUNTS, DAY_HUNTS, HUNT_LABEL } from './hunts.js?v=7.5';
+import { clamp, haversineKm, angleDiff, compass } from './util.js?v=7.5.1';
+import { computeHunts, computeNightHunts, computeDayHunts, huntsOf, NIGHT_HUNTS, DAY_HUNTS, HUNT_LABEL, huntWord } from './hunts.js?v=7.5.1';
 
 /* ---------- helpers ---------- */
 
@@ -136,23 +136,23 @@ export function baseScore(h, tide, spot, ctx = {}) {
   const coverPct = Math.round(c.cover * 100);
 
   // The canvas
-  if (c.cover < 0.12 && floor > 0.35) factors.push({ k: 'good', t: 'Clean light suits this spot: clear-sky sessions here have delivered for you' });
-  else if (c.cover < 0.12) factors.push({ k: 'neutral', t: 'Mostly clear upper sky: clean light, but little cloud to catch colour' });
-  else if (c.thick >= 0.15) factors.push({ k: 'bad', t: 'Thick mid and high cloud stacked together: the light may not get through' });
-  else if (c.deck >= 0.12) factors.push({ k: 'neutral', t: `A full mid-level deck (${Math.round(mid)}%): it only lights up if there's a gap towards the ${ctx.horizon?.kind || 'sun'}` });
-  else if (high >= 60 && mid < 50) factors.push({ k: 'good', t: `High cloud (${Math.round(high)}%): thin cirrus that catches the best colour` });
-  else factors.push({ k: 'good', t: `Good canvas: about ${coverPct}% of the sky with mid/high cloud to catch colour` });
-  if (c.deck >= 0.12 && far != null && far < 0.35) factors.push({ k: 'good', t: `Clear far out towards the ${ctx.horizon.kind}: the light can get under the deck and light it from below` });
+  if (c.cover < 0.12 && floor > 0.35) factors.push({ k: 'good', t: 'Clean light suits this spot. Clear-sky sessions here have delivered for you' });
+  else if (c.cover < 0.12) factors.push({ k: 'neutral', t: 'Mostly clear upper sky, so clean light but little cloud to catch colour' });
+  else if (c.thick >= 0.15) factors.push({ k: 'bad', t: 'Thick mid and high cloud stacked together may stop the light getting through' });
+  else if (c.deck >= 0.12) factors.push({ k: 'neutral', t: `A full mid-level deck (${Math.round(mid)}%) only lights up if there's a gap towards the ${ctx.horizon?.kind || 'sun'}` });
+  else if (high >= 60 && mid < 50) factors.push({ k: 'good', t: `High cloud (${Math.round(high)}%), the thin cirrus that catches the best colour` });
+  else factors.push({ k: 'good', t: `About ${coverPct}% of the sky has mid or high cloud to catch colour` });
+  if (c.deck >= 0.12 && far != null && far < 0.35) factors.push({ k: 'good', t: `Clear far out towards the ${ctx.horizon.kind}, so the light can get under the deck and light it from below` });
 
-  if (ctx.deep >= 2 && c.fill > 0.3) factors.push({ k: 'bad', t: 'Moist air from about 4 to 9 km up: a thick cloud layer the light may not get through' });
-  if (low >= 60) factors.push({ k: 'bad', t: `Low cloud ${Math.round(low)}%: the sky is likely blocked` });
+  if (ctx.deep >= 2 && c.fill > 0.3) factors.push({ k: 'bad', t: 'Moist air from about 4 to 9 km up means a thick cloud layer the light may not get through' });
+  if (low >= 60) factors.push({ k: 'bad', t: `Low cloud at ${Math.round(low)}% will likely block the sky` });
   else if (low <= 20) factors.push({ k: 'good', t: 'Little low cloud overhead' });
 
-  if (ctx.clearing) factors.unshift({ k: 'good', t: 'Rain clearing around the light: often the most dramatic skies of all' });
+  if (ctx.clearing) factors.unshift({ k: 'good', t: 'Rain clearing around the light, which often brings the most dramatic skies of all' });
   else if ((h.precip ?? 0) >= 0.8) factors.push({ k: 'bad', t: `Steady rain forecast (${(+h.precip).toFixed(1)} mm in the hour)` });
-  else if (c.pp >= 50) factors.push({ k: 'neutral', t: `Showers about (${Math.round(c.pp)}%): risky, but showery skies often light up` });
+  else if (c.pp >= 50) factors.push({ k: 'neutral', t: `Showers about (${Math.round(c.pp)}%). Risky, but showery skies often light up` });
 
-  if (c.vis < 1) factors.push({ k: 'neutral', t: `Fog or mist possible (visibility ${(h.vis / 1000).toFixed(1)} km): moody rather than colourful` });
+  if (c.vis < 1) factors.push({ k: 'neutral', t: `Fog or mist possible (visibility ${(h.vis / 1000).toFixed(1)} km), so moody rather than colourful` });
 
   let tideF = 1;
   if (spot.coastal && spot.tide !== 'any' && tide) {
@@ -163,18 +163,18 @@ export function baseScore(h, tide, spot, ctx = {}) {
   }
 
   const wind = h.wind ?? 0;
-  if (wind >= 30) factors.push({ k: 'bad', t: `Strong wind (${Math.round(wind)} km/h): tripod shake and choppy water` });
+  if (wind >= 30) factors.push({ k: 'bad', t: `Strong wind (${Math.round(wind)} km/h) means tripod shake and choppy water` });
   else if (wind <= 10) factors.push({ k: 'good', t: 'Light wind, good for long exposures' });
 
   if (ctx.horizon) {
     const where = `towards the ${ctx.horizon.kind} (${ctx.horizon.dir})`;
-    if (near >= 0.7) factors.unshift({ k: 'bad', t: `Cloud bank on the horizon ${where}: it may hide the sun as it ${ctx.horizon.kind === 'sunrise' ? 'rises' : 'sets'}` });
+    if (near >= 0.7) factors.unshift({ k: 'bad', t: `Cloud bank on the horizon ${where} may hide the sun as it ${ctx.horizon.kind === 'sunrise' ? 'rises' : 'sets'}` });
     else if (near >= 0.45) factors.push({ k: 'neutral', t: `Some cloud on the horizon ${where}` });
     else factors.push({ k: 'good', t: `Clear horizon ${where}` });
-    if (far != null && far >= 0.7 && c.fill > 0.3) factors.unshift({ k: 'bad', t: `Thick cloud 200–350 km ${where}: it can stop the light reaching the clouds overhead` });
+    if (far != null && far >= 0.7 && c.fill > 0.3) factors.unshift({ k: 'bad', t: `Thick cloud 200–350 km ${where} can stop the light reaching the clouds overhead` });
   }
-  if (ctx.aod != null && ctx.aod >= 0.4) factors.push({ k: 'bad', t: `Smoke or haze in the air: colours may be muted (the sun itself can glow red)` });
-  else if (ctx.aod != null && ctx.aod <= 0.12 && c.fill > 0.3) factors.push({ k: 'good', t: 'Clean, clear air: colours should be crisp' });
+  if (ctx.aod != null && ctx.aod >= 0.4) factors.push({ k: 'bad', t: `Smoke or haze in the air may mute the colours (the sun itself can glow red)` });
+  else if (ctx.aod != null && ctx.aod <= 0.12 && c.fill > 0.3) factors.push({ k: 'good', t: 'Clean, clear air should give crisp colours' });
 
   const score = c.score * tideF;
   // Each factor as 0–100, for the "why" bars.
@@ -467,7 +467,7 @@ export function evaluateEvent({ spot, data, type, t, keepers, settings }) {
   if (confidence) {
     if (confidence.level === 'low') {
       if (base.score > 50) base.score = Math.round(50 + (base.score - 50) * 0.8);   // don't oversell a coin toss
-      base.factors.push({ k: 'bad', t: `Weather models disagree on the cloud (they range ${confidence.min}–${confidence.max}): treat it as a maybe` });
+      base.factors.push({ k: 'bad', t: `Weather models disagree on the cloud (they range ${confidence.min}–${confidence.max}), so treat it as a maybe` });
     } else if (confidence.level === 'high') {
       base.factors.push({ k: 'good', t: 'Weather models agree on the cloud' });
     }
@@ -623,7 +623,7 @@ export function evaluateDay({ spot, data, d, keepers, settings }) {
   const walkStart = hike ? t - (arrive + hike) * 60 : null;
   const H = hunts[topHunt];
   const timeline = [
-    { t, label: `Best for ${HUNT_LABEL[topHunt].toLowerCase()}`, cls: 'key' },
+    { t, label: `Best for ${huntWord(topHunt)}`, cls: 'key' },
     ...(H.from < t ? [{ t: H.from, label: 'Good light from' }] : []),
     ...(H.to > t ? [{ t: H.to, label: 'Good light until' }] : []),
     { t: day.sunset, label: 'Sunset' },

@@ -5,7 +5,7 @@
    Also answers { action: 'test' } from the app (with the user's sign-in token) to send a test. */
 
 const { evaluateSpot } = M_scoring;
-const { setKp, HUNT_LABEL, HUNT_VERB } = M_hunts;
+const { setKp, HUNT_LABEL, HUNT_VERB, huntWord } = M_hunts;
 const { fetchSpotForecast, fetchKp, clearCache } = M_api;
 const { fmtTime, fmtDay, tzOffset } = M_util;
 const { seasForSpots, seasReady, seasSwell, seasWhen, seasLightLine } = M_seas;
@@ -43,7 +43,7 @@ function sessionLabel(e) {
 const goTitle = e => (e.topHunt === 'colour' ? `Worth the alarm: ${e.spot.name}` : `Go for ${HUNT_VERB[e.topHunt]} at ${e.spot.name}`);
 function goBody(e) {
   const when = e.type === 'night' || e.type === 'day' ? `${sessionLabel(e)}, best around ${fmtTime(e.t, e.offset)}` : `${sessionLabel(e)} ${fmtTime(e.t, e.offset)}`;
-  const hunt = e.topHunt !== 'colour' ? ` (${HUNT_LABEL[e.topHunt].toLowerCase()})` : '';
+  const hunt = e.topHunt !== 'colour' ? ` (${huntWord(e.topHunt)})` : '';
   const access = e.access && !e.access.inside ? ' Tide blocks access, check the briefing.' : '';
   const walk = e.hike ? ` (incl. ${e.hike} min hike)` : '';
   const sure = e.topHunt === 'colour' && e.confidence?.level === 'high' ? ' Models agree.' : '';
@@ -231,7 +231,7 @@ async function checkUser(admin, uid) {
       if (top.length) {
         toSend.push({
           title: 'Your best light, next 3 days',
-          body: top.map(e => `${sessionLabel(e)}: ${e.spot.name}, ${e.score}${e.topHunt !== 'colour' ? ` (${HUNT_LABEL[e.topHunt].toLowerCase()})` : ''}`).join('\n'),
+          body: top.map(e => `${sessionLabel(e)}: ${e.spot.name}, ${e.score}${e.topHunt !== 'colour' ? ` (${huntWord(e.topHunt)})` : ''}`).join('\n'),
           tag: 'digest', url: './',
         });
         toLog.push({ kind: 'digest', key: dkey, score: top[0].score });
@@ -276,7 +276,7 @@ async function handler(req) {
     const { data: states } = ids.length ? await admin.from('user_state').select('user_id, data').in('user_id', ids) : { data: [] };
     const muted = new Set((states || []).filter(r => r.data?.settings?.alerts?.crew === false).map(r => r.user_id));
     const e = { type: cp.type, t: cp.t, dayT: cp.day_t ?? cp.t, offset: cp.offset_s || 0 };
-    const hunt = cp.hunt && cp.hunt !== 'colour' && HUNT_LABEL[cp.hunt] ? ` (${HUNT_LABEL[cp.hunt].toLowerCase()})` : '';
+    const hunt = cp.hunt && cp.hunt !== 'colour' && HUNT_LABEL[cp.hunt] ? ` (${huntWord(cp.hunt)})` : '';
     const payload = {
       title: `${cp.display_name} is heading to ${cp.spot_name}`,
       body: `${sessionLabel(e)} ${fmtTime(cp.t, e.offset)}${cp.score != null ? `, score ${cp.score}${hunt}` : ''}.${cp.note ? ` "${cp.note}"` : ''} Tap to see the spot.`,

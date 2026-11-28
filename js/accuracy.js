@@ -1,13 +1,13 @@
 // Tidelight: rating a shoot in one tap, what happened at a shoot, and How accurate is Tidelight?
-import { update } from './storage.js?v=7.5';
-import { esc, fmtTime, toast } from './util.js?v=7.5';
-import { tuningReport } from './scoring.js?v=7.5';
-import { $, $$, S, closeSheet, openSheet, ui } from './core.js?v=7.5';
-import { TYPE_NAME } from './forecast.js?v=7.5';
-import { openRating, planWhen, ratePlan } from './plans.js?v=7.5';
-import { render, setTab } from './app.js?v=7.5';
-import { youHead } from './you.js?v=7.5';
-import { CALL_WORD, KIND_LABEL, accuracyReport, callOf, fillActuals, forecastOf, isRated, missWords, notLightsFault, ratedS10, verdict, weatherRows } from './records.js?v=7.5';
+import { update } from './storage.js?v=7.5.1';
+import { esc, fmtTime, toast } from './util.js?v=7.5.1';
+import { tuningReport } from './scoring.js?v=7.5.1';
+import { $, $$, S, closeSheet, openSheet, ui } from './core.js?v=7.5.1';
+import { TYPE_NAME } from './forecast.js?v=7.5.1';
+import { openRating, planWhen, ratePlan } from './plans.js?v=7.5.1';
+import { render, setTab } from './app.js?v=7.5.1';
+import { youHead } from './you.js?v=7.5.1';
+import { CALL_WORD, KIND_LABEL, accuracyReport, accuracySplit, accuracyLine, callOf, fillActuals, forecastOf, isRated, missWords, notLightsFault, ratedS10, verdict, weatherRows } from './records.js?v=7.5.1';
 
 const svg = (d, w = 26) => `<svg class="qr-ic" viewBox="0 0 24 24" width="${w}" height="${w}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 // One tap each. The numbers are what they mean on the 0 to 10 scale.
@@ -172,7 +172,7 @@ export function accuracySummary() {
     <p class="muted">Rate ${3 - r.n} more shoot${3 - r.n === 1 ? '' : 's'} to see how accurate Tidelight is for you. Every rating also trains your personal score.</p></section>`;
   return `<button class="acc-mini acc-link" id="accOpen">
     <span class="acc-mini-k">How accurate is Tidelight?</span>
-    <span class="acc-mini-h">Right <b>${r.right}</b> times in ${r.n}</span>
+    <span class="acc-mini-h">${esc(accuracyLine())}</span>
     <span class="acc-mini-s">${r.why.forecast ? `${r.why.forecast} miss${r.why.forecast === 1 ? ' was' : 'es were'} the forecast, not the score. ` : ''}See the full report ›</span>
   </button>`;
 }
@@ -215,6 +215,7 @@ export function pageAccuracy(v) {
       <p class="k">Your ${r.n === 1 ? '' : `last ${r.n} `}rated shoots</p>
       <h2>Right <em>${r.right}</em> times in ${r.n}</h2>
       <p>Go, Maybe or Skip matched how you rated the light ${pct(r.right)}% of the time.</p>
+      ${(() => { const sp = accuracySplit(); return sp.before.n ? `<p class="acc-split">${sp.now.n ? `Since the new score in 7.3: right <b>${sp.now.right}</b> in ${sp.now.n}.` : 'The new score (7.3) has no rated shoots yet.'} Before it: ${sp.before.right} in ${sp.before.n}. The colour score was rebuilt in 7.3, so older shoots were judged the old way.</p>` : ''; })()}
       <div class="acc-dots" aria-hidden="true">${r.rows.slice().reverse().map(x => `<i class="${x.v.kind === 'right' ? '' : 'no'}"></i>`).join('')}</div>
       ${early ? `<span class="acc-early"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M6 1a5 5 0 0 1 5 5H6z" fill="currentColor"/></svg>Early days: steadier after about 40 ratings</span>` : ''}
     </div>

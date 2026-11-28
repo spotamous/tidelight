@@ -1,18 +1,18 @@
 // Tidelight: The Forecast tab: the session card, score gauge and What if?, the light band, week strip, little pictures (horizon scenes, spot tiles, avatars) and gestures.
-import { dayKey, esc, fmtTime, toast, fmtWeekday, fmtDayDate, cap } from './util.js?v=7.5';
-import { nearestIndex, horizonBlock, spotFloor, baseScore, tideInfo } from './scoring.js?v=7.5';
-import { HUNT_LABEL, HUNT_VERB, huntsOf, forestAt, waterfallAt, stormAt, setKp } from './hunts.js?v=7.5';
-import { update } from './storage.js?v=7.5';
-import { unshareFromCrew, syncNow } from './sync.js?v=7.5';
-import { coverUrl } from './photos.js?v=7.5';
-import { fetchForecasts, fetchKp } from './api.js?v=7.5';
-import { $, $$, S, allEvents, bgRefresh, ensureForecasts, eventIndex, forecasts, forecastsLanded, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.5';
-import { render } from './app.js?v=7.5';
-import { openSpotForm, openSpotDetail } from './spots.js?v=7.5';
-import { anySeas, ensureSeas, seasBanner, seasView, wireSeasView } from './seasui.js?v=7.5';
-import { untilText } from './field.js?v=7.5';
-import { crewGoing, goingText, loadCrew } from './crews.js?v=7.5';
-import { PIN_ICON, openHere } from './here.js?v=7.5';
+import { dayKey, esc, fmtTime, toast, fmtWeekday, fmtDayDate, cap } from './util.js?v=7.5.1';
+import { nearestIndex, horizonBlock, spotFloor, baseScore, tideInfo } from './scoring.js?v=7.5.1';
+import { HUNT_LABEL, HUNT_VERB, huntsOf, forestAt, waterfallAt, stormAt, setKp, huntWord } from './hunts.js?v=7.5.1';
+import { update } from './storage.js?v=7.5.1';
+import { unshareFromCrew, syncNow } from './sync.js?v=7.5.1';
+import { coverUrl } from './photos.js?v=7.5.1';
+import { fetchForecasts, fetchKp } from './api.js?v=7.5.1';
+import { $, $$, S, allEvents, bgRefresh, ensureForecasts, eventIndex, forecasts, forecastsLanded, indexEvents, openSheet, sessionName, ui, unsure } from './core.js?v=7.5.1';
+import { render } from './app.js?v=7.5.1';
+import { openSpotForm, openSpotDetail } from './spots.js?v=7.5.1';
+import { anySeas, ensureSeas, seasBanner, seasView, wireSeasView } from './seasui.js?v=7.5.1';
+import { untilText } from './field.js?v=7.5.1';
+import { crewGoing, goingText, loadCrew } from './crews.js?v=7.5.1';
+import { PIN_ICON, openHere } from './here.js?v=7.5.1';
 
 /* ================= forecast ================= */
 
@@ -28,7 +28,7 @@ export function savedAgo() {
   const t = Number(localStorage.getItem('tidelight:lastFetch') || 0);
   if (!t) return 'earlier';
   const mins = Math.round((Date.now() - t) / 60000);
-  return mins < 60 ? `${mins} min ago` : mins < 48 * 60 ? `${Math.round(mins / 60)} h ago` : `${Math.round(mins / 1440)} days ago`;
+  return mins < 1 ? 'just now' : mins < 60 ? `${mins} min ago` : mins < 48 * 60 ? `${Math.round(mins / 60)} h ago` : `${Math.round(mins / 1440)} days ago`;
 }
 export const SUN_ICON = {
   day: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></svg>',
@@ -71,10 +71,10 @@ export function whyLine(e) {
 }
 export function whySentence(e) {
   const fs = e.hunts?.[e.topHunt]?.factors || e.factors || [];
-  const goods = fs.filter(f => f.k === 'good').slice(0, 2).map((f, i) => (i ? f.t.charAt(0).toLowerCase() + f.t.slice(1) : f.t));
+  const goods = fs.filter(f => f.k === 'good').slice(0, 2).map(f => f.t);
   const bad = fs.find(f => f.k === 'bad')?.t;
-  let txt = goods.length ? goods.join('; ') + '.' : '';
-  if (bad) txt += `${txt ? ' ' : ''}${goods.length ? 'Against it: ' + bad.charAt(0).toLowerCase() + bad.slice(1) : bad}.`;
+  let txt = goods.length ? goods.join('. ') + '.' : '';
+  if (bad) txt += `${txt ? ' ' : ''}${goods.length ? 'Against it, ' + bad.charAt(0).toLowerCase() + bad.slice(1) : bad}.`;
   return txt || 'Nothing stands out either way.';
 }
 export function couldChange(e) {
@@ -335,13 +335,13 @@ export function labModel(e) {
 export function openLab(key) {
   const e = eventIndex.get(key);
   const model = e && labModel(e);
-  if (!model) { toast('What if? works for colour, forest and waterfall sessions.', 4500); return; }
+  if (!model) { toast('Try other weather works for colour, forest and waterfall sessions.', 4500); return; }
   const start = Object.fromEntries(model.sliders.map(sl => [sl.id, sl.value]));
   const vals = { ...start };
   const base = model.score(start);
   openSheet(`
-    <h2 class="bf-name">What if?</h2>
-    <p class="bf-when">${esc(e.spot.name)}, ${esc(sessionName(e))}. Move a slider to see how the ${esc(HUNT_LABEL[e.topHunt].toLowerCase())} score responds.</p>
+    <h2 class="bf-name">Try other weather</h2>
+    <p class="bf-when">${esc(e.spot.name)}, ${esc(sessionName(e))}. Move a slider to see how the ${esc(huntWord(e.topHunt))} score responds.</p>
     <div class="lab-top">
       ${gauge(base, 118, 'big')}
       <div class="lab-read">
@@ -433,7 +433,7 @@ export const bandFill = s => (s >= 80 ? '#D9A066' : s >= 65 ? '#8F6B44' : s >= 5
 export const bandInk = s => (s >= 80 ? '#1A130B' : '#ECE8E1');
 export function huntPhrase(e) {
   const v = HUNT_VERB[e.topHunt];
-  if (e.score >= 75) return e.topHunt === 'colour' ? 'Worth the alarm' : `Go for ${v}`;
+  if (e.score >= 75) return e.topHunt === 'colour' ? (e.type === 'sunset' ? 'Worth the drive' : 'Worth the alarm') : `Go for ${v}`;
   if (e.score >= 50) return e.topHunt === 'colour' ? 'Worth a look' : `Maybe ${v}`;
   return 'Probably not worth it';
 }
@@ -523,7 +523,7 @@ export function weekStrip(allEvs, offset) {
     const best = evs.filter(e => e.dayIdx === i).sort((a, b) => b.score - a.score)[0];
     const wd = fmtWeekday(t, offset);
     const date = fmtDayDate(t, offset).split(' ')[1] || '';
-    const label = i === 0 ? 'Today' : i === 1 ? 'Tmrw' : wd.slice(0, 3);
+    const label = i === 0 ? 'Today' : wd.slice(0, 3);
     const full = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : `${wd} ${date}`;
     cells.push(`<button class="wk-d ${i === ui.homeDay ? 'on' : ''}" data-day="${i}" aria-pressed="${i === ui.homeDay}"
         aria-label="${esc(full)}${S().plans.some(p => evs.some(e => e.dayIdx === i && e.key === p.key)) ? ', you have a plan' : ''}${best ? `: best is ${best.score}, ${TYPE_NAME[best.type].toLowerCase()} at ${esc(best.spot.name)}, ${skyNow(best).word.toLowerCase()}` : ': no sessions'}">
@@ -534,8 +534,8 @@ export function weekStrip(allEvs, offset) {
   }
   const seg = weekFilter();
   return `${seg}<nav class="week" aria-label="Choose a day">${cells.join('')}</nav>
-    <p class="wk-key" aria-hidden="true"><span>${only ? `Showing ${only}s only. ` : ''}The sky at each day's best ${only || 'session'}${only ? '' : ` (${typeMark('sunrise')}sunrise, ${typeMark('sunset')}sunset)`}</span>
-      <span class="wk-key-i">${G('<path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0"/><path d="M12 9.5V8M7.6 11.6l-1.1-1.1M16.4 11.6l1.1-1.1"/>')}Clear</span><span class="wk-key-i">${G('<path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0"/><path d="M4 7.5h7.5M14 5.5h6M9 11h9"/>')}High cloud</span><span class="wk-key-i">${G(`<path d="${G_CLOUD}"/>`)}Overcast</span><span class="wk-key-i">${G(`<path d="${G_CLOUD}" transform="translate(0 -3)"/><path d="M9 18.5l-1 2.5M12.5 18.5l-1 2.5M16 18.5l-1 2.5"/>`)}Rain</span><span class="wk-key-i">${G('<path d="M4 8.5h16M6 12.5h12M4 16.5h16"/>')}Fog</span></p>`;
+    <details class="wk-key"><summary>${only ? `Showing ${only}s only · ` : ''}Key</summary><p><span>The sky at each day's best ${only || 'session'}${only ? '' : ` (${typeMark('sunrise')}sunrise, ${typeMark('sunset')}sunset)`}</span>
+      <span class="wk-key-i">${G('<path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0"/><path d="M12 9.5V8M7.6 11.6l-1.1-1.1M16.4 11.6l1.1-1.1"/>')}Clear</span><span class="wk-key-i">${G('<path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0"/><path d="M4 7.5h7.5M14 5.5h6M9 11h9"/>')}High cloud</span><span class="wk-key-i">${G(`<path d="${G_CLOUD}"/>`)}Overcast</span><span class="wk-key-i">${G(`<path d="${G_CLOUD}" transform="translate(0 -3)"/><path d="M9 18.5l-1 2.5M12.5 18.5l-1 2.5M16 18.5l-1 2.5"/>`)}Rain</span><span class="wk-key-i">${G('<path d="M4 8.5h16M6 12.5h12M4 16.5h16"/>')}Fog</span></p></details>`;
 }
 // When to set the alarm: the leave time, less the time you need to get ready.
 export const alarmAt = e => e.leave - (S().settings.readyMin ?? 30) * 60;
@@ -693,7 +693,7 @@ export function callCard(e, nav = null) {
       <div class="call-top">
         <h2 class="call-verdict" id="callVerdict">${esc(huntPhrase(e))}.</h2>
         ${lab
-          ? `<button class="call-score" data-lab="${esc(e.key)}" aria-label="Score ${e.score} out of 100. Open What if?">${score}<small>What if?</small></button>`
+          ? `<button class="call-score" data-lab="${esc(e.key)}" aria-label="Score ${e.score} out of 100. Try other weather">${score}<small>Try other weather</small></button>`
           : `<p class="call-score" role="img" aria-label="Score ${e.score} out of 100">${score}</p>`}
       </div>
       <div class="call-bottom">
@@ -969,7 +969,7 @@ export async function renderForecast(v) {
         ${coverUrl(e.spot)
           ? `<span class="other-sky has-photo ${scoreTone(e.score)}" style="background-image:url('${coverUrl(e.spot)}')"><b class="num">${e.score}</b></span>`
           : `<span class="other-sky ${skyClass(e)} ${scoreTone(e.score)}" style="background:${skyOf(e)}"><b class="num">${e.score}</b></span>`}
-        <span class="other-name">${esc(e.spot.name)}<small>${TYPE_NAME[e.type]} ${shortWhen(e)}${e.topHunt !== 'colour' ? `, ${HUNT_LABEL[e.topHunt].toLowerCase()}` : ''}${unsure(e) ? ', models disagree' : ''}</small></span>
+        <span class="other-name">${esc(e.spot.name)}<small>${TYPE_NAME[e.type]} ${shortWhen(e)}${e.topHunt !== 'colour' ? `, ${huntWord(e.topHunt)}` : ''}${unsure(e) ? ', models disagree' : ''}</small></span>
         <span class="other-verdict ${plannedKeys.has(e.key) ? 'planned' : e.score >= 75 ? 'go' : ''}">${plannedKeys.has(e.key) ? `${toneDot(100)}Planned` : `${toneDot(e.score)}${e.score >= 75 ? 'Go' : e.score >= 50 ? 'Maybe' : 'Skip'}`}</span>
       </button>`).join('')}
     </section>` : ''}

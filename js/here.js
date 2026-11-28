@@ -1,14 +1,14 @@
 // Tidelight: Right here and Anywhere: a forecast where you stand or any place you pick, and the place picker.
-import { evaluateSpot } from './scoring.js?v=7.5';
-import { dayKey, getPosition, esc, haversineKm, fmtDayDate, fmtWeekday, cap, toast, uid } from './util.js?v=7.5';
-import { FORECAST_TTL, placeName, coastalCheck, fetchSpotForecast, searchPlaces } from './api.js?v=7.5';
-import { HUNT_LABEL, HUNT_ORDER, DAY_HUNTS } from './hunts.js?v=7.5';
-import { update } from './storage.js?v=7.5';
-import { $, $$, S, closeSheet, forecasts, indexEvents, openSheet, sessionName, ui } from './core.js?v=7.5';
-import { TYPE_NAME, huntPhrase, runCounts, scoreTone, sessionWhen, shortWhen, skeleton, skyClass, skyGlyph, skyOf, toneDot, whyLine } from './forecast.js?v=7.5';
-import { openCompassHere } from './tools.js?v=7.5';
-import { render } from './app.js?v=7.5';
-import { openSpotDetail } from './spots.js?v=7.5';
+import { evaluateSpot } from './scoring.js?v=7.5.1';
+import { dayKey, getPosition, esc, haversineKm, fmtDayDate, fmtWeekday, cap, toast, uid } from './util.js?v=7.5.1';
+import { FORECAST_TTL, placeName, coastalCheck, fetchSpotForecast, searchPlaces } from './api.js?v=7.5.1';
+import { HUNT_LABEL, HUNT_ORDER, DAY_HUNTS, huntWord } from './hunts.js?v=7.5.1';
+import { update } from './storage.js?v=7.5.1';
+import { $, $$, S, closeSheet, forecasts, indexEvents, openSheet, sessionName, ui } from './core.js?v=7.5.1';
+import { TYPE_NAME, huntPhrase, runCounts, scoreTone, sessionWhen, shortWhen, skeleton, skyClass, skyGlyph, skyOf, toneDot, whyLine } from './forecast.js?v=7.5.1';
+import { openCompassHere } from './tools.js?v=7.5.1';
+import { render } from './app.js?v=7.5.1';
+import { openSpotDetail } from './spots.js?v=7.5.1';
 
 /* ================= right here ================= */
 // Scores and the week's sessions for wherever you're standing, without saving it as a spot.
@@ -108,7 +108,7 @@ export function drawHere() {
     const t = now + i * 86400;
     const best = evs.filter(e => e.dayIdx === i).sort((a, b) => b.score - a.score)[0];
     const date = fmtDayDate(t, offset).split(' ')[1] || '';
-    const label = i === 0 ? 'Today' : i === 1 ? 'Tmrw' : fmtWeekday(t, offset).slice(0, 3);
+    const label = i === 0 ? 'Today' : fmtWeekday(t, offset).slice(0, 3);
     days.push(`<button class="wk-d ${i === here.day ? 'on' : ''}" data-hday="${i}" aria-pressed="${i === here.day}" aria-label="${i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : esc(fmtWeekday(t, offset))}${best ? `, best ${best.score}` : ', no sessions'}">
       ${i === here.day ? '<span class="wk-hl" aria-hidden="true"></span>' : ''}<span class="wk-l">${label}<small class="num">${esc(date)}</small></span>
       <span class="wk-sky ${best ? `${skyClass(best)} ${scoreTone(best.score)}` : 'none'}" ${best ? `style="background:${skyOf(best)}"` : ''} aria-hidden="true">${best ? skyGlyph(best) : ''}</span>
@@ -165,7 +165,7 @@ export function saveHere() {
   openSheet(`<h2>Save as a spot</h2>
     <p class="small muted">It joins your spots: scored on the Forecast page, included in alerts, and Tidelight starts learning it from your ratings.</p>
     <form class="form" id="hsForm"><label>Name<input name="name" required value="${esc(name)}" placeholder="e.g. North ledge"></label>
-      <p class="small muted">Scoring for ${here.hunts.map(k => HUNT_LABEL[k].toLowerCase()).join(', ')}${here.coastal ? ', with tides' : ''}. Add the direction you shoot, the drive and notes in the spot's settings.</p>
+      <p class="small muted">Scoring for ${here.hunts.map(k => huntWord(k)).join(', ')}${here.coastal ? ', with tides' : ''}. Add the direction you shoot, the drive and notes in the spot's settings.</p>
       <div class="row"><button class="btn primary" type="submit">Save spot</button><button class="btn ghost" type="button" id="hsBack">Back</button></div></form>`);
   $('#hsBack').onclick = () => drawHere();
   $('#hsForm').onsubmit = ev => {

@@ -1,16 +1,16 @@
 // Tidelight: Crews: shared plans, crewmates, invites and shared spots.
-import { currentUser, myCrews, crewMembers, crewPlans, shareToCrew, createCrew, joinCrew, leaveCrew } from './sync.js?v=7.5';
-import { photoUrl, addPhotoFile } from './photos.js?v=7.5';
-import { huntsOf, HUNT_LABEL } from './hunts.js?v=7.5';
-import { toast, haversineKm, esc, fmtDay, fmtTime, uid, dayKey, fmtWeekday, fmtDayDate } from './util.js?v=7.5';
-import { update } from './storage.js?v=7.5';
-import { driveMinutes, evaluateSpot } from './scoring.js?v=7.5';
-import { gearFor } from './gear.js?v=7.5';
-import { fetchSpotForecast } from './api.js?v=7.5';
-import { $, $$, S, closeSheet, forecasts, hikeSummary, indexEvents, openSheet, sessionName } from './core.js?v=7.5';
-import { SESSION_TYPES, TYPE_NAME, avatar, avatarStack, band, huntPhrase, runCounts, skeleton, toneDot } from './forecast.js?v=7.5';
-import { render } from './app.js?v=7.5';
-import { openSpotDetail } from './spots.js?v=7.5';
+import { currentUser, myCrews, crewMembers, crewPlans, shareToCrew, createCrew, joinCrew, leaveCrew } from './sync.js?v=7.5.1';
+import { photoUrl, addPhotoFile } from './photos.js?v=7.5.1';
+import { huntsOf, HUNT_LABEL } from './hunts.js?v=7.5.1';
+import { toast, haversineKm, esc, fmtDay, fmtTime, uid, dayKey, fmtWeekday, fmtDayDate } from './util.js?v=7.5.1';
+import { update } from './storage.js?v=7.5.1';
+import { driveMinutes, evaluateSpot } from './scoring.js?v=7.5.1';
+import { gearFor } from './gear.js?v=7.5.1';
+import { fetchSpotForecast } from './api.js?v=7.5.1';
+import { $, $$, S, closeSheet, forecasts, hikeSummary, indexEvents, openSheet, sessionName } from './core.js?v=7.5.1';
+import { SESSION_TYPES, TYPE_NAME, avatar, avatarStack, band, huntPhrase, runCounts, skeleton, toneDot } from './forecast.js?v=7.5.1';
+import { render } from './app.js?v=7.5.1';
+import { openSpotDetail } from './spots.js?v=7.5.1';
 
 /* ================= crews ================= */
 
