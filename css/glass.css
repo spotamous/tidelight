@@ -30,8 +30,7 @@ body {
 @media (max-width: 999px) { body { padding-bottom: calc(108px + env(safe-area-inset-bottom)); } }
 
 /* The material */
-.topbar .brand, .now-btn, .tabbar, .sheet-panel, .sheet-close, .call-slide,
-.btn:not(.primary), .tool-chip, .chip-btn, .day-pills, .here-pill, .wk-hl {
+.topbar .brand, .now-btn, .tabbar, .sheet-panel, .sheet-close, .call-slide {
   -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
 }
 
@@ -84,33 +83,33 @@ body {
   .tabbar button:hover:not(.active) { background: rgba(255, 255, 255, .06); }
 }
 
-/* ---- Buttons: glass capsules; the main action is tinted glass in caramel ---- */
+/* ---- Buttons: plain surfaces with a hairline, so the light stays the brightest thing; the main action is solid caramel ---- */
 .btn:not(.primary) {
-  background: rgba(255, 255, 255, .07);
-  border: 1px solid var(--glass-rim);
-  box-shadow: var(--glass-shine);
+  background: var(--surface-2);
+  border: 1px solid rgba(236, 232, 225, .08);
+  box-shadow: none;
 }
 .btn.primary {
-  background: linear-gradient(180deg, rgba(232, 182, 128, .96), rgba(208, 148, 88, .92));
-  border: 1px solid rgba(255, 226, 190, .55);
-  box-shadow: inset 0 1px 0 rgba(255, 244, 228, .7), inset 0 -2px 6px rgba(120, 70, 20, .25), 0 10px 24px -10px rgba(217, 160, 102, .55);
+  background: var(--caramel);
+  border: 1px solid var(--caramel);
+  box-shadow: none;
 }
 .tool-chip, .chip-btn, .here-pill {
-  background: rgba(255, 255, 255, .06); border: 1px solid var(--glass-rim);
-  box-shadow: var(--glass-shine);
+  background: var(--surface-2); border: 1px solid rgba(236, 232, 225, .08);
+  box-shadow: none;
 }
 .chip-btn.on { background: rgba(217, 160, 102, .22); border-color: rgba(217, 160, 102, .55); }
 
 /* Segmented control (Plans views): one glass track, a lens on the chosen option */
 .day-pills {
   display: inline-flex; gap: 2px; padding: 4px; border-radius: 999px;
-  background: var(--glass); border: 1px solid var(--glass-rim); box-shadow: var(--glass-shine);
+  background: var(--surface); border: 1px solid rgba(236, 232, 225, .08); box-shadow: none;
 }
 .day-pills button { border: 0 !important; background: none !important; color: var(--muted) !important; }
 .day-pills button.on {
-  background: linear-gradient(180deg, rgba(255, 255, 255, .18), rgba(255, 255, 255, .06)) !important;
+  background: var(--surface-2) !important;
   color: var(--text) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 3px 10px -4px rgba(0, 0, 0, .5);
+  box-shadow: inset 0 0 0 1px rgba(236, 232, 225, .10);
 }
 
 /* ---- The call card: extra-round, with a glass rim; its controls float on the photo ---- */
@@ -118,11 +117,11 @@ body {
 .call-slide { background: rgba(20, 22, 26, .38); border: 1px solid var(--glass-rim); box-shadow: var(--glass-shine); }
 .band { border-radius: 20px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), inset 0 0 0 1px rgba(255, 255, 255, .06); }
 
-/* Week strip: the chosen day sits under a glass lens */
+/* Week strip: the chosen day sits on a quiet surface step */
 .wk-hl {
-  background: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .04)) !important;
-  border: 1px solid rgba(255, 255, 255, .14) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), 0 6px 16px -8px rgba(0, 0, 0, .6) !important;
+  background: rgba(236, 232, 225, .06) !important;
+  border: 1px solid rgba(236, 232, 225, .12) !important;
+  box-shadow: none !important;
   border-radius: 18px !important;
 }
 

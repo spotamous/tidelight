@@ -691,7 +691,7 @@ export function callCard(e, nav = null) {
   return `<article class="call ${slideFrom ? `slide-${slideFrom}` : ''}" aria-labelledby="callVerdict">
     <div class="call-sky ${photo ? 'has-photo' : skyClass(e)}" data-ev="${esc(e.key)}" style="${photo ? `background-image:url('${photo}')` : `--sky:${skyOf(e)}`}">
       <div class="call-top">
-        <h2 class="call-verdict" id="callVerdict">${esc(huntPhrase(e))}.</h2>
+        <h2 class="call-verdict" id="callVerdict">${esc(huntPhrase(e))}</h2>
         ${lab
           ? `<button class="call-score" data-lab="${esc(e.key)}" aria-label="Score ${e.score} out of 100. Try other weather">${score}<small>Try other weather</small></button>`
           : `<p class="call-score" role="img" aria-label="Score ${e.score} out of 100">${score}</p>`}

@@ -40,20 +40,24 @@
 :root[data-theme="light"] .tabbar button.active { color: var(--caramel); }
 
 /* Glass controls: white frost with a fine dark edge */
-:root[data-theme="light"] .btn:not(.primary),
-:root[data-theme="light"] .tool-chip, :root[data-theme="light"] .chip-btn, :root[data-theme="light"] .here-pill,
 :root[data-theme="light"] .sheet-close, :root[data-theme="light"] .now-btn {
   background: rgba(255, 255, 255, .7) !important; border-color: rgba(0, 0, 0, .1) !important; color: var(--text);
   box-shadow: inset 0 1px 0 #fff, 0 2px 8px -4px rgba(60, 40, 20, .25);
 }
+/* Buttons and chips: plain white surfaces with a hairline */
+:root[data-theme="light"] .btn:not(.primary),
+:root[data-theme="light"] .tool-chip, :root[data-theme="light"] .chip-btn, :root[data-theme="light"] .here-pill {
+  background: #fff !important; border-color: rgba(0, 0, 0, .1) !important; color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .05);
+}
 :root[data-theme="light"] .btn.primary {
-  background: linear-gradient(180deg, #E2AA6E, #CC8C4C); border-color: rgba(150, 90, 30, .45); color: #24170A;
-  box-shadow: inset 0 1px 0 rgba(255, 246, 232, .8), 0 8px 20px -10px rgba(170, 100, 40, .6);
+  background: #D69A5C; border-color: #D69A5C; color: #24170A;
+  box-shadow: none;
 }
 :root[data-theme="light"] .chip-btn.on { background: rgba(217, 160, 102, .3) !important; border-color: rgba(148, 86, 30, .45) !important; }
 :root[data-theme="light"] .day-pills { background: rgba(255, 255, 255, .55); border-color: rgba(0, 0, 0, .08); }
-:root[data-theme="light"] .day-pills button.on { background: #fff !important; box-shadow: 0 2px 8px -3px rgba(60, 40, 20, .3); }
-:root[data-theme="light"] .wk-hl { background: rgba(255, 255, 255, .8) !important; border-color: rgba(0, 0, 0, .08) !important; box-shadow: 0 4px 14px -6px rgba(60, 40, 20, .3) !important; }
+:root[data-theme="light"] .day-pills button.on { background: #fff !important; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08); }
+:root[data-theme="light"] .wk-hl { background: rgba(255, 255, 255, .8) !important; border-color: rgba(0, 0, 0, .08) !important; box-shadow: none !important; }
 
 /* Sheets: frosted white */
 :root[data-theme="light"] .sheet-backdrop { background: rgba(40, 30, 20, .22); }
